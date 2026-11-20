@@ -1,0 +1,31 @@
+# cmake -P MRRunCargoMSVC.cmake -- <evaluated MSVC_RUNTIME_LIBRARY> <cargo> <arguments...>
+cmake_minimum_required(VERSION 3.24)
+if(CMAKE_ARGV4 STREQUAL "MultiThreaded")
+    set(crt_flag "-Ctarget-feature=+crt-static")
+elseif(CMAKE_ARGV4 STREQUAL "MultiThreadedDLL")
+    set(crt_flag "-Ctarget-feature=-crt-static")
+else()
+    message(FATAL_ERROR "The MSVC Rust target uses a retail CRT. Select MultiThreaded (/MT) or MultiThreadedDLL (/MD) for this configuration, got '${CMAKE_ARGV4}'.")
+endif()
+
+# Cargo uses the encoded form in build scripts. Preserve its argument boundaries and the
+# host project's other flags, including any linker options containing spaces.
+if(DEFINED ENV{CARGO_ENCODED_RUSTFLAGS})
+    set(flag_env CARGO_ENCODED_RUSTFLAGS)
+    string(ASCII 31 separator)
+else()
+    set(flag_env RUSTFLAGS)
+    set(separator " ")
+endif()
+set(flags "$ENV{${flag_env}}")
+if(NOT flags STREQUAL "")
+    string(APPEND flags "${separator}")
+endif()
+set(ENV{${flag_env}} "${flags}-Crelocation-model=pic${separator}${crt_flag}")
+
+math(EXPR last "${CMAKE_ARGC} - 1")
+foreach(i RANGE 5 ${last})
+    string(REPLACE ";" "\\;" arg "${CMAKE_ARGV${i}}")
+    list(APPEND command "${arg}")
+endforeach()
+execute_process(COMMAND ${command} COMMAND_ERROR_IS_FATAL ANY)

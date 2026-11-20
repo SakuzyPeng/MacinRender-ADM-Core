@@ -264,8 +264,7 @@ jobs:
         shell: pwsh
         run: python scripts/quality/check-capi-exports.py build/windows/mradm_capi.dll
 
-      # ctest 在 vcvars 环境内运行：Debug 测试可执行文件依赖 VS 的调试版 CRT DLL
-      # （vcruntime140d/ucrtbased 等），这些只在 dev 环境的 PATH 上。
+      # Cargo 与 CMake 探针在 CTest 期间也使用 vcvars 提供的 MSVC 和 Windows SDK。
       - name: Test
         shell: cmd
         run: |

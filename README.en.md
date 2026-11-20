@@ -81,6 +81,8 @@ scripts/release/build-cargo-release.sh --target-dir build/rust   # products in b
 
 On Windows, run `cargo build --release --locked -p mradm-capi` from `rust/` in an MSVC environment
 to build `mradm.exe`, `mradm_capi.dll` and its import library `mradm_capi.dll.lib`.
+A host that uses the static CRT can set `CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` (`/MT`) before adding Core.
+For a direct Cargo build, set `-Ctarget-feature=+crt-static` in the MSVC target's `rustflags`. The native libraries follow the target's CRT. Standalone builds default to `/MD`.
 
 ### Inspect Scenes and Capabilities
 

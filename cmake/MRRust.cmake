@@ -59,6 +59,8 @@ if(NOT _mr_status EQUAL 0 OR NOT CMAKE_MATCH_1)
 endif()
 separate_arguments(MR_ADM_RUST_SYSTEM_LIBS NATIVE_COMMAND "${CMAKE_MATCH_1}")
 if(MSVC)
+    # The MSVC probe reports the same system libraries for both CRTs. The consuming compiler
+    # selects the matching CRT through its /DEFAULTLIB directive.
     list(FILTER MR_ADM_RUST_SYSTEM_LIBS EXCLUDE REGEX "^/defaultlib:")
     list(APPEND MR_ADM_RUST_SYSTEM_LIBS avrt.lib ws2_32.lib)
 endif()
@@ -70,17 +72,25 @@ string(SHA1 _mr_rust_path_hash "${_mr_rust_manifest}")
 string(SUBSTRING "${_mr_rust_path_hash}" 0 5 _mr_rust_path_hash)
 set(MR_ADM_RUST_TARGET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/rust/cargo/rust_${_mr_rust_path_hash}")
 # Keep the Cargo link on the same SDK and deployment target as the C++ islands.
-set(MR_ADM_CARGO_ENV "RUSTFLAGS=-Crelocation-model=pic" "CARGO_INCREMENTAL=0"
+set(MR_ADM_CARGO_COMMAND "${CMAKE_COMMAND}" -E env "CARGO_INCREMENTAL=0"
     "MRADM_NATIVE_LINK_FILE=${MR_ADM_NATIVE_LINK_FILE}"
     "CARGO_BUILD_RUSTC=${Rust_COMPILER_CACHED}")
 if(APPLE)
     if(CMAKE_OSX_SYSROOT)
-        list(APPEND MR_ADM_CARGO_ENV "SDKROOT=${CMAKE_OSX_SYSROOT}")
+        list(APPEND MR_ADM_CARGO_COMMAND "SDKROOT=${CMAKE_OSX_SYSROOT}")
     endif()
     if(CMAKE_OSX_DEPLOYMENT_TARGET)
-        list(APPEND MR_ADM_CARGO_ENV "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+        list(APPEND MR_ADM_CARGO_COMMAND "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}")
     endif()
 endif()
+if(MSVC AND CMAKE_MSVC_RUNTIME_LIBRARY)
+    # Merge the active Cargo flags at build time. Their unit separator cannot appear in VS XML.
+    list(APPEND MR_ADM_CARGO_COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_LIST_DIR}/MRRunCargoMSVC.cmake"
+        -- "${CMAKE_MSVC_RUNTIME_LIBRARY}")
+else()
+    list(APPEND MR_ADM_CARGO_COMMAND "RUSTFLAGS=-Crelocation-model=pic")
+endif()
+list(APPEND MR_ADM_CARGO_COMMAND "${Rust_CARGO_CACHED}")
 
 set(_mr_consistency_features)
 if(MR_ADM_ENABLE_SOFA)
@@ -157,8 +167,7 @@ if(MR_ADM_CORE_BUILD_CLI)
     endif()
 endif()
 add_custom_target(mr_adm_rust ALL
-    COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV}
-        "${Rust_CARGO_CACHED}" build --locked --profile "${_mr_profile}"
+    COMMAND ${MR_ADM_CARGO_COMMAND} build --locked --profile "${_mr_profile}"
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-capi ${_mr_cargo_targets}
         --no-default-features ${_mr_consistency_feature_args}
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
@@ -224,7 +233,7 @@ foreach(_mr_consistency_example IN ITEMS kernels render stream scene)
         set(_mr_consistency_all ALL)
     endif()
     add_custom_target(mr_adm_consistency_${_mr_consistency_example} ${_mr_consistency_all}
-        COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked --release
+        COMMAND ${MR_ADM_CARGO_COMMAND} build --locked --release
             --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
             --example consistency_${_mr_consistency_example} --no-default-features ${_mr_consistency_feature_args}
             --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
@@ -256,7 +265,7 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/rust-dependencies.json" "${_mr_cargo_met
 
 add_custom_target(mr_adm_rust_quality
     COMMAND "${Rust_CARGO_CACHED}" fmt --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" --all -- --check
-    COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" clippy --locked --workspace --all-targets
+    COMMAND ${MR_ADM_CARGO_COMMAND} clippy --locked --workspace --all-targets
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" -- -D warnings
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/rust"

@@ -19,6 +19,13 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         message(FATAL_ERROR "${package_name} was not found and MR_ADM_CORE_FETCH_DEPS is OFF")
     endif()
 
+    if(MSVC AND package_name MATCHES "^(FLAC|Opus)$")
+        # A shared FetchContent source cache may serve both /MD and /MT builds. Keep the .lib
+        # referenced by each native link manifest in the tree that selected its CRT.
+        string(TOLOWER "${package_name}" _mr_codec)
+        set(_mr_codec_binary_dir BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/_deps/${_mr_codec}-build")
+    endif()
+
     if(package_name STREQUAL "nlohmann_json")
         set(JSON_BuildTests OFF CACHE INTERNAL "")
         FetchContent_Declare(
@@ -139,6 +146,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_REPOSITORY https://github.com/xiph/flac.git
             GIT_TAG 1.5.0
             GIT_SHALLOW TRUE
+            ${_mr_codec_binary_dir}
             # Linked statically into mradm and the shared library only: no install rules of its own
             # (CMake 3.28+; older versions still install the FLAC headers and archive).
             EXCLUDE_FROM_ALL
@@ -250,6 +258,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         FetchContent_Declare(Opus
             GIT_REPOSITORY https://github.com/xiph/opus.git
             GIT_TAG v1.5.2 GIT_SHALLOW TRUE
+            ${_mr_codec_binary_dir}
             # As FLAC: linked statically, nothing of its own installed (CMake 3.28+).
             EXCLUDE_FROM_ALL)
         FetchContent_MakeAvailable(Opus)

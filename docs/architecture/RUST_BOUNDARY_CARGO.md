@@ -48,15 +48,16 @@
   libFLAC / libopus / dr_flac / miniaudio（和可选的 IAMF bridge）；
 - 岛的库一律为静态库，C ABI 是唯一的共享库；
 - 与顶层树共用的选项和编译设置在 `cmake/MRProject.cmake`（PIC 现在总是开启，因为 cdylib 要链接这些归档）；
-- MSVC 的 Debug 与 Release 都使用 `/MD`，让 C/C++ 岛、编解码库和 C ABI 消费者与 Rust 使用同一动态 CRT。
+- MSVC 的 Debug 与 Release 默认使用零售版动态 CRT（`/MD`）。父 CMake 工程可在引入 Core 前设置 `CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` 选择零售版静态 CRT（`/MT`）。岛、vendored 编解码库和嵌套的 Cargo 构建共用该选择。
+- MSVC 构建树可以共享 FetchContent 下载的源码。libFLAC 和 libopus 的归档随各自的构建树保存，使链接清单始终指向所选 CRT 的产物。
 - 写出 `mradm_native_link-<config>.txt`。清单按链接顺序列出归档（`file:`）、编解码库（`link:`）与平台库
   （`framework:` / `system:`），并记录编解码库在当前配置下的传递链接依赖（`target:`）。
 - `mr_adm_native` 以同样顺序把它们交给顶层树的 C++ 测试。
 
 **`rust/crates/mradm-islands-sys`**（`links = "mradm_islands"`），构建脚本有两种工作方式：
-- 设置了 `MRADM_NATIVE_LINK_FILE`（顶层树为它的每个 Cargo 命令设置）时，直接读该树的清单，不重复构建；
+- 设置了 `MRADM_NATIVE_LINK_FILE` 时直接使用该树的归档。MSVC 清单中的 `msvc-runtime` 与当前 Rust 目标的 CRT 必须匹配。固定 Rust 工具链支持零售版 `MultiThreaded` 和 `MultiThreadedDLL`；
 - 否则经 `cmake` crate 在 `OUT_DIR` 配置并构建 `src/`：
-  - 始终是 Release，MSVC 上固定动态 CRT（`MultiThreadedDLL`），与 Rust 一致；
+  - 原生库以 Release 构建，MSVC 的 CRT 由 Cargo 目标的 `crt-static` 特性决定；
   - 从环境读取 `MR_ADM_FLAC_PROVIDER` / `MR_ADM_OPUS_PROVIDER`；
   - 设置了 `MR_ADM_IAMF_AOM_ROOT` 时开启 IAMF；
   - `MRADM_NATIVE_CMAKE_ARGS` 可再传入以 `;` 分隔的 `NAME=VALUE` 缓存项。

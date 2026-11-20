@@ -17,9 +17,9 @@ option(MR_ADM_ENABLE_IAMF "Enable IAMF encoding via the official AOM iamf-tools 
 # every object in those archives must be built as PIC, so establish the default before FetchContent
 # and any island target is created.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-if(MSVC)
-    # Rust links the retail DLL CRT even in Debug. Use it for the islands, their dependencies
-    # and the C++ consumers of the Rust static library so they share the same CRT and C++ ABI.
+if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+    # Standalone builds use Rust's default retail CRT, including in Debug. An embedding project
+    # can select MultiThreaded (/MT) for its executable and all of the native archives.
     set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
 endif()
 

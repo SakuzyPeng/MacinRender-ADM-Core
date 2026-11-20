@@ -3,7 +3,7 @@
 //! `src/CMakeLists.txt` through the `cmake` crate. The manifest has one `kind:value` line per library,
 //! in link order. `file:`, `framework:` and `system:` identify paths and platform libraries.
 //! `link:` selects a codec target, and `target:Name=FILE;LINKS` records its evaluated CMake link
-//! interface and those of its dependencies.
+//! interface and those of its dependencies. `msvc-runtime:` records the selected CRT.
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -22,9 +22,10 @@ fn main() {
     ] {
         println!("cargo::rerun-if-env-changed={name}");
     }
+    let runtime = msvc_runtime();
     let manifest = match std::env::var_os("MRADM_NATIVE_LINK_FILE") {
         Some(path) => PathBuf::from(path),
-        None => build(),
+        None => build(runtime),
     };
     println!("cargo::rerun-if-changed={}", manifest.display());
     println!("cargo::metadata=manifest={}", manifest.display());
@@ -47,6 +48,12 @@ fn main() {
             "framework" => println!("cargo::rustc-link-lib=framework={value}"),
             "system" => system_library(value),
             "link" => link_item(value, &targets, &mut Vec::new()),
+            "msvc-runtime" => assert!(
+                Some(value) == runtime,
+                "{} uses {value}, but this Rust target requires {}. Match CMAKE_MSVC_RUNTIME_LIBRARY to Rust's crt-static setting",
+                manifest.display(),
+                runtime.unwrap_or("a non-MSVC runtime")
+            ),
             "target" => {}
             _ => panic!("{}: unknown kind {kind}", manifest.display()),
         }
@@ -149,9 +156,22 @@ fn link_archive(path: &Path) {
     println!("cargo::rustc-link-lib=static:-bundle={name}");
 }
 
-/// Builds the islands' project in OUT_DIR, always optimized (the C++ islands do no numerical work
-/// that a debug build checks), with the dynamic C runtime on Windows like Rust.
-fn build() -> PathBuf {
+/// Cargo describes the target's CRT even when the build script runs on a different host.
+fn msvc_runtime() -> Option<&'static str> {
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
+        return None;
+    }
+    let features = std::env::var("CARGO_CFG_TARGET_FEATURE").expect("Cargo target features");
+    let static_crt = features.split(',').any(|feature| feature == "crt-static");
+    Some(if static_crt {
+        "MultiThreaded"
+    } else {
+        "MultiThreadedDLL"
+    })
+}
+
+/// Builds the islands' project in OUT_DIR, optimized and with the target's C runtime.
+fn build(runtime: Option<&str>) -> PathBuf {
     // A shared Cargo target directory can reuse the compiled build script in another checkout.
     let manifest_dir =
         PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
@@ -167,6 +187,9 @@ fn build() -> PathBuf {
             "MR_ADM_CONSISTENCY_DIAGNOSTICS",
             on(cfg!(feature = "diagnostics")),
         );
+    if let Some(runtime) = runtime {
+        config.define("CMAKE_MSVC_RUNTIME_LIBRARY", runtime);
+    }
     for name in ["MR_ADM_FLAC_PROVIDER", "MR_ADM_OPUS_PROVIDER"] {
         if let Ok(value) = std::env::var(name) {
             config.define(name, value);

@@ -142,6 +142,63 @@ file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/link.txt" CONTENT "${links}")
         self.configure(source, build, '-DCMAKE_BUILD_TYPE=Debug')
         self.assertIn('target:FLAC::deps=;\n', link_file.read_text())
 
+    @unittest.skipUnless(sys.platform == 'win32', 'MSVC runtime selection')
+    def test_msvc_runtime_from_parent_reaches_native_targets_and_cargo(self):
+        source = self.root / 'parent'
+        source.mkdir()
+        # Exercise the vendored paths without fetching or compiling either codec.
+        for package, target in [('FLAC', 'FLAC'), ('Opus', 'opus')]:
+            codec = source / package
+            codec.mkdir()
+            (codec / f'{target}.c').write_text('')
+            (codec / 'CMakeLists.txt').write_text(
+                f'add_library({target} STATIC {target}.c)\nadd_library({package}::{target} ALIAS {target})\n')
+        (source / 'CMakeLists.txt').write_text(f"""
+cmake_minimum_required(VERSION 3.24)
+project(consumer LANGUAGES C CXX)
+set(MR_ADM_CORE_BUILD_TESTS OFF CACHE BOOL "")
+set(MR_ADM_CORE_BUILD_CLI OFF CACHE BOOL "")
+set(MR_ADM_FLAC_PROVIDER VENDORED CACHE STRING "")
+set(MR_ADM_OPUS_PROVIDER VENDORED CACHE STRING "")
+set(FETCHCONTENT_BASE_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/shared-cache" CACHE PATH "")
+set(FETCHCONTENT_SOURCE_DIR_FLAC "${{CMAKE_CURRENT_SOURCE_DIR}}/FLAC")
+set(FETCHCONTENT_SOURCE_DIR_OPUS "${{CMAKE_CURRENT_SOURCE_DIR}}/Opus")
+add_library(miniaudio INTERFACE IMPORTED GLOBAL)
+if(DEFINED PARENT_RUNTIME)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "${{PARENT_RUNTIME}}")
+endif()
+add_subdirectory("{REPO.as_posix()}" core)
+get_directory_property(cargo DIRECTORY "{REPO.as_posix()}" DEFINITION MR_ADM_CARGO_COMMAND)
+add_custom_target(rust_cfg COMMAND "${{CMAKE_COMMAND}}" -E env "CARGO_ENCODED_RUSTFLAGS=--cfg=parent_flag"
+    ${{cargo}} rustc --offline --target "${{Rust_CARGO_TARGET_CACHED}}" --manifest-path "${{CMAKE_CURRENT_SOURCE_DIR}}/Cargo.toml"
+    --lib -- --print cfg VERBATIM)
+""", encoding='utf-8')
+        (source / 'Cargo.toml').write_text(
+            '[workspace]\n[package]\nname="crt-probe"\nversion="0.1.0"\nedition="2024"\n[lib]\npath="lib.rs"\n')
+        (source / 'lib.rs').write_text('')
+        build = self.root / 'build'
+        cases = [
+            ('Debug', [], 'MultiThreadedDLL', 'MD', False),
+            ('Release', ['-DPARENT_RUNTIME=$<IF:$<CONFIG:Release>,MultiThreaded,MultiThreadedDLL>'],
+             'MultiThreaded', 'MT', True),
+        ]
+        for config, flags, runtime, native_flag, static in cases:
+            with self.subTest(config=config, runtime=runtime):
+                self.configure(source, build, '-DCMAKE_BUILD_TYPE=' + config, *flags)
+                manifest = (build / 'core' / 'src' / f'mradm_native_link-{config}.txt').read_text().splitlines()
+                self.assertIn('msvc-runtime:' + runtime, manifest)
+                for target in ('FLAC::FLAC', 'Opus::opus'):
+                    entry = next(line for line in manifest if line.startswith(f'target:{target}='))
+                    archive = Path(entry.split('=', 1)[1].split(';')[0])
+                    self.assertTrue(archive.is_relative_to(build), entry)
+                commands = json.loads((build / 'compile_commands.json').read_text(encoding='utf-8'))
+                for filename in ('island.cpp', 'FLAC.c', 'opus.c'):
+                    unit = next(row for row in commands if Path(row['file']).name == filename)
+                    self.assertRegex(unit['command'], rf'(?:^|\s)[/-]{native_flag}(?:\s|$)')
+                cfg = self.run_ok([OPTIONS.cmake, '--build', build, '--target', 'rust_cfg']).stdout.splitlines()
+                self.assertIn('parent_flag', cfg)
+                self.assertEqual('target_feature="crt-static"' in cfg, static)
+
     def test_strict_fp_rejects_common_and_release_conflicts(self):
         source = self.project()
         build = self.root / 'strict-build'

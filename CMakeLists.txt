@@ -119,7 +119,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             set(_mr_tool_features --no-default-features ${_mr_consistency_feature_args})
         endif()
         add_custom_target(mr_adm_${_mr_tool_example} ${_mr_tool_all}
-            COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked --release
+            COMMAND ${MR_ADM_CARGO_COMMAND} build --locked --release
                 --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p ${_mr_tool_package}
                 --example ${_mr_tool_example} ${_mr_tool_features}
                 --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
@@ -150,7 +150,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
             list(APPEND _mr_probe_depends mr_adm_room_cuda)
         endif()
         add_custom_target(mr_adm_${_mr_probe}
-            COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked
+            COMMAND ${MR_ADM_CARGO_COMMAND} build --locked
                 --profile "${_mr_probe_profile}"
                 --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-ffi
                 --example ${_mr_probe} --no-default-features ${_mr_consistency_feature_args}
@@ -190,7 +190,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         endif()
         foreach(_room_probe IN ITEMS room_hrir_check room_omni room_reflection_check)
             add_custom_target(mr_adm_${_room_probe}
-                COMMAND "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" build --locked --release
+                COMMAND ${MR_ADM_CARGO_COMMAND} build --locked --release
                     --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp --no-default-features
                     --example ${_room_probe} --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
                 COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -304,11 +304,11 @@ if(MR_ADM_CORE_BUILD_TESTS)
         list(APPEND _mr_rust_test_features --features sofa)
     endif()
     set(_mr_rust_unit_test_command
-        "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" test --locked --workspace
+        ${MR_ADM_CARGO_COMMAND} test --locked --workspace
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}" ${_mr_rust_test_features})
     set(_mr_room_trace_test_command
-        "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" test --locked
+        ${MR_ADM_CARGO_COMMAND} test --locked
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml" -p mradm-dsp
         --no-default-features --features room-trace --test room_profile --test room_no_alloc
         --test rayon_sleep_no_alloc
@@ -330,7 +330,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
 
     # The release workflows run the encoder tests with the product's profile and native libraries.
     set(_mr_encoder_test_command
-        "${CMAKE_COMMAND}" -E env ${MR_ADM_CARGO_ENV} "${Rust_CARGO_CACHED}" test --locked
+        ${MR_ADM_CARGO_COMMAND} test --locked
         --manifest-path "${CMAKE_CURRENT_SOURCE_DIR}/rust/Cargo.toml"
         --target-dir "${MR_ADM_RUST_TARGET_DIR}" --target "${Rust_CARGO_TARGET_CACHED}"
         --profile "${_mr_profile}" --no-default-features ${_mr_consistency_feature_args}
