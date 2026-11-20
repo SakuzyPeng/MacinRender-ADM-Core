@@ -1,5 +1,7 @@
 # dr_flac 替换准备与优先级
 
+> 2026-11-19（七期 7.2 A）：生产不读 FLAC 输入，dr_flac 与整条 FLAC 读取链（`FloatFlacReader`、Rust 校验、`mradm-wav` `flac`）及本选型工具 `scripts/flac-eval` 已删除，本文只作历史记录，见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+
 > 2026-10-07；状态：选型和本机风险验证完成，生产实现未切换。
 > 用户已决定暂缓替换，继续保留 dr_flac。以下方案留待后续重新评估，不是迁移验收记录或新增格式支持承诺。
 

@@ -916,6 +916,21 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 
 生产代码不变（8,684 行）。
 
+
+**7.2 状态**：A 已完成（2026-11-19，本机 Linux x64）。FLAC 写出与 Vorbis comment 改由 `mradm-ffi` `flac` 经手写 `extern` 调用 libFLAC：
+- `Runner::run` 在交给 C++ 岛之前接下 `EncodeFlac` 与 `.flac` 的 `WriteMetadata`；
+- C++ `flac_io.cpp`、dr_flac 与没有生产调用者的 FLAC 读取链（`FloatFlacReader`、`flac_validate`、`mradm-wav` `flac`、探针与测试、`scripts/flac-eval`）删除；
+- 与迁移前的构建对照，CLI 记录 134 条命令 0 差异；压缩级别与标签顺序两处故障注入都被抓到。
+
+生产 C/C++ 8,684 → 8,024 行。
+
+B 已完成（同日）：Opus MKA 改由 `mradm-ffi` `opus_mka` 实现：
+- libopus surround multistream 编码器经手写 `extern`（含变参 `ctl`）调用；
+- Matroska 封装与 Tags 由 Rust 写出；
+- `opus_mka_io.cpp` 与 `opus_mka_smoke_test.cpp` 删除；
+- 删除前后各对照一次，都是 134 条命令 0 差异；cluster 间隔与标签名两处注入都被抓到。
+
+生产 C/C++ 8,024 → 7,141 行。C、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

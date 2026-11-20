@@ -560,8 +560,8 @@ fn now() -> i64 {
     }
 }
 
-/// `compact_metadata_comment`.
-fn comment(m: &MetadataFields) -> String {
+/// `compact_metadata_comment`: the COMMENT of the CAF, FLAC, Matroska and MP4 metadata.
+pub fn metadata_comment(m: &MetadataFields) -> String {
     let mut parts = Vec::new();
     if !m.renderer.is_empty() {
         parts.push(format!("renderer={}", m.renderer));
@@ -595,7 +595,7 @@ fn write_own_metadata(ext: &str, path: &PathText, m: &MetadataFields) -> Option<
                 Path::new(&path.utf8),
                 m.encoder.as_bytes(),
                 m.date_utc.as_bytes(),
-                comment(m).as_bytes(),
+                metadata_comment(m).as_bytes(),
             )
             .map_err(|e| wav_failure(e, &path.display)),
         ),

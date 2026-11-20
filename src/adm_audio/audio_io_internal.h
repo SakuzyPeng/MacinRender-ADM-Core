@@ -11,8 +11,6 @@ std::string compact_metadata_comment(const MetadataFields& meta);
 
 Result<void> write_wav_metadata(const std::string& path, const MetadataFields& meta);
 Result<void> write_caf_metadata(const std::string& path, const MetadataFields& meta);
-Result<void> write_flac_metadata(const std::string& path, const MetadataFields& meta);
-Result<void> write_mka_metadata(const std::string& path, const MetadataFields& meta);
 
 // Subprocess worker behind convert_to_apac's stall watchdog. Runs the real
 // AudioToolbox encode in-process and streams a line-based heartbeat protocol on

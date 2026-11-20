@@ -12,10 +12,8 @@ extern "C" {
 typedef struct MradmRustTestServices MradmRustTestServices;
 // clang-format off
 typedef struct MradmRustServices {
-    // WAVE and FLAC input, float output and container edits (wav_ffi.h). Paths are UTF-8.
+    // WAVE input, float output and container edits (wav_ffi.h). Paths are UTF-8.
     int32_t (*wav_reader_open)(const uint8_t*, size_t, MradmWavReader**, MradmWavInfo*, uint8_t*, size_t);
-    // Validates native/Ogg FLAC completely and counts samples, including unknown-length streams.
-    int32_t (*flac_validate)(const uint8_t*, size_t, MradmWavInfo*, uint8_t*, size_t);
     void (*wav_reader_destroy)(MradmWavReader*);
     int32_t (*wav_reader_read)(MradmWavReader*, float*, size_t, uint64_t*, uint8_t*, size_t);
     int32_t (*wav_reader_seek)(MradmWavReader*, uint64_t, uint8_t*, size_t);

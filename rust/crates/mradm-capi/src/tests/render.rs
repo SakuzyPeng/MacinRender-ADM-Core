@@ -1,6 +1,6 @@
 //! Offline renders through `adm_render_file*` to WAV (from `c_api_fixture_test`): error paths and
 //! results, progress v1 / v2, logs, layouts, the DirectSpeakers matrix, loudness and final gain,
-//! trim, cancellation, in-memory semantic policies and Triple Balance D.
+//! trim, cancellation, in-memory semantic policies, Triple Balance D and the final FLAC.
 use super::common::*;
 use crate::cancel::*;
 use crate::options::*;
@@ -549,4 +549,71 @@ fn triple_balance_d_reports_its_model() {
             UNSUPPORTED
         );
     }
+}
+
+/// The channel count and Vorbis comment tags of a FLAC file.
+fn flac_shape(path: &Path) -> (u32, Vec<String>) {
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(&bytes[..4], b"fLaC");
+    let (mut channels, mut tags, mut at) = (0, Vec::new(), 4);
+    loop {
+        let header = bytes[at];
+        let len = u32::from_be_bytes([0, bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize;
+        let body = &bytes[at + 4..at + 4 + len];
+        match header & 0x7f {
+            0 => channels = u32::from((body[12] >> 1) & 7) + 1,
+            4 => {
+                let le = |o: usize| u32::from_le_bytes(body[o..o + 4].try_into().unwrap()) as usize;
+                let mut o = 4 + le(0);
+                let count = le(o);
+                o += 4;
+                for _ in 0..count {
+                    let n = le(o);
+                    tags.push(String::from_utf8(body[o + 4..o + 4 + n].to_vec()).unwrap());
+                    o += 4 + n;
+                }
+            }
+            _ => {}
+        }
+        at += 4 + len;
+        if header & 0x80 != 0 {
+            return (channels, tags);
+        }
+    }
+}
+
+/// The final FLAC (from `flac_io_smoke_test`, encoded in Rust since PCM consistency 7.2 A): rendered
+/// to a unique float32 temporary, encoded, the temporary removed while a stale file at the former
+/// fixed temporary path stays untouched, and the Vorbis comment written with the 5.1 channel mask.
+#[test]
+fn flac_outputs_are_encoded_and_tagged() {
+    let context = Context::new();
+    let dir = Dir::new("render-flac");
+    let input = object_input(&dir, 48000, false);
+    let output = dir.file("out.flac");
+    let legacy = dir.file("out.render_tmp.wav");
+    std::fs::write(&legacy, "stale").unwrap();
+    let options = Options::new();
+    unsafe {
+        adm_render_options_set_renderer(options.0, 2);
+        adm_render_options_set_output_layout(options.0, c"5.1".as_ptr());
+        adm_render_options_set_peak_limit(options.0, 0);
+    }
+    let (code, result) = render(&context, &input, &output, Some(&options));
+    assert_eq!(code, OK, "{}", result.message());
+    assert_eq!(std::fs::read(&legacy).unwrap(), b"stale");
+    std::fs::remove_file(&legacy).unwrap();
+    assert!(!dir.has_sidecar(&output, "render_tmp"));
+    assert!(!dir.has_sidecar(&output, "output_tmp"));
+    let (channels, tags) = flac_shape(&output);
+    assert_eq!(channels, 6);
+    assert!(
+        tags.iter()
+            .any(|t| t == "WAVEFORMATEXTENSIBLE_CHANNEL_MASK=0x0000003F"),
+        "{tags:?}"
+    );
+    assert!(
+        tags.iter().any(|t| t.starts_with("COMMENT=renderer=")),
+        "{tags:?}"
+    );
 }

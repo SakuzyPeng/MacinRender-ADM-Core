@@ -33,8 +33,8 @@
 ccache（Windows 用 sccache）和平台编译工具。C/C++ 第三方依赖（FLAC、Opus、miniaudio 等）
 由 FetchContent 或 vendored provider 处理；Rust 依赖由 Cargo 按 `rust/Cargo.lock`（`--locked`）获取。
 
-构建不获取 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64、libear 或 dr_wav
-（dr_libs 只为 dr_flac 获取）。这些旧库的对照测试、`MR_ADM_BUILD_*_REFERENCE_TESTS` 开关与手动的
+构建不获取 SAF、OpenBLAS/LAPACKE、libmysofa、libebur128、libsamplerate、libadm、libbw64、libear、dr_wav 或 dr_libs
+（dr_flac 随七期 7.2 A 删除）。这些旧库的对照测试、`MR_ADM_BUILD_*_REFERENCE_TESTS` 开关与手动的
 `reference-tests.yml` 已随 R1 删除（用户决定 2026-11-14，见 `docs/architecture/RUST_REFERENCE_RETENTION.md`）。
 
 ### 第二阶段：质量 CI
@@ -295,9 +295,9 @@ Cargo 因此使用 `release` profile（而非 `minsizerel`）。
 Windows GUI 普通包和 CUDA 试用包都启用 `MR_ADM_ENABLE_SOFA=ON`，保留自定义 SOFA HRIR 的批渲染和监听能力。
 打包脚本会覆盖复用构建树中的 SOFA 关闭配置；使用 `-SkipNative` 时则要求原生 bundle 已按此配置构建。
 
-`release-windows` 在打包前用 ctest 运行一组优化构建下的测试，覆盖主要编码器：
-`mr_adm_flac_io_smoke_tests`、`mr_adm_opus_mka_smoke_tests`、`mr_adm_cli_smoke_tests`（R3 E4 起是 `mradm-cli` 的
-`tests/binary.rs`：同名 CMake 目标构建 Cargo 测试二进制，ctest 以 `MRADM_EXE_PATH` 指向优化构建的 `mradm` 运行它）。渲染后端与后处理在 Rust 中，
+`release-windows` 在打包前用 CTest 运行 `mr_adm_encoder_tests` 和 `mr_adm_cli_smoke_tests`。
+编码器测试沿用产品的 Release profile 和原生库，运行 `mradm-ffi` 中的 FLAC、Opus MKA 测试和 `mradm-capi` 的最终 FLAC 测试。
+`windows-bringup.yml` 也运行这组编码器测试。CLI 测试通过 `MRADM_EXE_PATH` 指向优化构建的 `mradm`。渲染后端与后处理在 Rust 中，
 它们的整段渲染测试（R3 C 由 C++ 移植，`mradm-engine` 的 `*_render`、`render_service` 与 `mradm-render` 的后端测试）
 以 `cargo test --release -p mradm-engine -p mradm-render` 在同一 job 中运行。
 完整测试集仍由必需 CI 的 `windows-debug` 覆盖；SOFA 的 Unicode 路径与两种准备流程（原 `mr_adm_sofa_fixture_tests`，R3 B）

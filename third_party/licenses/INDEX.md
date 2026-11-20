@@ -7,7 +7,6 @@
 |---|---|---|---|
 | aom-iamf-tools-bridge | external-sdk | BSD-3-Clause-Clear AND AOM-PL-1.0 | `NOTICE.txt` |
 | apple-system-frameworks | platform-sdk | LicenseRef-Apple-SDK | `NOTICE.txt` |
-| dr_libs | 47a4f08e777faddf59a8955c4ea84f69f41020d5 | Unlicense OR MIT-0 | `LICENSE` |
 | libadm-common-definitions | 0.14.0 | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libear-derived-rust-ear | 2db69f8f-subset | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libFLAC | 1.5.0 | BSD-3-Clause | `COPYING.Xiph` |

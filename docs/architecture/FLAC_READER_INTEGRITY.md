@@ -1,5 +1,7 @@
 # FLAC 读取完整性、未知长度与所有权
 
+> 2026-11-19（七期 7.2 A）：本文描述的 FLAC 读取链没有生产调用者，已随 dr_flac 删除，本文只作历史记录，见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+
 2026-11-06。处理 [FLAC 选型记录](RUST_FLAC_DECODER_PLAN.md) 中的三个读取接口遗留项。
 本批保留 dr_flac 的 PCM 解码及现有 libFLAC provider，没有引入新的解码库或独立构建缓存。
 公开 `c_api.h` 和 FLAC 输出编码规则不变。

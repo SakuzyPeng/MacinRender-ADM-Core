@@ -584,6 +584,9 @@ impl render::Islands for Runner<'_> {
                 .apple
                 .map(|apple| self.apple(apple, island, scene, &bridge));
         }
+        if let Some(reply) = own_island(island, &bridge) {
+            return Some(reply);
+        }
         let run = self.islands.run?;
         let mut storage = IslandStorage::default();
         let mut e = empty_event();
@@ -595,6 +598,40 @@ impl render::Islands for Runner<'_> {
         }
         Some(unsafe { reply_of(&reply) })
     }
+}
+
+/// The islands implemented in Rust (PCM consistency 7.2): FLAC and Opus MKA encoding and their
+/// metadata.
+/// Their progress and cancellation go through the same bridge as the C++ islands'.
+fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
+    let user: *mut c_void = ptr::from_ref(bridge).cast_mut().cast();
+    let cancelled = || unsafe { bridge_cancelled(user) } != 0;
+    let progress = |p: &Progress| {
+        let raw = progress_record(p);
+        unsafe { bridge_progress(user, &raw) };
+    };
+    let result = match island {
+        Island::EncodeFlac { src, dst } => {
+            crate::flac::encode(&src.utf8, &dst.utf8, &cancelled, &progress)
+        }
+        Island::EncodeOpus {
+            src,
+            dst,
+            layout,
+            bitrate,
+        } => crate::opus_mka::encode(&src.utf8, &dst.utf8, layout, *bitrate, &cancelled),
+        Island::WriteMetadata { path, fields } if crate::flac::is_flac(&path.utf8) => {
+            crate::flac::write_metadata(&path.utf8, fields)
+        }
+        Island::WriteMetadata { path, fields } if crate::opus_mka::is_mka(&path.utf8) => {
+            crate::opus_mka::write_metadata(&path.utf8, fields)
+        }
+        _ => return None,
+    };
+    Some(Reply {
+        error: result.err(),
+        ..Reply::default()
+    })
 }
 
 /// `e` mapped by `map`; the message borrows `e`'s unless it was empty.

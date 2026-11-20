@@ -63,13 +63,6 @@ WriterHandle::open(const std::string& path, uint32_t channels, uint32_t sample_r
         }
         return WriterHandle{std::move(*res)};
     }
-    if (ext == ".flac") {
-        auto res = FloatFlacWriter::open(path, channels, sample_rate);
-        if (!res) {
-            return mradm::unexpected{res.error()};
-        }
-        return WriterHandle{std::move(*res)};
-    }
     auto res = FloatWavWriter::open(path, channels, sample_rate);
     if (!res) {
         return mradm::unexpected{res.error()};
@@ -82,15 +75,7 @@ uint64_t WriterHandle::write(const float* samples, uint64_t frame_count) {
 }
 
 Result<void> WriterHandle::finish() {
-    return std::visit(
-        [](auto& w) -> Result<void> {
-            if constexpr (requires { w.finish(); }) {
-                return w.finish();
-            } else {
-                return {}; // The FLAC writer finalizes in its destructor.
-            }
-        },
-        impl_);
+    return std::visit([](auto& w) { return w.finish(); }, impl_);
 }
 
 } // namespace mradm::audio

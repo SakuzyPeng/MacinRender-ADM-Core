@@ -7,7 +7,7 @@ use crate::render::{RenderLfeRouting, RenderOverride};
 use crate::render_apple::{RenderApplePlan, RenderApplePlanView, RenderAppleRequest};
 use crate::scene::{DirectMatrix, DirectMatrixView, LayoutEntry, SceneHandle, SceneImportInfo};
 use crate::wav::{Info, OutputHandle, ReadHandle, WavBext};
-use crate::{flac, meter, output_dsp, render, render_apple, scene, scene_math, wav};
+use crate::{meter, output_dsp, render, render_apple, scene, scene_math, wav};
 use mradm_dsp::{gain::GainBank, meter::Meter, scene_math::Rotation};
 
 /// `MradmRustServices`: field for field the former `mradm_*` entries, without the prefix.
@@ -21,7 +21,6 @@ pub struct RustServices {
         *mut u8,
         usize,
     ) -> i32,
-    flac_validate: unsafe extern "C" fn(*const u8, usize, *mut Info, *mut u8, usize) -> i32,
     wav_reader_destroy: unsafe extern "C" fn(*mut ReadHandle),
     wav_reader_read:
         unsafe extern "C" fn(*mut ReadHandle, *mut f32, usize, *mut u64, *mut u8, usize) -> i32,
@@ -149,7 +148,6 @@ static TEST_SERVICES: RustTestServices = RustTestServices {
 
 pub(crate) static SERVICES: RustServices = RustServices {
     wav_reader_open: wav::mradm_wav_reader_open,
-    flac_validate: flac::mradm_flac_validate,
     wav_reader_destroy: wav::mradm_wav_reader_destroy,
     wav_reader_read: wav::mradm_wav_reader_read,
     wav_reader_seek: wav::mradm_wav_reader_seek,

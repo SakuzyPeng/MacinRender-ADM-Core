@@ -43,28 +43,6 @@
     },
     {
       "type": "library",
-      "name": "dr_libs",
-      "version": "47a4f08e777faddf59a8955c4ea84f69f41020d5",
-      "description": "FLAC 解码（dr_flac）",
-      "licenses": [
-        {
-          "expression": "Unlicense OR MIT-0"
-        }
-      ],
-      "purl": "pkg:github/mackron/dr_libs@47a4f08e777faddf59a8955c4ea84f69f41020d5",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "miniaudio",
       "version": "0.11.21",
       "description": "实时音频设备输出（监听引擎）",
