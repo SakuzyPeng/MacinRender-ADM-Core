@@ -3,6 +3,8 @@ use mradm_engine::{offline::Progress, request::Error};
 use std::io::{self, Write};
 
 #[cfg(target_os = "macos")]
+mod encoder;
+#[cfg(target_os = "macos")]
 mod watchdog;
 #[cfg(target_os = "macos")]
 mod worker;

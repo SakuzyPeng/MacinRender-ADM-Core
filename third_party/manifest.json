@@ -389,6 +389,153 @@
       "notes": "仅构建时使用（build-dependency），不编入产物。"
     },
     {
+      "name": "rust-dispatch2-0.3.1",
+      "version": "0.3.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/dispatch2@0.3.1",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "Apple 框架绑定的可选 Grand Central Dispatch 依赖",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "dispatch2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "当前 APAC 配置仅锁定此可选依赖。"
+    },
+    {
+      "name": "rust-objc2-0.6.5",
+      "version": "0.6.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2@0.6.5",
+      "license": "MIT",
+      "purpose": "Apple 框架绑定的 Objective-C 运行时接口",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可声明取自 crate 对应的上游提交。"
+    },
+    {
+      "name": "rust-objc2-audio-toolbox-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-audio-toolbox@0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "macOS APAC worker 的 AudioToolbox 编码接口",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-audio-toolbox",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可声明取自 crate 对应的上游提交。"
+    },
+    {
+      "name": "rust-objc2-core-audio-types-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-core-audio-types@0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "macOS APAC 的声道布局、PCM 格式与音频缓冲区类型",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-core-audio-types",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可声明取自 crate 对应的上游提交。"
+    },
+    {
+      "name": "rust-objc2-core-foundation-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-core-foundation@0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "macOS APAC 的文件 URL 与转换器配置数组",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-core-foundation",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可声明取自 crate 对应的上游提交。"
+    },
+    {
+      "name": "rust-objc2-encode-4.1.0",
+      "version": "4.1.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-encode@4.1.0",
+      "license": "MIT",
+      "purpose": "objc2 的 Objective-C 类型编码",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-encode",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可声明取自 crate 对应的上游提交。"
+    },
+    {
+      "name": "rust-objc2-foundation-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-foundation@0.3.2",
+      "license": "MIT",
+      "purpose": "AudioToolbox 绑定依赖的 Foundation 类型",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-foundation",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可声明取自 crate 对应的上游提交。"
+    },
+    {
       "name": "rust-dasp_frame-0.11.0",
       "version": "0.11.0",
       "cmake_key": null,

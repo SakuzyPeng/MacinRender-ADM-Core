@@ -126,7 +126,6 @@ if(APPLE)
         mr_adm_apple
         PRIVATE
             adm_apple/spatial_mixer_renderer.cpp
-            adm_apple/apac_encoder.cpp
             adm_apple/apple_island.cpp
             adm_apple/avsamplebuffer_device.mm
         PUBLIC

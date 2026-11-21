@@ -22,7 +22,6 @@ include = [
     "EngineLayout",
     "EngineMode",
     "EngineProgress",
-    "ApacEncoder",
     "EngineSceneDeviceProgress",
     "EngineSpatialLayout",
     "IamfEncodeOptions",

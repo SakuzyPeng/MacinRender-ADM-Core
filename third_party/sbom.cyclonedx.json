@@ -469,6 +469,166 @@
     },
     {
       "type": "library",
+      "name": "rust-dispatch2-0.3.1",
+      "version": "0.3.1",
+      "description": "Apple 框架绑定的可选 Grand Central Dispatch 依赖",
+      "licenses": [
+        {
+          "expression": "Zlib OR Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/dispatch2@0.3.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-0.6.5",
+      "version": "0.6.5",
+      "description": "Apple 框架绑定的 Objective-C 运行时接口",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/objc2@0.6.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-audio-toolbox-0.3.2",
+      "version": "0.3.2",
+      "description": "macOS APAC worker 的 AudioToolbox 编码接口",
+      "licenses": [
+        {
+          "expression": "Zlib OR Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-audio-toolbox@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-core-audio-types-0.3.2",
+      "version": "0.3.2",
+      "description": "macOS APAC 的声道布局、PCM 格式与音频缓冲区类型",
+      "licenses": [
+        {
+          "expression": "Zlib OR Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-core-audio-types@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-core-foundation-0.3.2",
+      "version": "0.3.2",
+      "description": "macOS APAC 的文件 URL 与转换器配置数组",
+      "licenses": [
+        {
+          "expression": "Zlib OR Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-core-foundation@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-encode-4.1.0",
+      "version": "4.1.0",
+      "description": "objc2 的 Objective-C 类型编码",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/objc2-encode@4.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-foundation-0.3.2",
+      "version": "0.3.2",
+      "description": "AudioToolbox 绑定依赖的 Foundation 类型",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/objc2-foundation@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
       "name": "rust-dasp_frame-0.11.0",
       "version": "0.11.0",
       "description": "Rust 响度/True Peak 计量的锁定依赖",

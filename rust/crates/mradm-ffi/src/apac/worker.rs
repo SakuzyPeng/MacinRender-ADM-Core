@@ -1,103 +1,22 @@
 //! The worker owns the WAVE reader and reports completed blocks and the start of the encoder flush.
-use crate::adm::Text;
+use super::encoder::Writer;
 use mradm_engine::request::Error;
 use mradm_wav::Reader;
-use std::ffi::{CStr, c_char, c_void};
+use objc2_core_audio_types as ca;
 use std::fs::File;
 use std::io::{BufReader, Write};
-use std::ptr::NonNull;
 
-/// The Apple island's AudioToolbox operations (apac_encoder.h).
-#[repr(C)]
-pub struct ApacEncoder {
-    open: unsafe extern "C" fn(Text, u32, u32, u32, u32, *mut c_char, usize) -> *mut c_void,
-    write: unsafe extern "C" fn(*mut c_void, *mut f32, u32, u32) -> i32,
-    finish: unsafe extern "C" fn(*mut c_void) -> i32,
-}
-
-unsafe extern "C" {
-    fn mradm_apple_apac_encoder() -> *const ApacEncoder;
-}
-
-struct Writer {
-    api: &'static ApacEncoder,
-    file: NonNull<c_void>,
-}
-
-impl Writer {
-    fn open(
-        output: &[u8],
-        tag: u32,
-        bitrate: u32,
-        drc_music: bool,
-        caf: bool,
-    ) -> Result<Self, Error> {
-        let api = unsafe { &*mradm_apple_apac_encoder() };
-        let mut message = [0; 128];
-        let raw = unsafe {
-            (api.open)(
-                Text::bytes(output),
-                tag,
-                bitrate,
-                drc_music.into(),
-                caf.into(),
-                message.as_mut_ptr(),
-                message.len(),
-            )
-        };
-        let file = NonNull::new(raw).ok_or_else(|| {
-            let message = unsafe { CStr::from_ptr(message.as_ptr()) };
-            Error::new(3, message.to_string_lossy(), "")
-        })?;
-        Ok(Self { api, file })
-    }
-
-    fn write(&self, pcm: &mut [f32], channels: u32) -> Result<(), Error> {
-        let frames = (pcm.len() / channels as usize) as u32;
-        let status =
-            unsafe { (self.api.write)(self.file.as_ptr(), pcm.as_mut_ptr(), channels, frames) };
-        check(status, "ExtAudioFileWrite")
-    }
-
-    fn finish(self) -> Result<(), Error> {
-        let writer = std::mem::ManuallyDrop::new(self);
-        check(
-            unsafe { (writer.api.finish)(writer.file.as_ptr()) },
-            "ExtAudioFileDispose",
-        )
-    }
-}
-
-impl Drop for Writer {
-    fn drop(&mut self) {
-        unsafe { (self.api.finish)(self.file.as_ptr()) };
-    }
-}
-
-fn check(status: i32, operation: &str) -> Result<(), Error> {
-    if status == 0 {
-        Ok(())
-    } else {
-        Err(Error::new(
-            3,
-            format!("APAC: {operation} failed ({status})"),
-            "",
-        ))
-    }
-}
-
-/// AudioChannelLayoutTag is the layout identifier in the high half and the channel count in the low half.
 /// For wav71 the encoder takes AudioUnit_7_1, with the sides before the rears.
 fn layout_tag(layout: &[u8]) -> Result<u32, Error> {
-    let (id, channels) = match layout {
-        b"binaural" => (106, 2),
-        b"0+2+0" => (101, 2),
-        b"wav71" => (128, 8),
-        b"hoa3" => (190, 16),
-        b"4+5+0" | b"5.1.4" | b"atmos514" => (195, 10),
-        b"4+7+0" | b"7.1.4" | b"atmos714" => (192, 12),
-        b"9.1.6" | b"atmos916" => (193, 16),
-        b"9+10+3" | b"22.2" | b"cicp13" => (204, 24),
+    let tag = match layout {
+        b"binaural" => ca::kAudioChannelLayoutTag_Binaural,
+        b"0+2+0" => ca::kAudioChannelLayoutTag_Stereo,
+        b"wav71" => ca::kAudioChannelLayoutTag_AudioUnit_7_1,
+        b"hoa3" => ca::kAudioChannelLayoutTag_HOA_ACN_SN3D | 16,
+        b"4+5+0" | b"5.1.4" | b"atmos514" => ca::kAudioChannelLayoutTag_Atmos_5_1_4,
+        b"4+7+0" | b"7.1.4" | b"atmos714" => ca::kAudioChannelLayoutTag_Atmos_7_1_4,
+        b"9.1.6" | b"atmos916" => ca::kAudioChannelLayoutTag_Atmos_9_1_6,
+        b"9+10+3" | b"22.2" | b"cicp13" => ca::kAudioChannelLayoutTag_CICP_13,
         _ => {
             return Err(Error::new(
                 2,
@@ -109,7 +28,7 @@ fn layout_tag(layout: &[u8]) -> Result<u32, Error> {
             ));
         }
     };
-    Ok((id << 16) | channels)
+    Ok(tag)
 }
 
 fn progress(out: &mut dyn Write, current: u64, total: u64) {
@@ -162,7 +81,7 @@ pub(super) fn run(
     } else {
         bitrate
     };
-    let writer = Writer::open(output, tag, bitrate, drc_music, caf)?;
+    let mut writer = Writer::open(output, tag, bitrate, drc_music, caf)?;
     let total = info.frames;
     let mut done = 0;
     let mut pcm = vec![0.; 4096 * channels as usize];
@@ -182,7 +101,7 @@ pub(super) fn run(
                 frame.swap(5, 7);
             }
         }
-        writer.write(block, channels)?;
+        writer.write(block)?;
         done += read;
         progress(out, done, total);
     }

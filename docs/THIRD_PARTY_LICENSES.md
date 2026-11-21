@@ -51,6 +51,13 @@
 | `rust-clap_builder-4.5.41` @ 4.5.41 | clap 的解析与帮助实现 | MIT OR Apache-2.0 | 可用 | 经 clap 引入，features 同 clap。 |
 | `rust-clap_lex-0.7.5` @ 0.7.5 | clap 的命令行分词 | MIT OR Apache-2.0 | 可用 | 经 clap 引入。 |
 | `rust-cmake-0.1.58` @ 0.1.58 | mradm-islands-sys 构建脚本经 cmake crate 构建岛的 CMake 工程（6.6） | Apache-2.0 OR MIT | 可用 | 仅构建时使用（build-dependency），不编入产物。 |
+| `rust-dispatch2-0.3.1` @ 0.3.1 | Apple 框架绑定的可选 Grand Central Dispatch 依赖 | Zlib OR Apache-2.0 OR MIT | macOS only | 当前 APAC 配置仅锁定此可选依赖。 |
+| `rust-objc2-0.6.5` @ 0.6.5 | Apple 框架绑定的 Objective-C 运行时接口 | MIT | macOS only | 许可声明取自 crate 对应的上游提交。 |
+| `rust-objc2-audio-toolbox-0.3.2` @ 0.3.2 | macOS APAC worker 的 AudioToolbox 编码接口 | Zlib OR Apache-2.0 OR MIT | macOS only | 许可声明取自 crate 对应的上游提交。 |
+| `rust-objc2-core-audio-types-0.3.2` @ 0.3.2 | macOS APAC 的声道布局、PCM 格式与音频缓冲区类型 | Zlib OR Apache-2.0 OR MIT | macOS only | 许可声明取自 crate 对应的上游提交。 |
+| `rust-objc2-core-foundation-0.3.2` @ 0.3.2 | macOS APAC 的文件 URL 与转换器配置数组 | Zlib OR Apache-2.0 OR MIT | macOS only | 许可声明取自 crate 对应的上游提交。 |
+| `rust-objc2-encode-4.1.0` @ 4.1.0 | objc2 的 Objective-C 类型编码 | MIT | macOS only | 许可声明取自 crate 对应的上游提交。 |
+| `rust-objc2-foundation-0.3.2` @ 0.3.2 | AudioToolbox 绑定依赖的 Foundation 类型 | MIT | macOS only | 许可声明取自 crate 对应的上游提交。 |
 | `rust-dasp_frame-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-dasp_sample-0.11.0` @ 0.11.0 | Rust 响度/True Peak 计量的锁定依赖 | MIT OR Apache-2.0 | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。 crate 未附许可文本；从发布提交对应的 RustAudio/dasp 仓库补齐，来源见 NOTICE.txt。 |
 | `rust-ebur128-0.1.10` @ 0.1.10 | Rust 响度/True Peak 计量的锁定依赖 | MIT | 可用 | 通过普通 Rust API 使用；不启用 ebur128 capi、c-tests 或 precision-true-peak feature。0.1.10 本地补丁（rust/vendor/ebur128/PATCHES.md）：True Peak 插值滤波器的 Hanning 窗与 sinc 改用 libm 可移植 cos/sin（PCM 一致性二期 2.1）；K-weighting 的 tan/pow、门控系数的 pow 与 LUFS 换算的 log10 改用 libm，x86 不再设置 MXCSR flush-to-zero，所有架构统一在每次调用后清零低于 f64::EPSILON 的滤波器状态（二期 2.2）。 |

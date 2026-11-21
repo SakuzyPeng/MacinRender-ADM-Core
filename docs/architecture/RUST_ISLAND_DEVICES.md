@@ -1,6 +1,6 @@
 # 七期 7.3：输出设备
 
-> 状态：Linux x64 完成（2026-11-21），macOS arm64 与 Windows x64 的原生复核待维护者，见末节。
+> 合并提交 `5b8f62d4` 已在 macOS arm64 与 Windows x64 复核设备生命周期、原生输出和 164 个 C ABI 导出。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.3 之前，监听会话与 Scene 输出经 C++ 设备岛 `mradm_device_islands` 打开设备。它把三种设备包成 `IAudioOutputDevice`，再转成 `MradmDeviceTable` 交给 Rust：
@@ -72,7 +72,7 @@ miniaudio 改按 C 编译，原来是在 C++ 编译单元里编译。房间设�
 
 ## 维护者复核
 
-Linux 上的 sink 代码没有编译过，需要在原生平台上确认：
+初稿列出了以下原生检查。合并时已验证两平台的设备生命周期、原生输出及相关 Rust 和 C ABI 测试。7.4 又用 macOS 实机验证了 7.1.4 系统空间监听的播放、暂停和 seek，佩戴耳机的头追踪听感仍待确认。[7.4 原生行为验证](RUST_ISLAND_APPLE.md#原生行为验证)
 
 1. macOS arm64：Release 构建与 CTest；用 `mr_monitor_spatial_check`（`tests/manual/system_spatial_monitor_check.cpp`）或 GUI 检查 AVSampleBufferAudioRenderer 监听（7.1.4 播放、暂停与继续、seek、音量、头追踪）；7.1.4 硬件设备与立体声耳机设备各开一次监听，后者应得到多声道检查的 `unsupported`。
 2. Windows x64（`build\win-canon`）：Release 构建与 CTest；ISpatialAudioClient 监听，以及未启用空间音效时的 `unsupported`。

@@ -42,6 +42,7 @@
 | rust-dasp_frame-0.11.0 | 0.11.0 | MIT OR Apache-2.0 | `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE.txt` |
 | rust-dasp_sample-0.11.0 | 0.11.0 | MIT OR Apache-2.0 | `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE.txt` |
 | rust-digest-0.10.7 | 0.10.7 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-dispatch2-0.3.1 | 0.3.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-ebur128-0.1.10 | 0.1.10 | MIT | `LICENSE` |
 | rust-either-1.19.0 | 1.19.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-find-msvc-tools-0.1.15 | 0.1.15 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -63,6 +64,12 @@
 | rust-num-integer-0.1.47 | 0.1.47 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-num-rational-0.4.2 | 0.4.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-num-traits-0.2.19 | 0.2.19 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-objc2-0.6.5 | 0.6.5 | MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-audio-toolbox-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-core-audio-types-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-core-foundation-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-encode-4.1.0 | 4.1.0 | MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-foundation-0.3.2 | 0.3.2 | MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-paste-1.0.15 | 1.0.15 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-primal-check-0.3.4 | 0.3.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-proc-macro2-1.0.107 | 1.0.107 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |

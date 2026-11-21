@@ -14,16 +14,16 @@
       "lines": 512
     },
     "island-interfaces": {
-      "files": 12,
-      "lines": 1220
+      "files": 10,
+      "lines": 1078
     },
     "tests": {
       "files": 21,
       "lines": 8289
     },
     "rust": {
-      "files": 396,
-      "lines": 149013
+      "files": 397,
+      "lines": 149184
     },
     "rust-vendor": {
       "files": 175,
@@ -36,8 +36,8 @@
     "rust/crates/mradm-cli": 3602,
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 26846,
-    "rust/crates/mradm-ffi": 19333,
+    "rust/crates/mradm-engine": 26850,
+    "rust/crates/mradm-ffi": 19500,
     "rust/crates/mradm-islands-sys": 230,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
@@ -54,8 +54,6 @@
     "rust/vendor/rustfft": 59632,
     "rust/vendor/sofar": 6647,
     "src/adm_apple": 2311,
-    "src/adm_apple/apac_encoder.cpp": 116,
-    "src/adm_apple/apac_encoder.h": 26,
     "src/adm_apple/apple_backend.h": 218,
     "src/adm_apple/apple_island.cpp": 165,
     "src/adm_apple/apple_island.h": 14,
@@ -80,8 +78,6 @@
     "tests/unit": 6093
   },
   "island_interfaces": {
-    "src/adm_apple/apac_encoder.cpp": 116,
-    "src/adm_apple/apac_encoder.h": 26,
     "src/adm_apple/apple_backend.h": 218,
     "src/adm_apple/apple_island.cpp": 165,
     "src/adm_apple/apple_island.h": 14,

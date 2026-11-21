@@ -33,8 +33,6 @@ ISLAND_INTERFACES = (
     "src/adm_apple/apple_backend.h",
     "src/adm_apple/apple_island.cpp",
     "src/adm_apple/apple_island.h",
-    "src/adm_apple/apac_encoder.cpp",
-    "src/adm_apple/apac_encoder.h",
     "src/adm_apple/island_driver.h",
     "src/adm_engine/platform_island.cpp",
     "src/adm_engine/platform_island.h",

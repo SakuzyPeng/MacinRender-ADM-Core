@@ -46,7 +46,6 @@ FFI_HEADERS = [
     "src/adm_render_common/routing_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
-    "src/adm_apple/apac_encoder.h",
     "src/adm_realtime/miniaudio_island.h",
     "src/adm_core/rust_services_ffi.h",
     "tests/support/ffi/island_test_ffi.h",
@@ -70,7 +69,6 @@ ISLAND_RECORDS = {
     "MradmEngineLayout": "EngineLayout",
     "MradmEngineMode": "EngineMode",
     "MradmEngineProgress": "EngineProgress",
-    "MradmApacEncoder": "ApacEncoder",
     "MradmEngineSceneDeviceProgress": "EngineSceneDeviceProgress",
     "MradmEngineSpatialLayout": "EngineSpatialLayout",
     "MradmIslandContext": "IslandContext",
@@ -88,7 +86,6 @@ ISLAND_RECORDS = {
 # C++ functions the Rust side imports (declared next to the records they take), not Rust exports.
 ISLAND_FUNCTIONS = {
     "mradm_islands_bind",
-    "mradm_apple_apac_encoder",
     "mradm_miniaudio_island",
 }
 
