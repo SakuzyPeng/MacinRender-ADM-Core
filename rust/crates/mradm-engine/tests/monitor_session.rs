@@ -552,7 +552,11 @@ fn output_stage_flips_rebuild_and_restore_the_session() {
     // The flip's own opening is dropped; the rebuild opens the choice again.
     assert_eq!(f.opened(), vec![1, 2, 2]);
     assert!(eventually(|| f.seen(2).revision.load(Ordering::SeqCst) == 7));
-    assert_eq!(s.status().unwrap().state, State::Playing);
+    // Playback resumes once the worker has restored the playhead.
+    assert!(eventually(|| {
+        let status = s.status().unwrap();
+        status.state == State::Playing && status.playhead_frames == 24000
+    }));
     let calls = f.host.calls.lock().unwrap();
     assert_eq!((calls.starts, calls.stops), (2, 1));
 }

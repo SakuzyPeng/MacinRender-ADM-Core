@@ -191,10 +191,11 @@ add_custom_target(rust_cfg COMMAND "${{CMAKE_COMMAND}}" -E env "CARGO_ENCODED_RU
                     entry = next(line for line in manifest if line.startswith(f'target:{target}='))
                     archive = Path(entry.split('=', 1)[1].split(';')[0])
                     self.assertTrue(archive.is_relative_to(build), entry)
-                commands = json.loads((build / 'compile_commands.json').read_text(encoding='utf-8'))
-                for filename in ('island.cpp', 'FLAC.c', 'opus.c'):
-                    unit = next(row for row in commands if Path(row['file']).name == filename)
-                    self.assertRegex(unit['command'], rf'(?:^|\s)[/-]{native_flag}(?:\s|$)')
+                units = json.loads((build / 'compile_commands.json').read_text(encoding='utf-8'))
+                commands = {Path(unit['file']).name: unit['command'] for unit in units}
+                for filename in ('platform_island.cpp', 'FLAC.c', 'opus.c'):
+                    self.assertIn(filename, commands)
+                    self.assertRegex(commands[filename], rf'(?:^|\s)[/-]{native_flag}(?:\s|$)')
                 cfg = self.run_ok([OPTIONS.cmake, '--build', build, '--target', 'rust_cfg']).stdout.splitlines()
                 self.assertIn('parent_flag', cfg)
                 self.assertEqual('target_feature="crt-static"' in cfg, static)
