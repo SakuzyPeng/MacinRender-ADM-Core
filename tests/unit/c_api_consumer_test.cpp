@@ -137,14 +137,15 @@ std::filesystem::path write_fixture(uint32_t sample_rate = 48000U, bool cartesia
 
 bool has_output_sidecar(const std::filesystem::path& final_path, const char* purpose) {
     const auto parent = final_path.parent_path();
-    const auto prefix = final_path.stem().string() + "." + std::string{purpose} + ".";
+    auto prefix = final_path.stem();
+    prefix += "." + std::string{purpose} + ".";
     std::error_code ec;
     const std::filesystem::directory_iterator begin(parent, ec);
     if (ec) {
         return true;
     }
     return std::ranges::any_of(begin, std::filesystem::directory_iterator{}, [&](const auto& entry) {
-        return entry.path().filename().string().starts_with(prefix);
+        return entry.path().filename().native().starts_with(prefix.native());
     });
 }
 
