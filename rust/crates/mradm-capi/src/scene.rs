@@ -36,20 +36,14 @@ use std::pin::Pin;
 use std::ptr;
 use std::sync::{Mutex, MutexGuard};
 
-#[cfg(not(test))]
-unsafe extern "C" {
-    #[link_name = "mradm_device_islands"]
-    fn device_islands() -> *const DeviceIslands;
-}
-
-/// The device islands' table, after binding the islands' Rust services.
+/// The output devices, after binding the islands' Rust services (the system-spatial sinks call them).
 #[cfg(not(test))]
 pub(crate) unsafe fn mradm_device_islands() -> *const DeviceIslands {
     crate::services::bind();
-    unsafe { device_islands() }
+    mradm_ffi::api::islands::devices()
 }
 
-// Unit tests link without the C++ device islands.
+// Unit tests open no hardware devices.
 #[cfg(test)]
 pub(crate) unsafe fn mradm_device_islands() -> *const DeviceIslands {
     ptr::null()

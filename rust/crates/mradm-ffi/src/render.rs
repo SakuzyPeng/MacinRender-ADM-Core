@@ -277,6 +277,8 @@ pub mod device_island;
 pub mod engine_monitor;
 #[path = "engine_monitor_session.rs"]
 pub mod engine_monitor_session;
+#[path = "miniaudio.rs"]
+mod miniaudio;
 
 #[cfg(test)]
 #[path = "../../mradm-render/tests/common/mod.rs"]

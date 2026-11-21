@@ -359,22 +359,31 @@ impl Source for IslandSource {
     }
 }
 
-/// Writes `message` into an island call's error buffers, as a C++ island does.
-#[cfg(test)]
-pub(crate) unsafe fn island_error_for_test(
-    e: *const EngineIslandError,
-    code: i32,
-    message: &str,
-) -> i32 {
-    let e = unsafe { &*e };
-    let n = message
-        .len()
-        .min(unsafe { *e.message_len }.saturating_sub(1));
-    unsafe {
-        std::ptr::copy_nonoverlapping(message.as_ptr(), e.message, n);
-        *e.message.add(n) = 0;
-        *e.message_len = n;
-        *e.context_len = 0;
+/// Writes `message` (and an empty context) into an island call's error buffers as a C++ island
+/// does: truncated to the buffer, NUL-terminated, its length stored; returns `code`.
+pub(crate) unsafe fn island_error(e: *const EngineIslandError, code: i32, message: &str) -> i32 {
+    unsafe fn write(text: &[u8], out: *mut u8, len: *mut usize) {
+        let Some(len) = (unsafe { len.as_mut() }) else {
+            return;
+        };
+        let n = if *len == 0 || out.is_null() {
+            0
+        } else {
+            text.len().min(*len - 1)
+        };
+        if !out.is_null() && *len != 0 {
+            unsafe {
+                std::ptr::copy_nonoverlapping(text.as_ptr(), out, n);
+                *out.add(n) = 0;
+            }
+        }
+        *len = n;
+    }
+    if let Some(e) = unsafe { e.as_ref() } {
+        unsafe {
+            write(message.as_bytes(), e.message, e.message_len);
+            write(b"", e.context, e.context_len);
+        }
     }
     code
 }

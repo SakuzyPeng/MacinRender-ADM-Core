@@ -16,7 +16,6 @@ use std::time::Instant;
 
 unsafe extern "C" {
     fn mradm_islands_bind(services: *const RustServices);
-    fn mradm_device_islands() -> *const DeviceIslands;
     fn mradm_platform_islands() -> *const PlatformIslands;
     #[cfg(target_os = "macos")]
     fn mradm_apple_islands() -> *const AppleIslands;
@@ -28,10 +27,10 @@ fn bind() {
     BIND.call_once(|| unsafe { mradm_islands_bind(services()) });
 }
 
-/// The device island table (process lifetime).
+/// The output devices (process lifetime).
 pub fn devices() -> *const DeviceIslands {
     bind();
-    unsafe { mradm_device_islands() }
+    mradm_ffi::api::islands::devices()
 }
 
 /// The platform island table (process lifetime).

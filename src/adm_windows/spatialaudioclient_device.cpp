@@ -1,6 +1,6 @@
 // spatialaudioclient_device.cpp
 //
-// Windows-only IAudioOutputDevice backed by ISpatialAudioClient. Instead of opening a raw
+// Windows-only output device backed by ISpatialAudioClient. Instead of opening a raw
 // multichannel hardware device (the miniaudio path), it submits the monitor's multichannel bed as
 // spatial-audio objects (one per channel) and the active Windows spatializer (Windows Sonic for
 // Headphones / Dolby Atmos for Headphones / DTS Headphone:X) HRTF-renders them to the headphone
@@ -14,7 +14,7 @@
 // buffer-completion event and fills the object buffers each pass — the same realtime-callback model
 // as miniaudio. So pull_is_realtime_playback() is true and flush/pause/resume stay no-ops (the
 // engine feeds silence through pull() while paused). Windows COM / SpatialAudio types stay confined
-// to adm_windows (ADR 0003); the factory returns the third-party-free IAudioOutputDevice.
+// to adm_windows (ADR 0003); the factory returns the MradmDeviceTable Rust drives.
 
 #include <algorithm>
 #include <atomic>
@@ -41,7 +41,7 @@
 
 #include "../adm_render_common/render_common.h"
 #include "../adm_render_common/speaker_layouts.h"
-#include "audio_output_device.h"
+#include "system_spatial_island.h"
 #include "windows_layouts.h"
 
 namespace mradm::realtime {
@@ -60,13 +60,13 @@ hr_error(ErrorCode code, std::string message, const std::string& where, HRESULT 
     return make_error(code, std::move(message), where + " hr=" + buf);
 }
 
-class SpatialAudioClientDevice final : public IAudioOutputDevice {
+class SpatialAudioClientDevice final {
   public:
     SpatialAudioClientDevice(std::string layout_id, SpeakerGeometry geometry)
         : layout_id_(std::move(layout_id)), geometry_(geometry) {}
-    ~SpatialAudioClientDevice() override { stop(); }
+    ~SpatialAudioClientDevice() { stop(); }
 
-    [[nodiscard]] Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) override {
+    [[nodiscard]] Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) {
         const auto* layout = windows_layouts::find_windows_speaker_layout(layout_id_);
         if (layout == nullptr) {
             return make_error(ErrorCode::unsupported, "系统空间音频不支持该监听布局", "layout=" + layout_id_);
@@ -108,7 +108,7 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         return setup;
     }
 
-    void stop() override {
+    void stop() {
         stop_.store(true, std::memory_order_release);
         if (buffer_event_ != nullptr) {
             SetEvent(buffer_event_); // wake the pump so it can observe stop_
@@ -125,9 +125,8 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
         pull_ = nullptr;
     }
 
-    [[nodiscard]] uint32_t actual_sample_rate() const override { return sample_rate_; }
-    [[nodiscard]] bool pull_is_realtime_playback() const override { return true; }
-    [[nodiscard]] AudioDeviceProgress progress() const override { return {0, false, false, recovering_.load()}; }
+    [[nodiscard]] bool pull_is_realtime_playback() const { return true; }
+    [[nodiscard]] AudioDeviceProgress progress() const { return {0, false, false, recovering_.load()}; }
 
   private:
     enum class PumpResult { Stopped, Invalidated };
@@ -444,8 +443,8 @@ class SpatialAudioClientDevice final : public IAudioOutputDevice {
 
 } // namespace
 
-std::unique_ptr<IAudioOutputDevice> make_spatialaudioclient_device(std::string layout_id, SpeakerGeometry geometry) {
-    return std::make_unique<SpatialAudioClientDevice>(std::move(layout_id), geometry);
+MradmDeviceTable make_spatialaudioclient_device(std::string layout_id, SpeakerGeometry geometry) {
+    return device_table(std::make_unique<SpatialAudioClientDevice>(std::move(layout_id), geometry));
 }
 
 std::vector<SystemSpatialLayoutInfo> system_spatial_layouts() {

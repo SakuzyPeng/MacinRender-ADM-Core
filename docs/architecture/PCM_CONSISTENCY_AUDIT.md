@@ -896,7 +896,7 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 | --- | --- | --- |
 | 7.1 | 方向与基线 | 逐岛清单（第三方与平台 API、Rust 调用的接口与调用方、C++ 测试），岛共用头的使用者，Apple / Windows 评估标准，七期规模基线；恢复 CLI 记录并加入编码矩阵。已完成（2026-11-19），见 [7.1 记录](RUST_ISLAND_BASELINE.md)。 |
 | 7.2 | 编码器迁入 Rust | FLAC 写出与 Vorbis comment、Opus MKA 的 Matroska 封装、IAMF bridge 调用与 MP4 打包器探测和运行、MP4 元数据 atom、APAC worker 的子进程与心跳协议迁入 Rust。<br>libFLAC / libopus / IAMF bridge 由 Rust 经手写 `extern` 直接调用；APAC 的 AudioToolbox 编码移入 Apple 岛；`mradm_audio_island` 与 C++ 编码器删除。<br>同批删除 dr_flac、测试用 FLAC 读取链（`FloatFlacReader`、`flac_validate`、`mradm-wav` 的 `flac` 模块）及其读取探针。用测试端解码保留写出端的 PCM 往返与最终 FLAC 断言。<br>验收要求新旧实现的 CLI 记录 0 差异。macOS 验证 APAC，具备 bridge 与打包器的构建验证 IAMF 与 IAMF-in-MP4，两个 MP4 路径均核对元数据。 |
-| 7.3 | 输出设备 | miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛、`miniaudio_device.cpp` 与 `audio_output_device.h` 删除，Apple / Windows sink 直接提供设备表。 |
+| 7.3 | 输出设备 | miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛、`miniaudio_device.cpp` 与 `audio_output_device.h` 删除，Apple / Windows sink 直接提供设备表。Linux x64 完成（2026-11-21），macOS / Windows 原生复核待维护者，见 [7.3 记录](RUST_ISLAND_DEVICES.md)。 |
 | 7.4 | Apple 岛 | 以 objc2 原型评估 APAC 编码或 AVSampleBufferAudioRenderer sink，按 7.1 的标准决定 AUSpatialMixer 后端、sink 与 APAC 迁入 Rust 或保留窄接口。 |
 | 7.5 | Windows 岛 | 以 windows crate 原型评估 ISpatialAudioClient 的静态床与 MMCSS，同样按 7.1 的标准决定。 |
 | 7.6 | 收尾 | 岛共用的 C++ 头与私有 FFI 记录随调用方删除，C++ 岛测试与顶层 CMake 测试树随岛收缩。评估进度回调跳板和 Windows 打包路径的去留。保留 C++ 回调异常转为 `ADM_ERROR_INTERNAL` 的行为。 |
@@ -951,6 +951,13 @@ C3 已完成（同日）：IAMF bridge 由 `mradm-ffi` `iamf` 经手写 `extern`
 生产 C/C++ 6,311 → 6,100 行。
 
 D 已完成。Rust 接管 APAC worker、心跳、取消与超时清理，Apple 岛保留 AudioToolbox 的打开、写帧和关闭操作，通用 C++ 音频岛入口已删除。生产 C/C++ 降至 5,248 行。macOS arm64 的 IAMF 开、关两种 Release 配置与 Windows x64 各完成 134 条 CLI 对照，均有逐字节零差异记录。额外复测中，参考实现和候选均能生成相同的两种 APAC 载荷。采样条件和差异见 [7.2 记录](RUST_ISLAND_ENCODERS.md#release-验收)。
+
+**7.3 状态**：Linux x64 完成（2026-11-21），macOS arm64 / Windows x64 原生复核待维护者。Rust 打开和驱动输出设备：
+- miniaudio 的实现与窄 C 接口在 `src/adm_realtime/miniaudio_island.{h,c}`（`mr_adm_miniaudio`）；token、多声道检查、拉取与补零、错误消息在 `mradm-ffi` `render::miniaudio`；
+- 设备表由 Rust 组装（`mradm_ffi::api::islands::devices()`），系统空间 sink 经 `system_spatial_island.{h,cpp}` 直接给出 `MradmDeviceTable`；
+- C++ 设备岛、`miniaudio_device.cpp`、`audio_output_device.h` 与 `MradmDeviceIslands` / `MradmDeviceEnumeration` 记录删除。
+
+与 `b4d31ee` 对照，设备枚举、Scene 输出与监听的 C ABI 结果逐字节相同，CTest 22 项通过，三处故障注入都被抓到。生产 C/C++ 5,248 → 4,888 行，岛接口 1,009 → 1,220 行。见 [7.3 记录](RUST_ISLAND_DEVICES.md)。
 
 ## 每个迁移切片的验证
 

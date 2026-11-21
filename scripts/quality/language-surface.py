@@ -38,8 +38,10 @@ ISLAND_INTERFACES = (
     "src/adm_apple/island_driver.h",
     "src/adm_engine/platform_island.cpp",
     "src/adm_engine/platform_island.h",
-    "src/adm_realtime/device_island.cpp",
-    "src/adm_realtime/device_island.h",
+    "src/adm_realtime/miniaudio_island.c",
+    "src/adm_realtime/miniaudio_island.h",
+    "src/adm_realtime/system_spatial_island.cpp",
+    "src/adm_realtime/system_spatial_island.h",
 )
 # Legacy snapshots did not separate this SDK boundary. Its existing V2 trial
 # implementation at 1cb04b3e is the one-time ceiling, not a general allowance.

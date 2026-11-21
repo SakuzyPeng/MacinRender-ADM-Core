@@ -1,5 +1,5 @@
 // The capture or loopback input of the manual room device probe (mr_adm_room_scene_benchmark),
-// over the miniaudio implementation of the device islands (src/adm_realtime/miniaudio_device.cpp).
+// over the miniaudio implementation of the device islands (src/adm_realtime/miniaudio_island.c).
 // Manual probe only: the Rust example calls these three functions; miniaudio types stay here.
 #include <miniaudio.h>
 #include <stdint.h>

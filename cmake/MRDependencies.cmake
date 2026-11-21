@@ -36,7 +36,7 @@ function(mr_adm_core_find_or_fetch package_name target_name)
         )
     elseif(package_name STREQUAL "miniaudio")
         # Single-header realtime audio device I/O (mackron/miniaudio). One translation unit
-        # defines MINIAUDIO_IMPLEMENTATION (src/adm_realtime/miniaudio_device.cpp); the
+        # defines MINIAUDIO_IMPLEMENTATION (src/adm_realtime/miniaudio_island.c); the
         # INTERFACE target just exposes the header + the platform audio link deps. On Linux
         # miniaudio dlopen()s ALSA/PulseAudio at runtime, so only dl/pthread/m are needed.
         FetchContent_Declare(

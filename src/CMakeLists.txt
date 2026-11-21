@@ -144,9 +144,8 @@ if(APPLE)
         PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio MacinRender::ADMRenderCommon
                 ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_COREFOUNDATION_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
     )
-    # adm_apple consumes the realtime IAudioOutputDevice interface (third-party-free header) to
-    # provide the AVSampleBufferAudioRenderer monitor sink. Include-only, no link dependency —
-    # the device implements the pure interface; this keeps Apple frameworks confined here.
+    # The AVSampleBufferAudioRenderer monitor sink provides its device table through
+    # adm_realtime/system_spatial_island.h (header templates, no link dependency).
     target_include_directories(mr_adm_apple PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/adm_realtime)
     mr_adm_core_apply_warnings(mr_adm_apple)
     mr_adm_core_apply_static_analysis(mr_adm_apple)
@@ -154,7 +153,7 @@ endif()
 
 # ── adm_windows ───────────────────────────────────────────────────────────────
 # Windows-only system-spatial monitor sink (ISpatialAudioClient). Windows COM / SpatialAudio
-# types are confined here; the factory returns the third-party-free IAudioOutputDevice.
+# types are confined here; the factory returns the MradmDeviceTable Rust drives.
 
 if(WIN32)
     add_library(mr_adm_windows STATIC)
@@ -167,31 +166,28 @@ if(WIN32)
         PUBLIC MacinRender::ADMCore
         PRIVATE Ole32 MacinRender::ADMRenderCommon
     )
-    # adm_windows consumes the realtime IAudioOutputDevice interface (third-party-free header) to
-    # provide the ISpatialAudioClient monitor sink. Include-only, no link dependency — the device
-    # implements the pure interface; this keeps Windows COM headers confined here.
+    # The ISpatialAudioClient monitor sink provides its device table through
+    # adm_realtime/system_spatial_island.h (header templates, no link dependency).
     target_include_directories(mr_adm_windows PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/adm_realtime)
     mr_adm_core_apply_warnings(mr_adm_windows)
     mr_adm_core_apply_static_analysis(mr_adm_windows)
 endif()
 
 # ── islands ───────────────────────────────────────────────────────────────────
-# The C islands the Rust library calls by name besides the Apple island: the platform
-# facts (mradm_platform_islands) and the output devices (mradm_device_islands: miniaudio here, the
-# system-spatial sinks in adm_apple / adm_windows).
+# The C islands the Rust library calls by name besides the Apple island: the platform facts
+# (mradm_platform_islands) and, on macOS and Windows, the system-spatial sink
+# (mradm_system_spatial_island; the sinks live in adm_apple / adm_windows).
 
 add_library(mr_adm_islands STATIC)
 add_library(MacinRender::ADMIslands ALIAS mr_adm_islands)
-target_sources(mr_adm_islands PRIVATE
-    adm_engine/platform_island.cpp
-    adm_realtime/device_island.cpp
-    adm_realtime/miniaudio_device.cpp
-)
+target_sources(mr_adm_islands PRIVATE adm_engine/platform_island.cpp)
+if(APPLE OR WIN32)
+    target_sources(mr_adm_islands PRIVATE adm_realtime/system_spatial_island.cpp)
+endif()
 target_include_directories(mr_adm_islands PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/adm_realtime")
-# miniaudio is PRIVATE: its types never cross the IAudioOutputDevice boundary (ADR 0003).
 target_link_libraries(mr_adm_islands
     PUBLIC MacinRender::ADMCore
-    PRIVATE Threads::Threads miniaudio MacinRender::ADMAudio MacinRender::ADMDsp MacinRender::ADMRenderCommon
+    PRIVATE MacinRender::ADMAudio MacinRender::ADMDsp MacinRender::ADMRenderCommon
 )
 if(APPLE)
     target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderApple)
@@ -203,6 +199,14 @@ if(WIN32)
 endif()
 mr_adm_core_apply_warnings(mr_adm_islands)
 mr_adm_core_apply_static_analysis(mr_adm_islands)
+
+# ── miniaudio ─────────────────────────────────────────────────────────────────
+# The miniaudio implementation and the narrow C interface through which Rust drives the output
+# devices (mradm_miniaudio_island, mradm-ffi `miniaudio`, 7.3). miniaudio's types stay in
+# miniaudio_island.c (ADR 0003). It is C, so the C++ warning set does not apply.
+
+add_library(mr_adm_miniaudio STATIC adm_realtime/miniaudio_island.c)
+target_link_libraries(mr_adm_miniaudio PRIVATE Threads::Threads miniaudio)
 
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
     foreach(_mr_trace_target IN ITEMS mr_adm_audio mr_adm_render_common)
@@ -220,7 +224,7 @@ mr_adm_core_apply_warnings(mr_adm_capi_progress)
 mr_adm_core_apply_static_analysis(mr_adm_capi_progress)
 
 # The capture or loopback input of the manual room device probe (mradm-ffi example
-# room_scene_benchmark), over the islands' miniaudio implementation. Only the probe references it.
+# room_scene_benchmark), over the miniaudio implementation of mr_adm_miniaudio. Only the probe references it.
 add_library(mr_adm_probe_capture STATIC "${CMAKE_CURRENT_SOURCE_DIR}/../tests/manual/capture_tap.c")
 target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
 
@@ -228,7 +232,7 @@ target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
 # Every archive after the archives that call it (single-pass linkers), the platform libraries last.
 # mr_adm_native carries the same order for the C++ tests of the top-level tree.
 
-set(MR_ADM_NATIVE_LIBRARIES mr_adm_capi_progress mr_adm_probe_capture mr_adm_islands)
+set(MR_ADM_NATIVE_LIBRARIES mr_adm_capi_progress mr_adm_probe_capture mr_adm_miniaudio mr_adm_islands)
 if(APPLE)
     list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_apple)
 elseif(WIN32)
