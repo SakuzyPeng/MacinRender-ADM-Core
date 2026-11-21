@@ -32,7 +32,7 @@ pub struct MiniaudioIsland {
             usize,
             u32,
             u32,
-            Option<MiniaudioData>,
+            MiniaudioData,
             *mut c_void,
             *mut *mut c_void,
         ) -> i32,
@@ -40,7 +40,7 @@ pub struct MiniaudioIsland {
     pub formats: Option<unsafe extern "C" fn(*mut c_void, *mut MiniaudioFormats)>,
     pub start: Option<unsafe extern "C" fn(*mut c_void) -> i32>,
     pub close: Option<unsafe extern "C" fn(*mut c_void)>,
-    pub enumerate: Option<unsafe extern "C" fn(*mut c_void, Option<MiniaudioEach>) -> i32>,
+    pub enumerate: Option<unsafe extern "C" fn(*mut c_void, MiniaudioEach) -> i32>,
 }
 
 unsafe extern "C" {
@@ -91,11 +91,22 @@ fn stereo_only(f: &MiniaudioFormats) -> bool {
     f.internal_channels <= 2 || native_stereo
 }
 
-/// A started device: the island's handle and the pull its callback reads (boxed, so its address
-/// stays fixed while the device runs).
+/// An initialized device and the callback state it owns until the island closes it.
 struct Running {
     handle: NonNull<c_void>,
-    _pull: Box<DevicePull>,
+    pull: *mut DevicePull,
+    close: unsafe extern "C" fn(*mut c_void),
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        // SAFETY: close waits for the last callback. Only then can we reclaim the allocation
+        // that start handed to the island with Box::into_raw.
+        unsafe {
+            (self.close)(self.handle.as_ptr());
+            drop(Box::from_raw(self.pull));
+        }
+    }
 }
 
 /// An opened (not yet started) miniaudio device.
@@ -117,8 +128,7 @@ impl Miniaudio {
         else {
             return Err((INTERNAL, "miniaudio device init failed"));
         };
-        let pull = Box::new(pull);
-        let user = ptr::from_ref::<DevicePull>(&pull).cast_mut().cast();
+        let pull = Box::into_raw(Box::new(pull));
         let (id, id_len) = self
             .id
             .as_deref()
@@ -131,15 +141,27 @@ impl Miniaudio {
                 id_len,
                 channels,
                 rate,
-                Some(data),
-                user,
+                data,
+                pull.cast(),
                 &mut raw,
             )
         };
-        let handle = match (status, NonNull::new(raw)) {
-            (0, Some(handle)) => handle,
-            (1, _) => return Err((INTERNAL, "miniaudio null context init failed")),
-            _ => return Err((INTERNAL, "miniaudio device init failed")),
+        let device = match (status, NonNull::new(raw)) {
+            (0, Some(handle)) => Running {
+                handle,
+                pull,
+                close,
+            },
+            (status, _) => {
+                // SAFETY: failed init leaves no device and retains no callback state.
+                unsafe { drop(Box::from_raw(pull)) };
+                let message = if status == 1 {
+                    "miniaudio null context init failed"
+                } else {
+                    "miniaudio device init failed"
+                };
+                return Err((INTERNAL, message));
+            }
         };
         if channels > 2 {
             let mut f = MiniaudioFormats {
@@ -147,33 +169,23 @@ impl Miniaudio {
                 native_count: 0,
                 native_channels: [0; 64],
             };
-            unsafe { formats(handle.as_ptr(), &mut f) };
+            unsafe { formats(device.handle.as_ptr(), &mut f) };
             if stereo_only(&f) {
-                unsafe { close(handle.as_ptr()) };
                 return Err((code::UNSUPPORTED, MULTICHANNEL));
             }
         }
-        if unsafe { start(handle.as_ptr()) } != 0 {
-            unsafe { close(handle.as_ptr()) };
+        if unsafe { start(device.handle.as_ptr()) } != 0 {
             return Err((INTERNAL, "miniaudio device start failed"));
         }
-        *running = Some(Running {
-            handle,
-            _pull: pull,
-        });
+        *running = Some(device);
         Ok(())
     }
 
     /// Stops and closes the device; its callback has returned afterwards.
     fn stop(&self) {
-        let taken = self
-            .running
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take();
-        if let (Some(r), Some(close)) = (taken, island().close) {
-            unsafe { close(r.handle.as_ptr()) };
-        }
+        let mut running = self.running.lock().unwrap_or_else(|e| e.into_inner());
+        // Keep start and stop serialized until close has drained the callbacks.
+        drop(running.take());
     }
 }
 
@@ -267,7 +279,7 @@ pub(crate) fn enumerate(each: &mut Each<'_>) {
     if let Some(enumerate) = island().enumerate {
         let mut each = each;
         let user = ptr::from_mut(&mut each).cast();
-        unsafe { enumerate(user, Some(one)) };
+        unsafe { enumerate(user, one) };
     }
 }
 
