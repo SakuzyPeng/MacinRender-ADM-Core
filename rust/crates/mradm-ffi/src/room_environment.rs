@@ -11,34 +11,25 @@ pub struct Environment {
 
 #[cfg(windows)]
 mod audio_worker {
+    use crate::mmcss::AudioTask;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
     static REGISTERED: AtomicUsize = AtomicUsize::new(0);
-    #[link(name = "avrt")]
-    unsafe extern "system" {
-        fn AvSetMmThreadCharacteristicsW(
-            name: *const u16,
-            index: *mut u32,
-        ) -> *mut core::ffi::c_void;
-        fn AvRevertMmThreadCharacteristics(handle: *mut core::ffi::c_void) -> i32;
-    }
-    struct Task(*mut core::ffi::c_void);
+
+    struct Task(Option<AudioTask>);
     impl Task {
         fn new() -> Self {
-            let mut index = 0;
-            let name = [65, 117, 100, 105, 111, 0]; // Audio
-            let handle = unsafe { AvSetMmThreadCharacteristicsW(name.as_ptr(), &mut index) };
-            if !handle.is_null() {
+            let registration = AudioTask::register();
+            if registration.is_some() {
                 REGISTERED.fetch_add(1, Ordering::Relaxed);
             }
-            Self(handle)
+            Self(registration)
         }
     }
     impl Drop for Task {
         fn drop(&mut self) {
-            if !self.0.is_null() {
-                unsafe {
-                    AvRevertMmThreadCharacteristics(self.0);
-                }
+            if let Some(registration) = self.0.take() {
+                drop(registration);
                 REGISTERED.fetch_sub(1, Ordering::Relaxed);
             }
         }

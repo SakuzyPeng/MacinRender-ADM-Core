@@ -898,7 +898,7 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 | 7.2 | 编码器迁入 Rust | FLAC 写出与 Vorbis comment、Opus MKA 的 Matroska 封装、IAMF bridge 调用与 MP4 打包器探测和运行、MP4 元数据 atom、APAC worker 的子进程与心跳协议迁入 Rust。<br>libFLAC / libopus / IAMF bridge 由 Rust 经手写 `extern` 直接调用；APAC 的 AudioToolbox 编码移入 Apple 岛；`mradm_audio_island` 与 C++ 编码器删除。<br>同批删除 dr_flac、测试用 FLAC 读取链（`FloatFlacReader`、`flac_validate`、`mradm-wav` 的 `flac` 模块）及其读取探针。用测试端解码保留写出端的 PCM 往返与最终 FLAC 断言。<br>验收要求新旧实现的 CLI 记录 0 差异。macOS 验证 APAC，具备 bridge 与打包器的构建验证 IAMF 与 IAMF-in-MP4，两个 MP4 路径均核对元数据。 |
 | 7.3 | 输出设备 | miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛、`miniaudio_device.cpp` 与 `audio_output_device.h` 删除，Apple / Windows sink 直接提供设备表。合并时已在 macOS arm64 与 Windows x64 复核设备生命周期、原生输出和 C ABI，见 [7.3 记录](RUST_ISLAND_DEVICES.md)。 |
 | 7.4 | Apple 岛 | 已用 objc2 将 APAC 的 AudioToolbox 编码迁入 Rust。AUSpatialMixer 后端与 AVSampleBufferAudioRenderer sink 保留原生窄接口。两平台 Release 验证及听音待确认项见 [7.4 记录](RUST_ISLAND_APPLE.md)。 |
-| 7.5 | Windows 岛 | 以 windows crate 原型评估 ISpatialAudioClient 的静态床与 MMCSS，同样按 7.1 的标准决定。 |
+| 7.5 | Windows 岛 | ISpatialAudioClient 静态床、混合对象床与房间工作线程 MMCSS 已接入 Rust。五种布局的设备更新及文件流式渲染、Scene 流式渲染验证见 [7.5 记录](RUST_ISLAND_WINDOWS.md)。 |
 | 7.6 | 收尾 | 岛共用的 C++ 头与私有 FFI 记录随调用方删除，C++ 岛测试与顶层 CMake 测试树随岛收缩。评估进度回调跳板和 Windows 打包路径的去留。保留 C++ 回调异常转为 `ADM_ERROR_INTERNAL` 的行为。 |
 | 7.7 | 三平台验收与结项 | Consistency、CI、Quality 与 Release Build，两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化。验收后删除 CLI 记录工具。 |
 

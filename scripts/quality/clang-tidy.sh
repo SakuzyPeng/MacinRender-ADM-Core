@@ -43,14 +43,13 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
     extra_args+=('--extra-arg=-DNAN=__builtin_nanf("")')
 fi
 
-# Windows and optional CUDA SDK sources need their native toolchains; they
-# cannot be parsed as translation units on the macOS quality host.
+# CUDA SDK sources require the native toolchain.
 files=()
 while IFS= read -r -d '' file; do
     files+=("$file")
 done < <(
     find "$repo_root/src" "$repo_root/tests" \
-        -type d \( -path '*/adm_windows' -o -path '*/adm_render_room/cuda' \) -prune -o \
+        -type d -path '*/adm_render_room/cuda' -prune -o \
         -type f \( -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \) \
         -print0
 )

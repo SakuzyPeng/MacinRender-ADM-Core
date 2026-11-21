@@ -10,13 +10,11 @@
 #ifdef __APPLE__
 #include "adm/render_apple.h"
 #endif
-#ifdef _WIN32
-#include "system_spatial_island.h"
-#endif
 
 namespace mradm::engine {
 namespace {
 
+#ifdef __APPLE__
 MradmAdmText text(std::string_view value) {
     return {reinterpret_cast<const uint8_t*>(value.data()), value.size()};
 }
@@ -95,7 +93,6 @@ class BackendRecords {
     MradmEngineBackend record_{};
 };
 
-#ifdef __APPLE__
 const BackendRecords& apple_records() {
     static const BackendRecords records{apple_capabilities()};
     return records;
@@ -109,12 +106,9 @@ const MradmEngineBackend* apple() noexcept {
 int32_t apple_lfe_routing_ok() noexcept {
     return apple_system_spatial_lfe_routing_ok() ? 1 : 0;
 }
-#endif
 
-// macOS system-spatial monitoring (AVSampleBufferAudioRenderer) accepts Apple's speaker layouts;
-// Windows' ISpatialAudioClient sink lists its own.
+// AVSampleBufferAudioRenderer accepts the Apple speaker layouts.
 void system_spatial(const MradmEngineSpatialLayout** layouts, size_t* len) noexcept {
-#ifdef __APPLE__
     static const CapabilityReport caps = apple_capabilities();
     static const std::vector<MradmEngineSpatialLayout> records = [] {
         std::vector<MradmEngineSpatialLayout> out;
@@ -125,32 +119,14 @@ void system_spatial(const MradmEngineSpatialLayout** layouts, size_t* len) noexc
         }
         return out;
     }();
-#elif defined(_WIN32)
-    static const auto spatial = realtime::system_spatial_layouts();
-    static const std::vector<MradmEngineSpatialLayout> records = [] {
-        std::vector<MradmEngineSpatialLayout> out(spatial.size());
-        std::ranges::transform(spatial, out.begin(), [](const auto& layout) {
-            return MradmEngineSpatialLayout{
-                text(layout.id), text(layout.display_name), static_cast<uint16_t>(layout.channel_count), 0};
-        });
-        return out;
-    }();
-#else
-    static const std::vector<MradmEngineSpatialLayout> records;
-#endif
     *layouts = records.data();
     *len = records.size();
 }
 
-constexpr MradmPlatformIslands k_platform{
-#ifdef __APPLE__
-    &apple,
-    &apple_lfe_routing_ok,
+constexpr MradmPlatformIslands k_platform{&apple, &apple_lfe_routing_ok, &system_spatial};
 #else
-    nullptr,
-    nullptr,
+constexpr MradmPlatformIslands k_platform{};
 #endif
-    &system_spatial};
 
 } // namespace
 } // namespace mradm::engine

@@ -2352,6 +2352,248 @@
           "value": "cargo"
         }
       ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-0.62.2",
+      "version": "0.62.2",
+      "description": "Windows 系统空间音频 COM 接口及 MMCSS 线程注册",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows@0.62.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-collections-0.3.2",
+      "version": "0.3.2",
+      "description": "Windows 集合接口",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-collections@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-core-0.62.2",
+      "version": "0.62.2",
+      "description": "Windows COM 接口与引用计数",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-core@0.62.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-future-0.3.2",
+      "version": "0.3.2",
+      "description": "Windows 异步接口",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-future@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-implement-0.60.2",
+      "version": "0.60.2",
+      "description": "Windows COM 实现过程宏",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-implement@0.60.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-interface-0.59.3",
+      "version": "0.59.3",
+      "description": "Windows COM 接口过程宏",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-interface@0.59.3",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-link-0.2.1",
+      "version": "0.2.1",
+      "description": "Windows 系统库链接声明",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-link@0.2.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-numerics-0.3.1",
+      "version": "0.3.1",
+      "description": "Windows 数值类型",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-numerics@0.3.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-result-0.4.1",
+      "version": "0.4.1",
+      "description": "HRESULT 与 Windows 错误类型",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-result@0.4.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-strings-0.5.1",
+      "version": "0.5.1",
+      "description": "Windows 字符串类型",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-strings@0.5.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-threading-0.2.1",
+      "version": "0.2.1",
+      "description": "Windows 线程支持",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-threading@0.2.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
     }
   ]
 }

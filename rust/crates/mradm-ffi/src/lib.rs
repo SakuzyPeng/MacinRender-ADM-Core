@@ -25,6 +25,8 @@ mod hptf;
 mod iamf;
 mod metadata_temp;
 mod meter;
+#[cfg(windows)]
+mod mmcss;
 mod mp4_metadata;
 mod mp4_packager;
 mod opus_mka;
@@ -48,6 +50,8 @@ mod unix_process;
 mod wav;
 #[cfg(windows)]
 mod windows_path;
+#[cfg(windows)]
+mod windows_spatial;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to
 /// the caller, making error reporting reentrant without thread-local allocation.

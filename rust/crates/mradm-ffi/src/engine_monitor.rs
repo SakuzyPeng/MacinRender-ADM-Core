@@ -362,6 +362,15 @@ impl Source for IslandSource {
 /// Writes `message` (and an empty context) into an island call's error buffers as a C++ island
 /// does: truncated to the buffer, NUL-terminated, its length stored; returns `code`.
 pub(crate) unsafe fn island_error(e: *const EngineIslandError, code: i32, message: &str) -> i32 {
+    unsafe { island_error_context(e, code, message, "") }
+}
+
+pub(crate) unsafe fn island_error_context(
+    e: *const EngineIslandError,
+    code: i32,
+    message: &str,
+    context: &str,
+) -> i32 {
     unsafe fn write(text: &[u8], out: *mut u8, len: *mut usize) {
         let Some(len) = (unsafe { len.as_mut() }) else {
             return;
@@ -382,7 +391,7 @@ pub(crate) unsafe fn island_error(e: *const EngineIslandError, code: i32, messag
     if let Some(e) = unsafe { e.as_ref() } {
         unsafe {
             write(message.as_bytes(), e.message, e.message_len);
-            write(b"", e.context, e.context_len);
+            write(context.as_bytes(), e.context, e.context_len);
         }
     }
     code

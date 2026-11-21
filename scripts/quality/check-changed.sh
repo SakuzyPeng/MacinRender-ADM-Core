@@ -62,14 +62,11 @@ done < <(
     } | sort -u
 )
 
-# Platform-only sources that can't be compiled on the quality host (macOS): clang-tidy and cppcheck
-# parse them as TUs and would fail on missing platform SDK headers. clang-format is platform-agnostic
-# (no compilation), so those files are still format-checked. The Windows-only sink (src/adm_windows,
-# needs windows.h / spatialaudioclient.h) is verified by the windows-debug CI build instead. Mirrors
-# how the macOS-only Apple paths are skipped on non-macOS hosts.
+# The optional CUDA SDK headers are unavailable on the macOS quality host.
+# clang-format still checks these files.
 is_platform_excluded() {
     case "$1" in
-        src/adm_windows/* | src/adm_render_room/cuda/*) return 0 ;;
+        src/adm_render_room/cuda/*) return 0 ;;
         *) return 1 ;;
     esac
 }

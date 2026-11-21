@@ -1,8 +1,8 @@
 //! The output devices, opened and driven from Rust for the monitor session and the Scene output:
 //! miniaudio and its null backend over `src/adm_realtime/miniaudio_island.h`, and the platform's
-//! system-spatial sink (`src/adm_realtime/system_spatial_island.h`, macOS and Windows), each a
+//! system-spatial sink (AVSampleBufferAudioRenderer on macOS, ISpatialAudioClient on Windows), each a
 //! [`DeviceTable`] (7.3; before it, one C++ device island opened all three).
-use super::engine_monitor::{Buffers, EngineIslandError, island_error};
+use super::engine_monitor::{Buffers, EngineIslandError};
 use super::engine_scene_output::EngineSceneDeviceProgress;
 use super::miniaudio;
 use crate::adm::Text;
@@ -72,15 +72,14 @@ pub struct DeviceIslands {
     pub enumerate: Option<unsafe extern "C" fn(*const DeviceEnumeration)>,
 }
 
-/// The system-spatial sink of macOS and Windows (`MradmSystemSpatialIsland`).
-#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+/// The macOS system-spatial sink (`MradmSystemSpatialIsland`).
+#[cfg(target_os = "macos")]
 #[repr(C)]
 pub struct SystemSpatialIsland {
-    pub open:
-        Option<unsafe extern "C" fn(Text, u32, *mut DeviceTable, *const EngineIslandError) -> i32>,
+    pub open: Option<unsafe extern "C" fn(Text, *mut DeviceTable, *const EngineIslandError) -> i32>,
 }
 
-#[cfg(any(target_os = "macos", windows))]
+#[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn mradm_system_spatial_island() -> *const SystemSpatialIsland;
 }
@@ -108,19 +107,32 @@ unsafe extern "C" fn open_device(
         *output = miniaudio::open(kind == NULL_BACKEND, id);
         return 0;
     }
-    #[cfg(any(target_os = "macos", windows))]
+    #[cfg(windows)]
     {
+        if e.is_null() {
+            return 1;
+        }
+        let layout = unsafe { super::bytes(&layout) }.unwrap_or_default();
+        *output =
+            crate::windows_spatial::open(String::from_utf8_lossy(layout).into_owned(), geometry);
+        0
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = geometry;
         // SAFETY: the island returns its process-lifetime table.
         match unsafe { (*mradm_system_spatial_island()).open } {
-            Some(open) => unsafe { open(layout, geometry, output, e) },
-            None => unsafe { island_error(e, 6, "output devices are unavailable") },
+            Some(open) => unsafe { open(layout, output, e) },
+            None => unsafe {
+                super::engine_monitor::island_error(e, 6, "output devices are unavailable")
+            },
         }
     }
     #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = (layout, geometry);
         unsafe {
-            island_error(
+            super::engine_monitor::island_error(
                 e,
                 mradm_engine::request::code::UNSUPPORTED,
                 "System spatial output is unavailable on this platform",

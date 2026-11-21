@@ -1,6 +1,4 @@
-// The platform's system-spatial sink (adm_apple AVSampleBufferAudioRenderer, adm_windows
-// ISpatialAudioClient) as the MradmDeviceTable records Rust opens and drives (7.3). Platform types
-// stay in the sinks (ADR 0003).
+// The macOS AVSampleBufferAudioRenderer sink as a MradmDeviceTable.
 #pragma once
 #include "../adm_render_common/engine_ffi.h"
 
@@ -14,15 +12,13 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "adm/errors.h"
-#include "adm/options.h"
 
 extern "C" {
 #endif
 
-// Built on macOS and Windows only.
+// Built on macOS only.
 const MradmSystemSpatialIsland* mradm_system_spatial_island(void);
 
 #ifdef __cplusplus
@@ -154,21 +150,6 @@ template <class Sink> MradmDeviceTable device_table(std::unique_ptr<Sink> device
 // Enqueues the multichannel bed of `layout_id` (e.g. "4+7+0") into the system media stack, which
 // spatializes it with dynamic head tracking (adm_apple/avsamplebuffer_device.mm).
 [[nodiscard]] MradmDeviceTable make_avsamplebuffer_device(std::string layout_id);
-#endif
-
-#if defined(_WIN32)
-// Submits the bed of `layout_id` to ISpatialAudioClient as static (and above 8.1.4.4 dynamic) objects
-// for the active Windows spatializer, without OS head tracking; start fails with unsupported when no
-// spatial format is enabled (adm_windows/spatialaudioclient_device.cpp).
-[[nodiscard]] MradmDeviceTable make_spatialaudioclient_device(std::string layout_id, SpeakerGeometry geometry);
-
-// The layouts that sink accepts, for the capability report.
-struct SystemSpatialLayoutInfo {
-    std::string id;
-    std::string display_name;
-    uint32_t channel_count{0};
-};
-[[nodiscard]] std::vector<SystemSpatialLayoutInfo> system_spatial_layouts();
 #endif
 
 } // namespace mradm::realtime

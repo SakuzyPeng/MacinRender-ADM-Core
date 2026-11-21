@@ -135,6 +135,17 @@
 | `rust-pulp-wasm-simd-flag-0.1.1` @ 0.1.1 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 | 该子 crate 的发布包仅声明 MIT；保留 Cargo.toml，并附同一上游仓库的 pulp 0.22.3 根 LICENSE。 |
 | `rust-raw-cpuid-11.6.0` @ 11.6.0 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 |  |
 | `rust-reborrow-0.5.5` @ 0.5.5 | 房间独立频率 SIMD 的安全运行时分派依赖 | MIT | 可用 |  |
+| `rust-windows-0.62.2` @ 0.62.2 | Windows 系统空间音频 COM 接口及 MMCSS 线程注册 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-collections-0.3.2` @ 0.3.2 | Windows 集合接口 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-core-0.62.2` @ 0.62.2 | Windows COM 接口与引用计数 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-future-0.3.2` @ 0.3.2 | Windows 异步接口 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-implement-0.60.2` @ 0.60.2 | Windows COM 实现过程宏 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-interface-0.59.3` @ 0.59.3 | Windows COM 接口过程宏 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-link-0.2.1` @ 0.2.1 | Windows 系统库链接声明 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-numerics-0.3.1` @ 0.3.1 | Windows 数值类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-result-0.4.1` @ 0.4.1 | HRESULT 与 Windows 错误类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-strings-0.5.1` @ 0.5.1 | Windows 字符串类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-windows-threading-0.2.1` @ 0.2.1 | Windows 线程支持 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
 
 <!-- END GENERATED DEPS -->
 

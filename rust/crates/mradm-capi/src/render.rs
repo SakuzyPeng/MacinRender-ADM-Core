@@ -68,8 +68,7 @@ pub(crate) mod islands {
     }
 }
 
-// Unit tests link without the C++ islands: the platform supplies no Apple backend or
-// system spatial layouts, and every island request fails.
+// Unit tests substitute an empty table for the C++ platform and Apple islands.
 #[cfg(test)]
 pub(crate) mod islands {
     use super::*;

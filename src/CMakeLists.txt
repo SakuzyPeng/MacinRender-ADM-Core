@@ -150,37 +150,14 @@ if(APPLE)
     mr_adm_core_apply_static_analysis(mr_adm_apple)
 endif()
 
-# ── adm_windows ───────────────────────────────────────────────────────────────
-# Windows-only system-spatial monitor sink (ISpatialAudioClient). Windows COM / SpatialAudio
-# types are confined here; the factory returns the MradmDeviceTable Rust drives.
-
-if(WIN32)
-    add_library(mr_adm_windows STATIC)
-    add_library(MacinRender::ADMRenderWindows ALIAS mr_adm_windows)
-
-    target_sources(mr_adm_windows PRIVATE
-        adm_windows/spatialaudioclient_device.cpp
-    )
-    target_link_libraries(mr_adm_windows
-        PUBLIC MacinRender::ADMCore
-        PRIVATE Ole32 MacinRender::ADMRenderCommon
-    )
-    # The ISpatialAudioClient monitor sink provides its device table through
-    # adm_realtime/system_spatial_island.h (header templates, no link dependency).
-    target_include_directories(mr_adm_windows PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/adm_realtime)
-    mr_adm_core_apply_warnings(mr_adm_windows)
-    mr_adm_core_apply_static_analysis(mr_adm_windows)
-endif()
-
 # ── islands ───────────────────────────────────────────────────────────────────
 # The C islands the Rust library calls by name besides the Apple island: the platform facts
-# (mradm_platform_islands) and, on macOS and Windows, the system-spatial sink
-# (mradm_system_spatial_island; the sinks live in adm_apple / adm_windows).
+# (mradm_platform_islands) and the macOS system-spatial sink (mradm_system_spatial_island).
 
 add_library(mr_adm_islands STATIC)
 add_library(MacinRender::ADMIslands ALIAS mr_adm_islands)
 target_sources(mr_adm_islands PRIVATE adm_engine/platform_island.cpp)
-if(APPLE OR WIN32)
+if(APPLE)
     target_sources(mr_adm_islands PRIVATE adm_realtime/system_spatial_island.cpp)
 endif()
 target_include_directories(mr_adm_islands PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/adm_realtime")
@@ -190,11 +167,6 @@ target_link_libraries(mr_adm_islands
 )
 if(APPLE)
     target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderApple)
-endif()
-if(WIN32)
-    # The ISpatialAudioClient sink and its layouts (make_spatialaudioclient_device /
-    # system_spatial_layouts) live in mr_adm_windows.
-    target_link_libraries(mr_adm_islands PRIVATE MacinRender::ADMRenderWindows)
 endif()
 mr_adm_core_apply_warnings(mr_adm_islands)
 mr_adm_core_apply_static_analysis(mr_adm_islands)
@@ -234,8 +206,6 @@ target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
 set(MR_ADM_NATIVE_LIBRARIES mr_adm_capi_progress mr_adm_probe_capture mr_adm_miniaudio mr_adm_islands)
 if(APPLE)
     list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_apple)
-elseif(WIN32)
-    list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_windows)
 endif()
 list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_render_common mr_adm_audio mr_adm_rust_services)
 set(_mr_codec_libraries Opus::opus FLAC::FLAC)

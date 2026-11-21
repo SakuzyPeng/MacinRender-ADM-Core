@@ -23,6 +23,7 @@ END_MARK = "<!-- END GENERATED DEPS -->"
 DIST_LABEL = {
     "available": "可用",
     "macos-only": "macOS only",
+    "windows-only": "Windows only",
     "opt-in": "opt-in（默认关闭）",
     "test-only": "测试专用（不进生产）",
     "system": "平台 SDK（不再分发）",

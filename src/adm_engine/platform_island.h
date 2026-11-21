@@ -1,5 +1,5 @@
 // Platform facts used by the Rust engine: Apple backend capabilities and the LFE self-test,
-// and system-spatial layouts from the Apple or Windows sink.
+// and system-spatial layouts from AVSampleBufferAudioRenderer.
 #pragma once
 #include "../adm_render_common/engine_ffi.h"
 #ifdef __cplusplus

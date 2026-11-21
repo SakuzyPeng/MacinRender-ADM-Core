@@ -3,6 +3,7 @@
 //! waitable timer for the output ring wait. Each thread owns its timer and registration; no
 //! global timer resolution or priority changes and no handle creation during room DSP. Without
 //! the timer the wait falls back to a sleep.
+use crate::mmcss::AudioTask;
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::time::Duration;
@@ -33,12 +34,6 @@ unsafe extern "system" {
     ) -> i32;
     fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
     fn CloseHandle(handle: Handle) -> i32;
-}
-
-#[link(name = "avrt")]
-unsafe extern "system" {
-    fn AvSetMmThreadCharacteristicsW(name: *const u16, index: *mut u32) -> Handle;
-    fn AvRevertMmThreadCharacteristics(handle: Handle) -> i32;
 }
 
 struct Timer(Handle);
@@ -77,7 +72,7 @@ impl Drop for Timer {
 
 #[derive(Default)]
 struct Task {
-    handle: Option<Handle>,
+    registration: Option<AudioTask>,
     active: bool,
 }
 
@@ -87,20 +82,7 @@ impl Task {
             return;
         }
         self.active = active;
-        if active {
-            let mut index = 0;
-            let name = [65u16, 117, 100, 105, 111, 0]; // Audio
-            let handle = unsafe { AvSetMmThreadCharacteristicsW(name.as_ptr(), &mut index) };
-            self.handle = (!handle.is_null()).then_some(handle);
-        } else if let Some(handle) = self.handle.take() {
-            unsafe { AvRevertMmThreadCharacteristics(handle) };
-        }
-    }
-}
-
-impl Drop for Task {
-    fn drop(&mut self) {
-        self.set_active(false);
+        self.registration = if active { AudioTask::register() } else { None };
     }
 }
 
@@ -119,4 +101,24 @@ pub(crate) fn wait(duration: Duration) {
 
 pub(crate) fn set_active(active: bool) {
     TASK.with_borrow_mut(|task| task.set_active(active));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    #[ignore = "requires the Windows MMCSS service"]
+    fn scene_mmcss_registration_follows_room_activation() {
+        std::thread::spawn(|| {
+            set_active(true);
+            set_active(true);
+            assert!(TASK.with_borrow(|task| task.registration.is_some()));
+            set_active(false);
+            assert!(TASK.with_borrow(|task| task.registration.is_none()));
+            set_active(true);
+            assert!(TASK.with_borrow(|task| task.registration.is_some()));
+        })
+        .join()
+        .unwrap();
+    }
 }

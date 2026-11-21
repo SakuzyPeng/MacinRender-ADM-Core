@@ -2087,6 +2087,226 @@
         ]
       },
       "notes": ""
+    },
+    {
+      "name": "rust-windows-0.62.2",
+      "version": "0.62.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows@0.62.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 系统空间音频 COM 接口及 MMCSS 线程注册",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-collections-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-collections@0.3.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 集合接口",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-collections",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-core-0.62.2",
+      "version": "0.62.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-core@0.62.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows COM 接口与引用计数",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-core",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-future-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-future@0.3.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 异步接口",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-future",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-implement-0.60.2",
+      "version": "0.60.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-implement@0.60.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows COM 实现过程宏",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-implement",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-interface-0.59.3",
+      "version": "0.59.3",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-interface@0.59.3",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows COM 接口过程宏",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-interface",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-link-0.2.1",
+      "version": "0.2.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-link@0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 系统库链接声明",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-link",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-numerics-0.3.1",
+      "version": "0.3.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-numerics@0.3.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 数值类型",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-numerics",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-result-0.4.1",
+      "version": "0.4.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-result@0.4.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "HRESULT 与 Windows 错误类型",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-result",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-strings-0.5.1",
+      "version": "0.5.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-strings@0.5.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 字符串类型",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-strings",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-windows-threading-0.2.1",
+      "version": "0.2.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-threading@0.2.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "Windows 线程支持",
+      "distribution": "windows-only",
+      "source": {
+        "type": "cargo",
+        "package": "windows-threading",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "Microsoft windows-rs。"
     }
   ]
 }

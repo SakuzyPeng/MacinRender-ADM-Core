@@ -19,6 +19,5 @@ cppcheck \
     -I "$repo_root/include" \
     -I "$repo_root/tests/support/ffi" \
     -I "$repo_root/src/adm_core" \
-    -i "$repo_root/src/adm_windows" \
     -i "$repo_root/src/adm_render_room/cuda" \
     "$repo_root/include" "$repo_root/src" "$repo_root/tests"

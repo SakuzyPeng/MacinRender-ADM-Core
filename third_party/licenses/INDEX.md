@@ -107,5 +107,16 @@
 | rust-version_check-0.9.5 | 0.9.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-visibility-0.1.1 | 0.1.1 | Zlib OR MIT OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
 | rust-wide-1.7.1 | 1.7.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.txt`, `LICENSE-MIT.txt`, `LICENSE-ZLIB.txt` |
+| rust-windows-0.62.2 | 0.62.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-collections-0.3.2 | 0.3.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-core-0.62.2 | 0.62.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-future-0.3.2 | 0.3.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-implement-0.60.2 | 0.60.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-interface-0.59.3 | 0.59.3 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-link-0.2.1 | 0.2.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-numerics-0.3.1 | 0.3.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-result-0.4.1 | 0.4.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-strings-0.5.1 | 0.5.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-threading-0.2.1 | 0.2.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-winnow-0.7.15 | 0.7.15 | MIT | `LICENSE-MIT` |
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |

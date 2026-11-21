@@ -180,8 +180,7 @@ typedef struct MradmDevicePull {
     void* user;
     size_t (*pull)(void* user, float* out, size_t len, size_t frames);
 } MradmDevicePull;
-// An opened output device (miniaudio from Rust, or a system-spatial sink of
-// src/adm_realtime/system_spatial_island.h). start begins pulling (the pull record is copied) and
+// An opened output device. start begins pulling (the pull record is copied) and
 // returns 0 or an error code (100: the device threw, its message the exception's). An absent entry is
 // a no-op (realtime: false, has_volume: false). destroy releases the device (after stop).
 typedef struct MradmDeviceTable {
@@ -203,14 +202,9 @@ typedef struct MradmDeviceTable {
     void (*destroy)(void* ctx);
 } MradmDeviceTable;
 
-// The platform's system-spatial sink (macOS and Windows only): open returns 0 with *output set over
-// layout (geometry: SpeakerGeometry) or an error code (100: the factory threw, its message the
-// exception's).
+// The macOS system-spatial sink. open sets *output for layout and returns 0 on success.
 typedef struct MradmSystemSpatialIsland {
-    int32_t (*open)(MradmAdmText layout,
-                    uint32_t geometry,
-                    MradmDeviceTable* output,
-                    const MradmEngineIslandError* error);
+    int32_t (*open)(MradmAdmText layout, MradmDeviceTable* output, const MradmEngineIslandError* error);
 } MradmSystemSpatialIsland;
 
 #ifdef __cplusplus

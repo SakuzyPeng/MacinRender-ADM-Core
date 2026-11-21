@@ -106,6 +106,7 @@
 - [Rust 直接调用 Rust（R2）](architecture/RUST_BOUNDARY_DIRECT.md)
 - [C++ 测试移植为 Rust（R3）](architecture/RUST_BOUNDARY_TESTS.md)
 - [Apple 岛与 APAC AudioToolbox 绑定（七期 7.4）](architecture/RUST_ISLAND_APPLE.md)
+- [Windows 系统空间输出与 MMCSS（七期 7.5）](architecture/RUST_ISLAND_WINDOWS.md)
 - [room 默认 ramp 按采样率换算（五期 5.7）](architecture/RUST_ROOM_DEFAULT_RAMP.md)
 - [Rust Triple Balance 数值状态迁移](architecture/RUST_TRIPLE_BALANCE_MIGRATION.md)
 - [Rust WAVE 容器元数据迁移](architecture/RUST_WAV_CONTAINER_MIGRATION.md)

@@ -3,11 +3,11 @@
   "areas": {
     "production": {
       "files": 39,
-      "lines": 4888
+      "lines": 4882
     },
     "islands": {
-      "files": 6,
-      "lines": 3019
+      "files": 4,
+      "lines": 2311
     },
     "cuda": {
       "files": 4,
@@ -15,15 +15,15 @@
     },
     "island-interfaces": {
       "files": 10,
-      "lines": 1078
+      "lines": 1029
     },
     "tests": {
       "files": 21,
       "lines": 8289
     },
     "rust": {
-      "files": 397,
-      "lines": 149184
+      "files": 402,
+      "lines": 150165
     },
     "rust-vendor": {
       "files": 175,
@@ -32,12 +32,12 @@
   },
   "modules": {
     "include/adm": 2009,
-    "rust/crates/mradm-capi": 13725,
+    "rust/crates/mradm-capi": 13724,
     "rust/crates/mradm-cli": 3602,
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 26850,
-    "rust/crates/mradm-ffi": 19500,
+    "rust/crates/mradm-ffi": 20482,
     "rust/crates/mradm-islands-sys": 230,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
@@ -62,17 +62,16 @@
     "src/adm_c_api": 27,
     "src/adm_core": 1137,
     "src/adm_dsp": 252,
-    "src/adm_engine/platform_island.cpp": 160,
+    "src/adm_engine/platform_island.cpp": 136,
     "src/adm_engine/platform_island.h": 14,
     "src/adm_metadata": 252,
     "src/adm_realtime": 55,
     "src/adm_realtime/miniaudio_island.c": 137,
     "src/adm_realtime/miniaudio_island.h": 46,
-    "src/adm_realtime/system_spatial_island.cpp": 36,
-    "src/adm_realtime/system_spatial_island.h": 175,
-    "src/adm_render_common": 789,
+    "src/adm_realtime/system_spatial_island.cpp": 30,
+    "src/adm_realtime/system_spatial_island.h": 156,
+    "src/adm_render_common": 783,
     "src/adm_render_room/cuda": 512,
-    "src/adm_windows": 708,
     "tests/manual": 817,
     "tests/support": 1379,
     "tests/unit": 6093
@@ -82,11 +81,11 @@
     "src/adm_apple/apple_island.cpp": 165,
     "src/adm_apple/apple_island.h": 14,
     "src/adm_apple/island_driver.h": 113,
-    "src/adm_engine/platform_island.cpp": 160,
+    "src/adm_engine/platform_island.cpp": 136,
     "src/adm_engine/platform_island.h": 14,
     "src/adm_realtime/miniaudio_island.c": 137,
     "src/adm_realtime/miniaudio_island.h": 46,
-    "src/adm_realtime/system_spatial_island.cpp": 36,
-    "src/adm_realtime/system_spatial_island.h": 175
+    "src/adm_realtime/system_spatial_island.cpp": 30,
+    "src/adm_realtime/system_spatial_island.h": 156
   }
 }

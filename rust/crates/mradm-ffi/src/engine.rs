@@ -1,6 +1,6 @@
 //! The render orchestration boundary (`mradm-engine`): the backend
-//! capability records and the discovery JSON documents. Island facts (the Apple backend, the
-//! system-spatial layouts, encoder availability) are read from the islands' [`PlatformIslands`].
+//! capability records and the discovery JSON documents. Apple supplies its backend and spatial
+//! layouts through [`PlatformIslands`]. Windows supplies layouts from its Rust playback device.
 use crate::adm::Text;
 use mradm_engine::catalog::{Backend, Layout, Mode, Platform, SpatialLayout};
 use std::{ptr, slice};
@@ -196,20 +196,25 @@ unsafe fn platform_with(
     } else {
         Some(unsafe { backend(&*record)? })
     };
-    let (mut layouts, mut len) = (ptr::null(), 0);
-    if capabilities && let Some(f) = p.system_spatial {
-        unsafe { f(&mut layouts, &mut len) };
-    }
-    let system_spatial_layouts = unsafe { items(layouts, len)? }
-        .iter()
-        .map(|l| {
-            Some(SpatialLayout {
-                id: unsafe { text(l.id)? },
-                display_name: unsafe { text(l.display_name)? },
-                channel_count: l.channel_count,
-            })
-        })
-        .collect::<Option<_>>()?;
+    let system_spatial_layouts = match (capabilities, p.system_spatial) {
+        (true, Some(read)) => {
+            let (mut layouts, mut len) = (ptr::null(), 0);
+            unsafe { read(&mut layouts, &mut len) };
+            unsafe { items(layouts, len)? }
+                .iter()
+                .map(|l| {
+                    Some(SpatialLayout {
+                        id: unsafe { text(l.id)? },
+                        display_name: unsafe { text(l.display_name)? },
+                        channel_count: l.channel_count,
+                    })
+                })
+                .collect::<Option<_>>()?
+        }
+        #[cfg(windows)]
+        (true, None) => crate::windows_spatial::layouts(),
+        _ => Vec::new(),
+    };
     let lfe = match p.apple_lfe_routing_ok {
         Some(f) if capabilities => unsafe { f() },
         _ => -1,
