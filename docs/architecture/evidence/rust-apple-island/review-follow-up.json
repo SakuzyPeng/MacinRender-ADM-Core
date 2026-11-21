@@ -1,0 +1,1565 @@
+{
+  "schema": "mradm.apac-worker-review.v1",
+  "platform": {
+    "cpu": "Apple M4 Pro",
+    "architecture": "arm64",
+    "os": "27.2.1",
+    "sdk": "27.2",
+    "deployment_target": "26.0",
+    "power": "AC",
+    "profile": "Release",
+    "flac": "vendored",
+    "opus": "vendored",
+    "sofa": true,
+    "iamf": false
+  },
+  "rustc": "1.98.0",
+  "cargo_lock_sha256": "290d3362836f61cc52e5188dc21a4fa8ce4d2591aeacb81850eaafb1019e1618",
+  "executables": {
+    "cpp_reference": {
+      "commit": "d3c7ae68c26c4de3f72980465c76642f7fbe4e87",
+      "sha256": "9ed063a5bfc218c10ddc68c7ca6012bf238f094b6628478f70b3dd6aec9b3f8b"
+    },
+    "rust_before": {
+      "commit": "226cfbae29e16f443761c1c7ddbb4d6a1080e162",
+      "sha256": "380b271a618c9b5da3b7971d8b9eb7abaf74813ab41d81e9c85f68dfae36aee8"
+    },
+    "rust_dedicated_thread": {
+      "sha256": "2ac7730d485eda133b683ef69d102ed50a312212aace5fc0ce667b799bdc738a"
+    }
+  },
+  "worker_request": {
+    "layout": "4+7+0",
+    "sample_rate": 48000,
+    "bitrate_kbps": 0,
+    "drc_music": true,
+    "container": "mpeg4"
+  },
+  "environment": {
+    "pad_variable": "APAC_ENV_PAD",
+    "pad_character": "x",
+    "null_pad": "inherit the environment",
+    "procedure": "Use the same executable, input and output paths for all three variants within a round."
+  },
+  "measurements": {
+    "flush_ms": "From F to the terminal progress line.",
+    "peak_rss_bytes": "wait4 ru_maxrss of the CLI process."
+  },
+  "cli_transcript": {
+    "commands": 134,
+    "differences": [
+      {
+        "command": "render-apac",
+        "item": "files/outputs/render-apac/out.m4a",
+        "first_difference": 830,
+        "reference_bytes": 154478,
+        "candidate_bytes": 154477
+      }
+    ],
+    "informational": []
+  },
+  "decoded_pcm": {
+    "objects-point": {
+      "frames": 48000,
+      "channels": 12,
+      "sample_rate": 48000,
+      "variants": {
+        "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3": {
+          "file_bytes": 154477,
+          "pcm_sha256": "3b592ba8f092e941063e99fc55c6cb03709b0142cb64b392275202d210458bf7"
+        },
+        "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8": {
+          "file_bytes": 154478,
+          "pcm_sha256": "5b8053e4ad8ba27309b2ded0001ab93d4dc040040d5cdf6f648c8c2756ee15f9"
+        }
+      },
+      "comparisons": [
+        {
+          "mdat_sha256": [
+            "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3",
+            "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"
+          ],
+          "changed_f32_samples": 13265,
+          "max_abs_error": 5.605816841125488e-05,
+          "rms_error": 1.2937745252066985e-06
+        }
+      ]
+    },
+    "objects-long": {
+      "frames": 576000,
+      "channels": 12,
+      "sample_rate": 48000,
+      "variants": {
+        "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993": {
+          "file_bytes": 1376230,
+          "pcm_sha256": "5572f78a2ddb64158b9fe1ec1bbe09cb970bdc424600b72464ca723c2faa6966"
+        },
+        "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36": {
+          "file_bytes": 1376250,
+          "pcm_sha256": "3f04a9ffcdce5fe7336ff092cc72aa0b01d2bb18809151a3383fa553818bce03"
+        },
+        "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": {
+          "file_bytes": 1376244,
+          "pcm_sha256": "df4c5a8b7f2d87193ce31d0a857e61f8bffc63ee1f2e7e27a56502ad9bc8b3cd"
+        }
+      },
+      "comparisons": [
+        {
+          "mdat_sha256": [
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993",
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"
+          ],
+          "changed_f32_samples": 204147,
+          "max_abs_error": 0.00025784969329833984,
+          "rms_error": 2.1836390982441897e-06
+        },
+        {
+          "mdat_sha256": [
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993",
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"
+          ],
+          "changed_f32_samples": 188886,
+          "max_abs_error": 0.00025784969329833984,
+          "rms_error": 2.103874749476711e-06
+        },
+        {
+          "mdat_sha256": [
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36",
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"
+          ],
+          "changed_f32_samples": 15261,
+          "max_abs_error": 7.687509059906006e-05,
+          "rms_error": 5.847997519621614e-07
+        }
+      ]
+    }
+  },
+  "direct_objects_point": {
+    "procedure": "Direct APAC worker; pair by environment length.",
+    "fixture": "objects-point",
+    "input_sha256": "13f07b2496479a8e863b24740dad1da7a23184a6e66de78221ddb8e8eabdabd2",
+    "rounds_per_binary": 26,
+    "warmups_per_binary": 1,
+    "load_averages_start": [
+      4.164,
+      4.953,
+      4.28
+    ],
+    "load_averages_end": [
+      4.047,
+      4.889,
+      4.269
+    ],
+    "protocol_sha256": "5eef35d73f4169fe24aa28b388e50bb09e9a9883eb4b7dcabe392a48cc71c8ca",
+    "rounds": [
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 0,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 11,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 22,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 33,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 44,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 55,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 66,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 77,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 88,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 99,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 110,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 121,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 0,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 11,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 22,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 33,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 44,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 55,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 66,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 77,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 88,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 99,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"file_bytes": 154478, "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 110,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      },
+      {
+        "pad_bytes": 121,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_before": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"},
+        "rust_dedicated_thread": {"file_bytes": 154477, "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3"}
+      }
+    ]
+  },
+  "direct_objects_long_review_launch": {
+    "procedure": "Direct APAC worker; inherited environment and the argument lengths from the review.",
+    "fixture": "objects-long",
+    "input_sha256": "9299e22eb74f6299fc1b11e335b15e65e52917a7803fbe8df9b30f9c4af82fe3",
+    "rounds_per_binary": 12,
+    "warmups_per_binary": 1,
+    "load_averages_start": [
+      4.009,
+      4.581,
+      4.227
+    ],
+    "load_averages_end": [
+      4.04,
+      4.557,
+      4.227
+    ],
+    "protocol_sha256": "e9cd41b0ac02041f46d556163de455dcf77aed494504720ad690dda85f38196b",
+    "argv_bytes_including_terminators": 231,
+    "environment_string_bytes_including_terminators": 7346,
+    "summary_by_environment": [
+      {
+        "pad_bytes": null,
+        "cpp_reference": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 12
+          },
+          "medians": {
+            "elapsed_ms": 444.455,
+            "user_ms": 398.369,
+            "system_ms": 39.047,
+            "peak_rss_bytes": 64995328.0,
+            "startup_ms": 70.356,
+            "write_ms": 127.592,
+            "flush_ms": 244.694
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 12
+          },
+          "medians": {
+            "elapsed_ms": 470.22,
+            "user_ms": 425.07,
+            "system_ms": 38.922,
+            "peak_rss_bytes": 66560000.0,
+            "startup_ms": 70.177,
+            "write_ms": 127.773,
+            "flush_ms": 270.564
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 12
+          },
+          "medians": {
+            "elapsed_ms": 442.408,
+            "user_ms": 398.656,
+            "system_ms": 37.368,
+            "peak_rss_bytes": 67354624.0,
+            "startup_ms": 69.75,
+            "write_ms": 127.296,
+            "flush_ms": 244.023
+          }
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 447.348, "user_ms": 399.677, "system_ms": 39.818, "peak_rss_bytes": 77709312, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.919, "write_ms": 129.121, "flush_ms": 244.786},
+        "rust_before": {"elapsed_ms": 478.636, "user_ms": 427.552, "system_ms": 40.426, "peak_rss_bytes": 74203136, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.087, "write_ms": 127.935, "flush_ms": 274.789},
+        "rust_dedicated_thread": {"elapsed_ms": 479.647, "user_ms": 411.634, "system_ms": 55.136, "peak_rss_bytes": 87801856, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 95.789, "write_ms": 130.966, "flush_ms": 251.047}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 453.506, "user_ms": 401.726, "system_ms": 42.84, "peak_rss_bytes": 67436544, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.107, "write_ms": 132.605, "flush_ms": 246.322},
+        "rust_before": {"elapsed_ms": 479.441, "user_ms": 428.853, "system_ms": 42.377, "peak_rss_bytes": 70516736, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.338, "write_ms": 129.443, "flush_ms": 276.166},
+        "rust_dedicated_thread": {"elapsed_ms": 447.47, "user_ms": 398.588, "system_ms": 41.123, "peak_rss_bytes": 67469312, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.846, "write_ms": 128.198, "flush_ms": 245.752}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 454.933, "user_ms": 402.456, "system_ms": 42.489, "peak_rss_bytes": 87474176, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.662, "write_ms": 131.167, "flush_ms": 247.509},
+        "rust_before": {"elapsed_ms": 479.919, "user_ms": 429.651, "system_ms": 41.746, "peak_rss_bytes": 87834624, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.518, "write_ms": 129.485, "flush_ms": 275.232},
+        "rust_dedicated_thread": {"elapsed_ms": 449.638, "user_ms": 400.206, "system_ms": 42.335, "peak_rss_bytes": 67403776, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.129, "write_ms": 128.811, "flush_ms": 247.901}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 443.61, "user_ms": 399.61, "system_ms": 37.283, "peak_rss_bytes": 88375296, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.757, "write_ms": 127.693, "flush_ms": 244.601},
+        "rust_before": {"elapsed_ms": 471.897, "user_ms": 425.259, "system_ms": 39.217, "peak_rss_bytes": 66076672, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.434, "write_ms": 128.702, "flush_ms": 271.277},
+        "rust_dedicated_thread": {"elapsed_ms": 439.681, "user_ms": 396.649, "system_ms": 36.555, "peak_rss_bytes": 67403776, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.443, "write_ms": 125.952, "flush_ms": 242.844}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 440.416, "user_ms": 397.367, "system_ms": 36.206, "peak_rss_bytes": 61308928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.164, "write_ms": 127.237, "flush_ms": 243.723},
+        "rust_before": {"elapsed_ms": 466.966, "user_ms": 422.03, "system_ms": 38.627, "peak_rss_bytes": 61325312, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.789, "write_ms": 126.544, "flush_ms": 270.343},
+        "rust_dedicated_thread": {"elapsed_ms": 440.233, "user_ms": 397.358, "system_ms": 36.442, "peak_rss_bytes": 67452928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.057, "write_ms": 126.73, "flush_ms": 241.937}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 436.638, "user_ms": 393.967, "system_ms": 36.407, "peak_rss_bytes": 61308928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.045, "write_ms": 125.564, "flush_ms": 241.69},
+        "rust_before": {"elapsed_ms": 466.395, "user_ms": 422.755, "system_ms": 37.272, "peak_rss_bytes": 67043328, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.539, "write_ms": 126.278, "flush_ms": 270.214},
+        "rust_dedicated_thread": {"elapsed_ms": 436.927, "user_ms": 394.323, "system_ms": 36.578, "peak_rss_bytes": 61538304, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.916, "write_ms": 125.919, "flush_ms": 241.764}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 449.54, "user_ms": 397.215, "system_ms": 45.207, "peak_rss_bytes": 61145088, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 75.875, "write_ms": 126.97, "flush_ms": 245.393},
+        "rust_before": {"elapsed_ms": 475.039, "user_ms": 425.41, "system_ms": 43.003, "peak_rss_bytes": 65912832, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 77.037, "write_ms": 126.476, "flush_ms": 270.061},
+        "rust_dedicated_thread": {"elapsed_ms": 436.868, "user_ms": 396.449, "system_ms": 34.26, "peak_rss_bytes": 61505536, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.847, "write_ms": 125.53, "flush_ms": 242.179}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 481.763, "user_ms": 418.563, "system_ms": 51.121, "peak_rss_bytes": 87539712, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 82.214, "write_ms": 151.999, "flush_ms": 245.943},
+        "rust_before": {"elapsed_ms": 468.265, "user_ms": 424.379, "system_ms": 38.255, "peak_rss_bytes": 86523904, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.921, "write_ms": 127.68, "flush_ms": 268.993},
+        "rust_dedicated_thread": {"elapsed_ms": 446.89, "user_ms": 400.335, "system_ms": 39.826, "peak_rss_bytes": 67305472, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.485, "write_ms": 127.647, "flush_ms": 244.311}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 443.529, "user_ms": 397.371, "system_ms": 39.097, "peak_rss_bytes": 62554112, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.022, "write_ms": 127.948, "flush_ms": 244.226},
+        "rust_before": {"elapsed_ms": 466.57, "user_ms": 422.729, "system_ms": 37.916, "peak_rss_bytes": 61325312, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.881, "write_ms": 126.902, "flush_ms": 269.289},
+        "rust_dedicated_thread": {"elapsed_ms": 443.442, "user_ms": 399.511, "system_ms": 37.282, "peak_rss_bytes": 86687744, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.658, "write_ms": 128.329, "flush_ms": 244.895}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 445.3, "user_ms": 399.367, "system_ms": 38.998, "peak_rss_bytes": 88309760, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.691, "write_ms": 127.066, "flush_ms": 245.796},
+        "rust_before": {"elapsed_ms": 467.028, "user_ms": 423.162, "system_ms": 37.268, "peak_rss_bytes": 61243392, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.093, "write_ms": 126.921, "flush_ms": 270.659},
+        "rust_dedicated_thread": {"elapsed_ms": 441.189, "user_ms": 397.087, "system_ms": 37.562, "peak_rss_bytes": 61538304, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.949, "write_ms": 126.857, "flush_ms": 243.898}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 440.007, "user_ms": 396.579, "system_ms": 37.226, "peak_rss_bytes": 61341696, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.015, "write_ms": 126.544, "flush_ms": 243.148},
+        "rust_before": {"elapsed_ms": 473.533, "user_ms": 426.94, "system_ms": 39.451, "peak_rss_bytes": 87703552, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.953, "write_ms": 128.097, "flush_ms": 271.87},
+        "rust_dedicated_thread": {"elapsed_ms": 442.786, "user_ms": 398.763, "system_ms": 37.454, "peak_rss_bytes": 61767680, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.13, "write_ms": 126.945, "flush_ms": 244.148}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 440.705, "user_ms": 397.303, "system_ms": 37.178, "peak_rss_bytes": 61423616, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.34, "write_ms": 127.49, "flush_ms": 243.465},
+        "rust_before": {"elapsed_ms": 468.542, "user_ms": 424.881, "system_ms": 38.458, "peak_rss_bytes": 61292544, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.617, "write_ms": 127.865, "flush_ms": 270.469},
+        "rust_dedicated_thread": {"elapsed_ms": 442.03, "user_ms": 398.723, "system_ms": 37.167, "peak_rss_bytes": 62636032, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.72, "write_ms": 128.992, "flush_ms": 242.868}
+      }
+    ]
+  },
+  "direct_objects_long_inherited": {
+    "procedure": "Direct APAC worker; inherited environment and the same paths as the padded measurements.",
+    "fixture": "objects-long",
+    "input_sha256": "9299e22eb74f6299fc1b11e335b15e65e52917a7803fbe8df9b30f9c4af82fe3",
+    "rounds_per_binary": 12,
+    "warmups_per_binary": 1,
+    "load_averages_start": [
+      4.047,
+      4.889,
+      4.269
+    ],
+    "load_averages_end": [
+      4.048,
+      4.831,
+      4.261
+    ],
+    "protocol_sha256": "e9cd41b0ac02041f46d556163de455dcf77aed494504720ad690dda85f38196b",
+    "summary_by_environment": [
+      {
+        "pad_bytes": null,
+        "cpp_reference": {
+          "payloads": {
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993": 12
+          },
+          "medians": {
+            "elapsed_ms": 444.206,
+            "user_ms": 398.842,
+            "system_ms": 39.252,
+            "peak_rss_bytes": 64208896.0,
+            "startup_ms": 70.154,
+            "write_ms": 126.276,
+            "flush_ms": 247.994
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36": 12
+          },
+          "medians": {
+            "elapsed_ms": 447.803,
+            "user_ms": 402.334,
+            "system_ms": 38.484,
+            "peak_rss_bytes": 67231744.0,
+            "startup_ms": 70.514,
+            "write_ms": 132.603,
+            "flush_ms": 242.438
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 12
+          },
+          "medians": {
+            "elapsed_ms": 439.263,
+            "user_ms": 394.519,
+            "system_ms": 38.671,
+            "peak_rss_bytes": 85811200.0,
+            "startup_ms": 70.201,
+            "write_ms": 127.06,
+            "flush_ms": 242.036
+          }
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 440.509, "user_ms": 398.122, "system_ms": 35.954, "peak_rss_bytes": 61128704, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 66.835, "write_ms": 125.897, "flush_ms": 246.486},
+        "rust_before": {"elapsed_ms": 447.329, "user_ms": 401.768, "system_ms": 39.374, "peak_rss_bytes": 87490560, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 71.554, "write_ms": 132.002, "flush_ms": 242.156},
+        "rust_dedicated_thread": {"elapsed_ms": 437.005, "user_ms": 393.09, "system_ms": 37.847, "peak_rss_bytes": 67223552, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.595, "write_ms": 125.979, "flush_ms": 239.89}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 443.596, "user_ms": 399.562, "system_ms": 37.115, "peak_rss_bytes": 61145088, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 66.55, "write_ms": 126.656, "flush_ms": 248.941},
+        "rust_before": {"elapsed_ms": 444.106, "user_ms": 400.222, "system_ms": 37.632, "peak_rss_bytes": 61521920, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 68.472, "write_ms": 131.661, "flush_ms": 242.607},
+        "rust_dedicated_thread": {"elapsed_ms": 435.588, "user_ms": 392.289, "system_ms": 36.551, "peak_rss_bytes": 61456384, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.581, "write_ms": 124.381, "flush_ms": 242.131}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 444.815, "user_ms": 396.243, "system_ms": 42.111, "peak_rss_bytes": 61145088, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 73.669, "write_ms": 124.758, "flush_ms": 245.117},
+        "rust_before": {"elapsed_ms": 441.465, "user_ms": 398.168, "system_ms": 38.213, "peak_rss_bytes": 61276160, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 68.1, "write_ms": 131.617, "flush_ms": 240.255},
+        "rust_dedicated_thread": {"elapsed_ms": 438.168, "user_ms": 394.414, "system_ms": 38.459, "peak_rss_bytes": 67338240, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.241, "write_ms": 125.289, "flush_ms": 241.096}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 438.754, "user_ms": 397.606, "system_ms": 35.07, "peak_rss_bytes": 61177856, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.384, "write_ms": 124.621, "flush_ms": 245.357},
+        "rust_before": {"elapsed_ms": 443.207, "user_ms": 398.606, "system_ms": 38.03, "peak_rss_bytes": 61341696, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 69.545, "write_ms": 132.023, "flush_ms": 240.285},
+        "rust_dedicated_thread": {"elapsed_ms": 435.854, "user_ms": 393.228, "system_ms": 36.237, "peak_rss_bytes": 61456384, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.134, "write_ms": 127.472, "flush_ms": 239.893}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 438.471, "user_ms": 396.279, "system_ms": 35.854, "peak_rss_bytes": 67108864, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.691, "write_ms": 124.323, "flush_ms": 244.091},
+        "rust_before": {"elapsed_ms": 444.131, "user_ms": 399.557, "system_ms": 37.748, "peak_rss_bytes": 88604672, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 69.356, "write_ms": 131.598, "flush_ms": 241.509},
+        "rust_dedicated_thread": {"elapsed_ms": 440.357, "user_ms": 394.625, "system_ms": 38.883, "peak_rss_bytes": 85590016, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.162, "write_ms": 126.648, "flush_ms": 241.941}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 484.102, "user_ms": 417.854, "system_ms": 53.517, "peak_rss_bytes": 67338240, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 103.846, "write_ms": 129.712, "flush_ms": 248.988},
+        "rust_before": {"elapsed_ms": 444.111, "user_ms": 400.507, "system_ms": 37.253, "peak_rss_bytes": 61521920, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 67.952, "write_ms": 132.523, "flush_ms": 242.27},
+        "rust_dedicated_thread": {"elapsed_ms": 437.646, "user_ms": 393.266, "system_ms": 37.896, "peak_rss_bytes": 87719936, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.76, "write_ms": 124.785, "flush_ms": 241.275}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 440.165, "user_ms": 396.324, "system_ms": 37.275, "peak_rss_bytes": 61308928, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 69.056, "write_ms": 125.048, "flush_ms": 244.781},
+        "rust_before": {"elapsed_ms": 448.277, "user_ms": 402.9, "system_ms": 38.756, "peak_rss_bytes": 67272704, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 70.028, "write_ms": 134.673, "flush_ms": 242.23},
+        "rust_dedicated_thread": {"elapsed_ms": 435.94, "user_ms": 393.407, "system_ms": 36.016, "peak_rss_bytes": 61390848, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.626, "write_ms": 125.432, "flush_ms": 241.431}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 441.98, "user_ms": 397.074, "system_ms": 35.902, "peak_rss_bytes": 61210624, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.525, "write_ms": 125.626, "flush_ms": 247.522},
+        "rust_before": {"elapsed_ms": 454.991, "user_ms": 405.51, "system_ms": 41.205, "peak_rss_bytes": 87687168, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 71.573, "write_ms": 136.479, "flush_ms": 245.44},
+        "rust_dedicated_thread": {"elapsed_ms": 450.273, "user_ms": 400.87, "system_ms": 40.754, "peak_rss_bytes": 87900160, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.659, "write_ms": 132.596, "flush_ms": 243.344}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 455.095, "user_ms": 404.614, "system_ms": 41.229, "peak_rss_bytes": 87621632, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 74.731, "write_ms": 127.331, "flush_ms": 251.347},
+        "rust_before": {"elapsed_ms": 453.084, "user_ms": 405.253, "system_ms": 40.591, "peak_rss_bytes": 67190784, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 72.087, "write_ms": 135.29, "flush_ms": 244.194},
+        "rust_dedicated_thread": {"elapsed_ms": 450.961, "user_ms": 399.231, "system_ms": 43.013, "peak_rss_bytes": 86032384, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.001, "write_ms": 130.149, "flush_ms": 245.064}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 460.83, "user_ms": 404.818, "system_ms": 47.991, "peak_rss_bytes": 87752704, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 80.835, "write_ms": 128.315, "flush_ms": 250.181},
+        "rust_before": {"elapsed_ms": 462.073, "user_ms": 409.306, "system_ms": 44.292, "peak_rss_bytes": 87474176, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 73.85, "write_ms": 139.868, "flush_ms": 246.738},
+        "rust_dedicated_thread": {"elapsed_ms": 453.835, "user_ms": 401.781, "system_ms": 45.071, "peak_rss_bytes": 87687168, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.486, "write_ms": 132.667, "flush_ms": 245.875}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 484.055, "user_ms": 428.037, "system_ms": 44.667, "peak_rss_bytes": 67174400, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 71.252, "write_ms": 129.853, "flush_ms": 281.405},
+        "rust_before": {"elapsed_ms": 458.666, "user_ms": 407.463, "system_ms": 42.914, "peak_rss_bytes": 87539712, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 74.424, "write_ms": 135.81, "flush_ms": 246.802},
+        "rust_dedicated_thread": {"elapsed_ms": 451.374, "user_ms": 400.005, "system_ms": 43.016, "peak_rss_bytes": 87932928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.281, "write_ms": 129.087, "flush_ms": 247.266}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 454.515, "user_ms": 404.682, "system_ms": 42.306, "peak_rss_bytes": 86212608, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 75.898, "write_ms": 128.547, "flush_ms": 248.466},
+        "rust_before": {"elapsed_ms": 449.238, "user_ms": 404.922, "system_ms": 37.12, "peak_rss_bytes": 67141632, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 70.999, "write_ms": 132.684, "flush_ms": 244.222},
+        "rust_dedicated_thread": {"elapsed_ms": 448.39, "user_ms": 398.885, "system_ms": 42.058, "peak_rss_bytes": 87900160, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.078, "write_ms": 129.498, "flush_ms": 245.167}
+      }
+    ]
+  },
+  "direct_objects_long_padded": {
+    "procedure": "Direct APAC worker; pair by environment length.",
+    "fixture": "objects-long",
+    "input_sha256": "9299e22eb74f6299fc1b11e335b15e65e52917a7803fbe8df9b30f9c4af82fe3",
+    "rounds_per_binary": 36,
+    "warmups_per_binary": 1,
+    "load_averages_start": [
+      4.048,
+      4.831,
+      4.261
+    ],
+    "load_averages_end": [
+      3.845,
+      4.667,
+      4.231
+    ],
+    "protocol_sha256": "e9cd41b0ac02041f46d556163de455dcf77aed494504720ad690dda85f38196b",
+    "summary_by_environment": [
+      {
+        "pad_bytes": 16,
+        "cpp_reference": {
+          "payloads": {
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36": 6
+          },
+          "medians": {
+            "elapsed_ms": 458.752,
+            "user_ms": 408.428,
+            "system_ms": 42.381,
+            "peak_rss_bytes": 71753728.0,
+            "startup_ms": 72.693,
+            "write_ms": 135.46,
+            "flush_ms": 248.101
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993": 6
+          },
+          "medians": {
+            "elapsed_ms": 457.108,
+            "user_ms": 406.279,
+            "system_ms": 42.029,
+            "peak_rss_bytes": 77299712.0,
+            "startup_ms": 73.401,
+            "write_ms": 129.507,
+            "flush_ms": 252.236
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 453.113,
+            "user_ms": 402.848,
+            "system_ms": 43.939,
+            "peak_rss_bytes": 87670784.0,
+            "startup_ms": 73.375,
+            "write_ms": 129.758,
+            "flush_ms": 247.796
+          }
+        }
+      },
+      {
+        "pad_bytes": 32,
+        "cpp_reference": {
+          "payloads": {
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993": 6
+          },
+          "medians": {
+            "elapsed_ms": 457.566,
+            "user_ms": 406.915,
+            "system_ms": 41.973,
+            "peak_rss_bytes": 76562432.0,
+            "startup_ms": 73.098,
+            "write_ms": 130.263,
+            "flush_ms": 252.833
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36": 6
+          },
+          "medians": {
+            "elapsed_ms": 456.269,
+            "user_ms": 407.382,
+            "system_ms": 41.632,
+            "peak_rss_bytes": 76161024.0,
+            "startup_ms": 71.718,
+            "write_ms": 135.782,
+            "flush_ms": 246.975
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 450.152,
+            "user_ms": 401.013,
+            "system_ms": 41.058,
+            "peak_rss_bytes": 85508096.0,
+            "startup_ms": 72.604,
+            "write_ms": 128.861,
+            "flush_ms": 247.135
+          }
+        }
+      },
+      {
+        "pad_bytes": 64,
+        "cpp_reference": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 453.29,
+            "user_ms": 403.071,
+            "system_ms": 42.814,
+            "peak_rss_bytes": 81158144.0,
+            "startup_ms": 72.52,
+            "write_ms": 131.658,
+            "flush_ms": 247.756
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 474.876,
+            "user_ms": 414.485,
+            "system_ms": 45.913,
+            "peak_rss_bytes": 79216640.0,
+            "startup_ms": 73.528,
+            "write_ms": 131.19,
+            "flush_ms": 254.24
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 451.804,
+            "user_ms": 402.101,
+            "system_ms": 41.54,
+            "peak_rss_bytes": 80781312.0,
+            "startup_ms": 73.069,
+            "write_ms": 129.186,
+            "flush_ms": 248.434
+          }
+        }
+      },
+      {
+        "pad_bytes": 128,
+        "cpp_reference": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 452.531,
+            "user_ms": 402.463,
+            "system_ms": 42.728,
+            "peak_rss_bytes": 85934080.0,
+            "startup_ms": 73.217,
+            "write_ms": 131.27,
+            "flush_ms": 247.517
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 454.705,
+            "user_ms": 403.641,
+            "system_ms": 43.234,
+            "peak_rss_bytes": 87539712.0,
+            "startup_ms": 73.624,
+            "write_ms": 130.281,
+            "flush_ms": 249.247
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 450.497,
+            "user_ms": 401.348,
+            "system_ms": 42.689,
+            "peak_rss_bytes": 67461120.0,
+            "startup_ms": 72.419,
+            "write_ms": 130.095,
+            "flush_ms": 247.003
+          }
+        }
+      },
+      {
+        "pad_bytes": 192,
+        "cpp_reference": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 458.596,
+            "user_ms": 408.19,
+            "system_ms": 42.174,
+            "peak_rss_bytes": 77201408.0,
+            "startup_ms": 73.444,
+            "write_ms": 135.002,
+            "flush_ms": 248.463
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 453.367,
+            "user_ms": 402.518,
+            "system_ms": 43.005,
+            "peak_rss_bytes": 70631424.0,
+            "startup_ms": 72.874,
+            "write_ms": 130.76,
+            "flush_ms": 247.691
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 454.063,
+            "user_ms": 402.559,
+            "system_ms": 43.036,
+            "peak_rss_bytes": 87842816.0,
+            "startup_ms": 73.802,
+            "write_ms": 129.346,
+            "flush_ms": 247.951
+          }
+        }
+      },
+      {
+        "pad_bytes": 256,
+        "cpp_reference": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 452.819,
+            "user_ms": 402.611,
+            "system_ms": 42.247,
+            "peak_rss_bytes": 86900736.0,
+            "startup_ms": 73.563,
+            "write_ms": 129.953,
+            "flush_ms": 247.301
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 451.887,
+            "user_ms": 402.328,
+            "system_ms": 41.7,
+            "peak_rss_bytes": 73211904.0,
+            "startup_ms": 72.003,
+            "write_ms": 130.509,
+            "flush_ms": 247.38
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 6
+          },
+          "medians": {
+            "elapsed_ms": 454.532,
+            "user_ms": 402.709,
+            "system_ms": 43.676,
+            "peak_rss_bytes": 76464128.0,
+            "startup_ms": 72.393,
+            "write_ms": 131.014,
+            "flush_ms": 248.776
+          }
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "pad_bytes": 16,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 460.022, "user_ms": 410.084, "system_ms": 42.703, "peak_rss_bytes": 87588864, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 73.097, "write_ms": 135.995, "flush_ms": 249.384},
+        "rust_before": {"elapsed_ms": 456.674, "user_ms": 404.819, "system_ms": 43.331, "peak_rss_bytes": 87506944, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 74.644, "write_ms": 127.431, "flush_ms": 252.976},
+        "rust_dedicated_thread": {"elapsed_ms": 458.935, "user_ms": 405.697, "system_ms": 45.043, "peak_rss_bytes": 87932928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.603, "write_ms": 132.326, "flush_ms": 251.089}
+      },
+      {
+        "pad_bytes": 32,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 458.536, "user_ms": 406.849, "system_ms": 43.457, "peak_rss_bytes": 86032384, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 72.187, "write_ms": 131.539, "flush_ms": 253.297},
+        "rust_before": {"elapsed_ms": 455.18, "user_ms": 406.055, "system_ms": 42.118, "peak_rss_bytes": 87752704, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 72.091, "write_ms": 134.403, "flush_ms": 246.99},
+        "rust_dedicated_thread": {"elapsed_ms": 453.009, "user_ms": 402.739, "system_ms": 42.7, "peak_rss_bytes": 87834624, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.877, "write_ms": 129.599, "flush_ms": 248.715}
+      },
+      {
+        "pad_bytes": 64,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 453.425, "user_ms": 402.201, "system_ms": 42.939, "peak_rss_bytes": 67190784, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.018, "write_ms": 131.767, "flush_ms": 247.2},
+        "rust_before": {"elapsed_ms": 486.077, "user_ms": 426.587, "system_ms": 44.092, "peak_rss_bytes": 87556096, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.105, "write_ms": 131.092, "flush_ms": 281.12},
+        "rust_dedicated_thread": {"elapsed_ms": 452.339, "user_ms": 401.49, "system_ms": 42.723, "peak_rss_bytes": 62783488, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.64, "write_ms": 129.273, "flush_ms": 249.891}
+      },
+      {
+        "pad_bytes": 128,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 451.862, "user_ms": 400.691, "system_ms": 43.232, "peak_rss_bytes": 87588864, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.895, "write_ms": 131.223, "flush_ms": 245.075},
+        "rust_before": {"elapsed_ms": 451.371, "user_ms": 400.945, "system_ms": 42.858, "peak_rss_bytes": 87638016, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.513, "write_ms": 129.577, "flush_ms": 246.384},
+        "rust_dedicated_thread": {"elapsed_ms": 449.438, "user_ms": 400.525, "system_ms": 41.278, "peak_rss_bytes": 67223552, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.304, "write_ms": 129.0, "flush_ms": 246.69}
+      },
+      {
+        "pad_bytes": 192,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 459.598, "user_ms": 407.685, "system_ms": 43.149, "peak_rss_bytes": 66863104, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.082, "write_ms": 135.076, "flush_ms": 249.984},
+        "rust_before": {"elapsed_ms": 453.628, "user_ms": 403.048, "system_ms": 43.907, "peak_rss_bytes": 74006528, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.207, "write_ms": 130.935, "flush_ms": 247.981},
+        "rust_dedicated_thread": {"elapsed_ms": 456.084, "user_ms": 400.48, "system_ms": 47.638, "peak_rss_bytes": 88752128, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 79.696, "write_ms": 129.07, "flush_ms": 245.68}
+      },
+      {
+        "pad_bytes": 256,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 449.319, "user_ms": 400.359, "system_ms": 41.248, "peak_rss_bytes": 67141632, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.326, "write_ms": 128.825, "flush_ms": 245.635},
+        "rust_before": {"elapsed_ms": 451.896, "user_ms": 402.151, "system_ms": 42.259, "peak_rss_bytes": 69173248, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.965, "write_ms": 131.261, "flush_ms": 247.326},
+        "rust_dedicated_thread": {"elapsed_ms": 455.21, "user_ms": 403.509, "system_ms": 43.717, "peak_rss_bytes": 85803008, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.455, "write_ms": 131.273, "flush_ms": 248.761}
+      },
+      {
+        "pad_bytes": 16,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 488.628, "user_ms": 424.796, "system_ms": 46.681, "peak_rss_bytes": 81100800, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 73.884, "write_ms": 164.381, "flush_ms": 248.852},
+        "rust_before": {"elapsed_ms": 453.476, "user_ms": 403.637, "system_ms": 42.462, "peak_rss_bytes": 67158016, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 72.775, "write_ms": 129.716, "flush_ms": 249.331},
+        "rust_dedicated_thread": {"elapsed_ms": 451.268, "user_ms": 401.136, "system_ms": 42.435, "peak_rss_bytes": 87556096, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.668, "write_ms": 128.183, "flush_ms": 247.505}
+      },
+      {
+        "pad_bytes": 32,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 461.473, "user_ms": 411.318, "system_ms": 41.712, "peak_rss_bytes": 86884352, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 73.471, "write_ms": 130.156, "flush_ms": 256.321},
+        "rust_before": {"elapsed_ms": 457.358, "user_ms": 408.709, "system_ms": 40.578, "peak_rss_bytes": 87638016, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 72.424, "write_ms": 136.502, "flush_ms": 246.96},
+        "rust_dedicated_thread": {"elapsed_ms": 450.516, "user_ms": 401.848, "system_ms": 40.729, "peak_rss_bytes": 67469312, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.721, "write_ms": 129.36, "flush_ms": 246.91}
+      },
+      {
+        "pad_bytes": 64,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 453.155, "user_ms": 403.941, "system_ms": 41.142, "peak_rss_bytes": 65994752, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.897, "write_ms": 131.635, "flush_ms": 248.313},
+        "rust_before": {"elapsed_ms": 454.062, "user_ms": 403.565, "system_ms": 42.263, "peak_rss_bytes": 68222976, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.904, "write_ms": 130.277, "flush_ms": 249.39},
+        "rust_dedicated_thread": {"elapsed_ms": 451.226, "user_ms": 401.099, "system_ms": 42.071, "peak_rss_bytes": 70533120, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.493, "write_ms": 129.323, "flush_ms": 247.945}
+      },
+      {
+        "pad_bytes": 128,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 451.248, "user_ms": 402.296, "system_ms": 40.411, "peak_rss_bytes": 85344256, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.525, "write_ms": 129.666, "flush_ms": 246.416},
+        "rust_before": {"elapsed_ms": 453.471, "user_ms": 402.421, "system_ms": 43.611, "peak_rss_bytes": 87736320, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.956, "write_ms": 129.5, "flush_ms": 249.047},
+        "rust_dedicated_thread": {"elapsed_ms": 451.556, "user_ms": 401.044, "system_ms": 43.921, "peak_rss_bytes": 86720512, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.635, "write_ms": 130.667, "flush_ms": 247.316}
+      },
+      {
+        "pad_bytes": 192,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 454.145, "user_ms": 405.371, "system_ms": 40.891, "peak_rss_bytes": 87932928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.805, "write_ms": 133.203, "flush_ms": 245.557},
+        "rust_before": {"elapsed_ms": 451.987, "user_ms": 401.937, "system_ms": 42.27, "peak_rss_bytes": 67256320, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.636, "write_ms": 130.586, "flush_ms": 247.402},
+        "rust_dedicated_thread": {"elapsed_ms": 451.093, "user_ms": 401.846, "system_ms": 41.15, "peak_rss_bytes": 87883776, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.787, "write_ms": 129.08, "flush_ms": 247.383}
+      },
+      {
+        "pad_bytes": 256,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 462.222, "user_ms": 403.274, "system_ms": 50.154, "peak_rss_bytes": 87883776, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 81.765, "write_ms": 130.682, "flush_ms": 248.07},
+        "rust_before": {"elapsed_ms": 498.328, "user_ms": 425.611, "system_ms": 57.82, "peak_rss_bytes": 87965696, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 109.738, "write_ms": 134.801, "flush_ms": 252.141},
+        "rust_dedicated_thread": {"elapsed_ms": 458.496, "user_ms": 405.169, "system_ms": 44.397, "peak_rss_bytes": 67239936, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.811, "write_ms": 133.583, "flush_ms": 249.515}
+      },
+      {
+        "pad_bytes": 16,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 460.419, "user_ms": 409.256, "system_ms": 42.629, "peak_rss_bytes": 86540288, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 72.288, "write_ms": 137.023, "flush_ms": 249.486},
+        "rust_before": {"elapsed_ms": 458.782, "user_ms": 407.739, "system_ms": 41.597, "peak_rss_bytes": 67223552, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 75.383, "write_ms": 130.466, "flush_ms": 251.497},
+        "rust_dedicated_thread": {"elapsed_ms": 452.283, "user_ms": 401.779, "system_ms": 42.854, "peak_rss_bytes": 87785472, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.927, "write_ms": 129.679, "flush_ms": 247.816}
+      },
+      {
+        "pad_bytes": 32,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 457.317, "user_ms": 406.982, "system_ms": 42.235, "peak_rss_bytes": 87506944, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 72.755, "write_ms": 130.37, "flush_ms": 252.65},
+        "rust_before": {"elapsed_ms": 458.724, "user_ms": 408.978, "system_ms": 41.605, "peak_rss_bytes": 85524480, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 72.556, "write_ms": 136.062, "flush_ms": 248.43},
+        "rust_dedicated_thread": {"elapsed_ms": 449.789, "user_ms": 400.178, "system_ms": 41.388, "peak_rss_bytes": 87670784, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.488, "write_ms": 128.362, "flush_ms": 247.36}
+      },
+      {
+        "pad_bytes": 64,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 450.475, "user_ms": 400.807, "system_ms": 42.69, "peak_rss_bytes": 75579392, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.075, "write_ms": 129.688, "flush_ms": 247.049},
+        "rust_before": {"elapsed_ms": 463.675, "user_ms": 410.721, "system_ms": 44.188, "peak_rss_bytes": 87621632, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.003, "write_ms": 130.326, "flush_ms": 257.71},
+        "rust_dedicated_thread": {"elapsed_ms": 451.27, "user_ms": 402.711, "system_ms": 40.572, "peak_rss_bytes": 85475328, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.645, "write_ms": 129.099, "flush_ms": 246.884}
+      },
+      {
+        "pad_bytes": 128,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 458.712, "user_ms": 406.029, "system_ms": 44.602, "peak_rss_bytes": 68419584, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.868, "write_ms": 134.154, "flush_ms": 250.221},
+        "rust_before": {"elapsed_ms": 455.939, "user_ms": 403.789, "system_ms": 41.891, "peak_rss_bytes": 87441408, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.735, "write_ms": 130.984, "flush_ms": 249.447},
+        "rust_dedicated_thread": {"elapsed_ms": 475.181, "user_ms": 411.654, "system_ms": 50.397, "peak_rss_bytes": 67534848, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 93.566, "write_ms": 132.167, "flush_ms": 248.008}
+      },
+      {
+        "pad_bytes": 192,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 459.383, "user_ms": 409.649, "system_ms": 42.009, "peak_rss_bytes": 67026944, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.001, "write_ms": 136.78, "flush_ms": 249.217},
+        "rust_before": {"elapsed_ms": 453.105, "user_ms": 401.914, "system_ms": 43.303, "peak_rss_bytes": 88064000, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.155, "write_ms": 131.337, "flush_ms": 246.037},
+        "rust_dedicated_thread": {"elapsed_ms": 454.636, "user_ms": 403.272, "system_ms": 43.564, "peak_rss_bytes": 87867392, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.707, "write_ms": 129.613, "flush_ms": 249.707}
+      },
+      {
+        "pad_bytes": 256,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 450.954, "user_ms": 401.894, "system_ms": 42.603, "peak_rss_bytes": 65798144, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.862, "write_ms": 130.087, "flush_ms": 246.533},
+        "rust_before": {"elapsed_ms": 451.878, "user_ms": 402.506, "system_ms": 42.458, "peak_rss_bytes": 66961408, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.041, "write_ms": 130.853, "flush_ms": 247.434},
+        "rust_dedicated_thread": {"elapsed_ms": 453.854, "user_ms": 401.853, "system_ms": 43.704, "peak_rss_bytes": 85409792, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.111, "write_ms": 132.297, "flush_ms": 248.792}
+      },
+      {
+        "pad_bytes": 16,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 449.257, "user_ms": 404.927, "system_ms": 38.578, "peak_rss_bytes": 61194240, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 68.713, "write_ms": 133.677, "flush_ms": 245.397},
+        "rust_before": {"elapsed_ms": 457.541, "user_ms": 407.797, "system_ms": 41.541, "peak_rss_bytes": 87375872, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 73.533, "write_ms": 129.299, "flush_ms": 253.061},
+        "rust_dedicated_thread": {"elapsed_ms": 453.792, "user_ms": 400.651, "system_ms": 45.5, "peak_rss_bytes": 67469312, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 79.091, "write_ms": 128.755, "flush_ms": 244.195}
+      },
+      {
+        "pad_bytes": 32,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 448.181, "user_ms": 403.187, "system_ms": 38.119, "peak_rss_bytes": 67026944, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 71.296, "write_ms": 127.433, "flush_ms": 248.091},
+        "rust_before": {"elapsed_ms": 454.243, "user_ms": 405.497, "system_ms": 41.66, "peak_rss_bytes": 62455808, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 70.633, "write_ms": 135.503, "flush_ms": 246.823},
+        "rust_dedicated_thread": {"elapsed_ms": 440.591, "user_ms": 397.504, "system_ms": 37.294, "peak_rss_bytes": 61456384, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.4, "write_ms": 128.243, "flush_ms": 242.57}
+      },
+      {
+        "pad_bytes": 64,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 451.328, "user_ms": 401.765, "system_ms": 41.298, "peak_rss_bytes": 89309184, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.728, "write_ms": 130.223, "flush_ms": 246.744},
+        "rust_before": {"elapsed_ms": 489.532, "user_ms": 418.248, "system_ms": 55.992, "peak_rss_bytes": 73383936, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 104.843, "write_ms": 132.233, "flush_ms": 250.769},
+        "rust_dedicated_thread": {"elapsed_ms": 442.951, "user_ms": 398.564, "system_ms": 38.503, "peak_rss_bytes": 85770240, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.45, "write_ms": 127.152, "flush_ms": 243.559}
+      },
+      {
+        "pad_bytes": 128,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 453.2, "user_ms": 402.631, "system_ms": 42.225, "peak_rss_bytes": 86769664, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.91, "write_ms": 130.016, "flush_ms": 248.618},
+        "rust_before": {"elapsed_ms": 451.521, "user_ms": 403.493, "system_ms": 40.607, "peak_rss_bytes": 79740928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.404, "write_ms": 129.502, "flush_ms": 248.162},
+        "rust_dedicated_thread": {"elapsed_ms": 449.271, "user_ms": 401.502, "system_ms": 40.352, "peak_rss_bytes": 67387392, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.164, "write_ms": 129.284, "flush_ms": 246.311}
+      },
+      {
+        "pad_bytes": 192,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 459.731, "user_ms": 408.814, "system_ms": 43.67, "peak_rss_bytes": 87375872, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.046, "write_ms": 134.928, "flush_ms": 248.532},
+        "rust_before": {"elapsed_ms": 450.496, "user_ms": 401.988, "system_ms": 41.979, "peak_rss_bytes": 87588864, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.112, "write_ms": 130.514, "flush_ms": 245.229},
+        "rust_dedicated_thread": {"elapsed_ms": 450.545, "user_ms": 401.843, "system_ms": 40.862, "peak_rss_bytes": 87326720, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.896, "write_ms": 127.651, "flush_ms": 247.325}
+      },
+      {
+        "pad_bytes": 256,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 454.685, "user_ms": 403.022, "system_ms": 41.891, "peak_rss_bytes": 86589440, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.77, "write_ms": 129.819, "flush_ms": 249.486},
+        "rust_before": {"elapsed_ms": 448.897, "user_ms": 401.235, "system_ms": 40.663, "peak_rss_bytes": 77250560, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.934, "write_ms": 128.794, "flush_ms": 246.617},
+        "rust_dedicated_thread": {"elapsed_ms": 448.769, "user_ms": 401.908, "system_ms": 40.196, "peak_rss_bytes": 67518464, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.332, "write_ms": 130.323, "flush_ms": 245.561}
+      },
+      {
+        "pad_bytes": 16,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 447.622, "user_ms": 403.404, "system_ms": 37.531, "peak_rss_bytes": 61292544, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 69.137, "write_ms": 133.426, "flush_ms": 243.713},
+        "rust_before": {"elapsed_ms": 442.193, "user_ms": 400.305, "system_ms": 35.472, "peak_rss_bytes": 61259776, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.384, "write_ms": 127.245, "flush_ms": 245.177},
+        "rust_dedicated_thread": {"elapsed_ms": 452.434, "user_ms": 403.917, "system_ms": 41.065, "peak_rss_bytes": 89751552, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.147, "write_ms": 129.837, "flush_ms": 247.776}
+      },
+      {
+        "pad_bytes": 32,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 456.281, "user_ms": 403.021, "system_ms": 46.695, "peak_rss_bytes": 62488576, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 76.465, "write_ms": 130.593, "flush_ms": 247.666},
+        "rust_before": {"elapsed_ms": 447.939, "user_ms": 403.476, "system_ms": 38.651, "peak_rss_bytes": 61685760, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 70.212, "write_ms": 131.938, "flush_ms": 244.355},
+        "rust_dedicated_thread": {"elapsed_ms": 445.826, "user_ms": 399.993, "system_ms": 39.418, "peak_rss_bytes": 83345408, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.513, "write_ms": 127.945, "flush_ms": 246.717}
+      },
+      {
+        "pad_bytes": 64,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 461.569, "user_ms": 407.256, "system_ms": 45.611, "peak_rss_bytes": 86736896, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.313, "write_ms": 135.211, "flush_ms": 252.527},
+        "rust_before": {"elapsed_ms": 491.0, "user_ms": 429.348, "system_ms": 47.639, "peak_rss_bytes": 67321856, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.053, "write_ms": 134.984, "flush_ms": 281.433},
+        "rust_dedicated_thread": {"elapsed_ms": 500.516, "user_ms": 435.893, "system_ms": 46.873, "peak_rss_bytes": 76087296, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.87, "write_ms": 131.288, "flush_ms": 292.92}
+      },
+      {
+        "pad_bytes": 128,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 462.732, "user_ms": 407.464, "system_ms": 46.795, "peak_rss_bytes": 73711616, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 78.0, "write_ms": 133.031, "flush_ms": 250.121},
+        "rust_before": {"elapsed_ms": 458.38, "user_ms": 406.208, "system_ms": 43.655, "peak_rss_bytes": 87375872, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.382, "write_ms": 131.068, "flush_ms": 251.307},
+        "rust_dedicated_thread": {"elapsed_ms": 460.106, "user_ms": 405.41, "system_ms": 46.456, "peak_rss_bytes": 67371008, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 78.215, "write_ms": 131.429, "flush_ms": 248.901}
+      },
+      {
+        "pad_bytes": 192,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 457.809, "user_ms": 408.696, "system_ms": 42.34, "peak_rss_bytes": 87638016, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.827, "write_ms": 134.678, "flush_ms": 248.395},
+        "rust_before": {"elapsed_ms": 455.104, "user_ms": 404.474, "system_ms": 42.706, "peak_rss_bytes": 62537728, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.763, "write_ms": 132.256, "flush_ms": 250.757},
+        "rust_dedicated_thread": {"elapsed_ms": 453.491, "user_ms": 403.332, "system_ms": 42.604, "peak_rss_bytes": 87818240, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.038, "write_ms": 131.381, "flush_ms": 248.519}
+      },
+      {
+        "pad_bytes": 256,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 459.624, "user_ms": 405.335, "system_ms": 42.98, "peak_rss_bytes": 87212032, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 77.42, "write_ms": 132.231, "flush_ms": 248.333},
+        "rust_before": {"elapsed_ms": 452.73, "user_ms": 403.074, "system_ms": 41.142, "peak_rss_bytes": 67256320, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.135, "write_ms": 130.165, "flush_ms": 247.897},
+        "rust_dedicated_thread": {"elapsed_ms": 459.259, "user_ms": 407.012, "system_ms": 43.648, "peak_rss_bytes": 87588864, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.704, "write_ms": 130.755, "flush_ms": 252.144}
+      },
+      {
+        "pad_bytes": 16,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 457.483, "user_ms": 407.601, "system_ms": 42.133, "peak_rss_bytes": 62406656, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 73.704, "write_ms": 134.924, "flush_ms": 247.351},
+        "rust_before": {"elapsed_ms": 460.859, "user_ms": 409.572, "system_ms": 43.329, "peak_rss_bytes": 87605248, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 73.268, "write_ms": 130.365, "flush_ms": 255.71},
+        "rust_dedicated_thread": {"elapsed_ms": 480.493, "user_ms": 422.926, "system_ms": 45.023, "peak_rss_bytes": 61734912, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.003, "write_ms": 144.538, "flush_ms": 263.451}
+      },
+      {
+        "pad_bytes": 32,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 457.815, "user_ms": 408.232, "system_ms": 41.234, "peak_rss_bytes": 67092480, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 73.442, "write_ms": 129.991, "flush_ms": 253.015},
+        "rust_before": {"elapsed_ms": 463.876, "user_ms": 411.206, "system_ms": 43.277, "peak_rss_bytes": 66797568, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 71.346, "write_ms": 139.842, "flush_ms": 251.244},
+        "rust_dedicated_thread": {"elapsed_ms": 455.111, "user_ms": 403.663, "system_ms": 43.939, "peak_rss_bytes": 87752704, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.918, "write_ms": 131.84, "flush_ms": 247.592}
+      },
+      {
+        "pad_bytes": 64,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 457.594, "user_ms": 404.464, "system_ms": 44.894, "peak_rss_bytes": 87736320, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.067, "write_ms": 131.681, "flush_ms": 251.388},
+        "rust_before": {"elapsed_ms": 459.625, "user_ms": 403.138, "system_ms": 49.841, "peak_rss_bytes": 85049344, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 78.216, "write_ms": 131.287, "flush_ms": 248.37},
+        "rust_dedicated_thread": {"elapsed_ms": 453.083, "user_ms": 404.448, "system_ms": 41.01, "peak_rss_bytes": 87736320, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.829, "write_ms": 128.8, "flush_ms": 248.922}
+      },
+      {
+        "pad_bytes": 128,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 451.438, "user_ms": 401.905, "system_ms": 41.922, "peak_rss_bytes": 86523904, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.187, "write_ms": 131.316, "flush_ms": 246.272},
+        "rust_before": {"elapsed_ms": 462.881, "user_ms": 407.855, "system_ms": 46.353, "peak_rss_bytes": 87834624, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.172, "write_ms": 134.18, "flush_ms": 252.903},
+        "rust_dedicated_thread": {"elapsed_ms": 449.204, "user_ms": 401.194, "system_ms": 41.457, "peak_rss_bytes": 86720512, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.533, "write_ms": 129.522, "flush_ms": 245.548}
+      },
+      {
+        "pad_bytes": 192,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 457.69, "user_ms": 406.132, "system_ms": 39.664, "peak_rss_bytes": 62406656, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 75.988, "write_ms": 135.603, "flush_ms": 244.772},
+        "rust_before": {"elapsed_ms": 482.589, "user_ms": 426.707, "system_ms": 43.865, "peak_rss_bytes": 61308928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.633, "write_ms": 129.68, "flush_ms": 282.716},
+        "rust_dedicated_thread": {"elapsed_ms": 459.252, "user_ms": 407.766, "system_ms": 43.468, "peak_rss_bytes": 75808768, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 74.037, "write_ms": 134.91, "flush_ms": 248.639}
+      },
+      {
+        "pad_bytes": 256,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 449.29, "user_ms": 402.2, "system_ms": 40.926, "peak_rss_bytes": 87572480, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.356, "write_ms": 127.972, "flush_ms": 246.188},
+        "rust_before": {"elapsed_ms": 447.252, "user_ms": 399.854, "system_ms": 40.087, "peak_rss_bytes": 86523904, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.634, "write_ms": 129.169, "flush_ms": 245.8},
+        "rust_dedicated_thread": {"elapsed_ms": 445.782, "user_ms": 400.778, "system_ms": 38.23, "peak_rss_bytes": 61554688, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.605, "write_ms": 128.991, "flush_ms": 245.787}
+      }
+    ]
+  },
+  "direct_objects_long_rss_recheck": {
+    "procedure": "Repeat the inherited environment and paths after the first RSS median crossed the investigation threshold.",
+    "fixture": "objects-long",
+    "input_sha256": "9299e22eb74f6299fc1b11e335b15e65e52917a7803fbe8df9b30f9c4af82fe3",
+    "rounds_per_binary": 24,
+    "warmups_per_binary": 1,
+    "load_averages_start": [
+      3.391,
+      4.077,
+      4.084
+    ],
+    "load_averages_end": [
+      3.862,
+      4.115,
+      4.096
+    ],
+    "protocol_sha256": "e9cd41b0ac02041f46d556163de455dcf77aed494504720ad690dda85f38196b",
+    "argv_bytes_including_terminators": 261,
+    "environment_string_bytes_including_terminators": 7346,
+    "summary_by_environment": [
+      {
+        "pad_bytes": null,
+        "cpp_reference": {
+          "payloads": {
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993": 24
+          },
+          "medians": {
+            "elapsed_ms": 439.662,
+            "user_ms": 396.034,
+            "system_ms": 37.605,
+            "peak_rss_bytes": 66928640.0,
+            "startup_ms": 68.315,
+            "write_ms": 124.615,
+            "flush_ms": 245.501
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36": 24
+          },
+          "medians": {
+            "elapsed_ms": 441.315,
+            "user_ms": 397.28,
+            "system_ms": 37.803,
+            "peak_rss_bytes": 62078976.0,
+            "startup_ms": 68.847,
+            "write_ms": 131.547,
+            "flush_ms": 239.684
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 24
+          },
+          "medians": {
+            "elapsed_ms": 436.542,
+            "user_ms": 391.81,
+            "system_ms": 37.909,
+            "peak_rss_bytes": 65429504.0,
+            "startup_ms": 68.098,
+            "write_ms": 124.827,
+            "flush_ms": 241.24
+          }
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 450.581, "user_ms": 400.838, "system_ms": 41.9, "peak_rss_bytes": 87703552, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 72.039, "write_ms": 127.862, "flush_ms": 248.836},
+        "rust_before": {"elapsed_ms": 445.238, "user_ms": 398.289, "system_ms": 39.571, "peak_rss_bytes": 62701568, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 70.051, "write_ms": 133.437, "flush_ms": 240.355},
+        "rust_dedicated_thread": {"elapsed_ms": 442.656, "user_ms": 393.319, "system_ms": 40.642, "peak_rss_bytes": 86704128, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 73.784, "write_ms": 125.61, "flush_ms": 241.587}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 438.68, "user_ms": 393.821, "system_ms": 37.987, "peak_rss_bytes": 66928640, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.433, "write_ms": 126.061, "flush_ms": 242.71},
+        "rust_before": {"elapsed_ms": 440.011, "user_ms": 395.256, "system_ms": 37.826, "peak_rss_bytes": 61374464, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 68.664, "write_ms": 131.106, "flush_ms": 238.889},
+        "rust_dedicated_thread": {"elapsed_ms": 427.628, "user_ms": 385.626, "system_ms": 35.968, "peak_rss_bytes": 62685184, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.291, "write_ms": 122.481, "flush_ms": 236.463}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 434.836, "user_ms": 392.404, "system_ms": 35.731, "peak_rss_bytes": 61505536, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 66.252, "write_ms": 123.05, "flush_ms": 244.068},
+        "rust_before": {"elapsed_ms": 434.615, "user_ms": 392.926, "system_ms": 35.466, "peak_rss_bytes": 61243392, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 65.699, "write_ms": 131.094, "flush_ms": 236.342},
+        "rust_dedicated_thread": {"elapsed_ms": 430.763, "user_ms": 386.966, "system_ms": 37.387, "peak_rss_bytes": 65617920, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.508, "write_ms": 122.365, "flush_ms": 237.381}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 439.865, "user_ms": 396.721, "system_ms": 36.342, "peak_rss_bytes": 66928640, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.344, "write_ms": 125.322, "flush_ms": 245.654},
+        "rust_before": {"elapsed_ms": 438.5, "user_ms": 395.145, "system_ms": 36.761, "peak_rss_bytes": 61325312, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 66.649, "write_ms": 131.507, "flush_ms": 238.917},
+        "rust_dedicated_thread": {"elapsed_ms": 430.76, "user_ms": 387.393, "system_ms": 36.746, "peak_rss_bytes": 62652416, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.303, "write_ms": 124.27, "flush_ms": 237.767}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 448.343, "user_ms": 398.917, "system_ms": 42.324, "peak_rss_bytes": 89079808, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 71.888, "write_ms": 129.183, "flush_ms": 245.584},
+        "rust_before": {"elapsed_ms": 437.035, "user_ms": 394.467, "system_ms": 36.51, "peak_rss_bytes": 61358080, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 67.705, "write_ms": 131.228, "flush_ms": 236.786},
+        "rust_dedicated_thread": {"elapsed_ms": 461.147, "user_ms": 409.841, "system_ms": 39.93, "peak_rss_bytes": 87031808, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.95, "write_ms": 125.396, "flush_ms": 266.095}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 438.136, "user_ms": 393.981, "system_ms": 37.665, "peak_rss_bytes": 67141632, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 69.734, "write_ms": 123.2, "flush_ms": 243.741},
+        "rust_before": {"elapsed_ms": 437.607, "user_ms": 393.877, "system_ms": 37.205, "peak_rss_bytes": 61292544, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 67.924, "write_ms": 131.016, "flush_ms": 237.282},
+        "rust_dedicated_thread": {"elapsed_ms": 429.499, "user_ms": 387.799, "system_ms": 35.599, "peak_rss_bytes": 61538304, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.296, "write_ms": 123.316, "flush_ms": 237.432}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 437.24, "user_ms": 394.869, "system_ms": 36.609, "peak_rss_bytes": 61292544, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.353, "write_ms": 123.975, "flush_ms": 243.363},
+        "rust_before": {"elapsed_ms": 447.853, "user_ms": 397.633, "system_ms": 44.307, "peak_rss_bytes": 79265792, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 74.49, "write_ms": 133.298, "flush_ms": 238.397},
+        "rust_dedicated_thread": {"elapsed_ms": 429.534, "user_ms": 387.805, "system_ms": 36.74, "peak_rss_bytes": 61456384, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 66.571, "write_ms": 123.731, "flush_ms": 237.808}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 434.13, "user_ms": 391.693, "system_ms": 36.028, "peak_rss_bytes": 61358080, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.455, "write_ms": 122.397, "flush_ms": 242.931},
+        "rust_before": {"elapsed_ms": 440.548, "user_ms": 395.552, "system_ms": 38.31, "peak_rss_bytes": 67043328, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 68.789, "write_ms": 131.086, "flush_ms": 239.171},
+        "rust_dedicated_thread": {"elapsed_ms": 430.658, "user_ms": 387.959, "system_ms": 36.028, "peak_rss_bytes": 67207168, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.097, "write_ms": 123.238, "flush_ms": 237.806}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 438.774, "user_ms": 393.956, "system_ms": 38.066, "peak_rss_bytes": 86540288, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.903, "write_ms": 124.282, "flush_ms": 244.701},
+        "rust_before": {"elapsed_ms": 436.77, "user_ms": 394.918, "system_ms": 35.579, "peak_rss_bytes": 61423616, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 66.964, "write_ms": 130.569, "flush_ms": 237.913},
+        "rust_dedicated_thread": {"elapsed_ms": 432.705, "user_ms": 388.496, "system_ms": 37.165, "peak_rss_bytes": 61669376, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.099, "write_ms": 124.828, "flush_ms": 238.204}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 438.1, "user_ms": 394.928, "system_ms": 37.092, "peak_rss_bytes": 61341696, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.781, "write_ms": 123.489, "flush_ms": 245.418},
+        "rust_before": {"elapsed_ms": 436.236, "user_ms": 394.218, "system_ms": 36.653, "peak_rss_bytes": 61276160, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 65.811, "write_ms": 130.593, "flush_ms": 238.476},
+        "rust_dedicated_thread": {"elapsed_ms": 434.343, "user_ms": 390.094, "system_ms": 38.594, "peak_rss_bytes": 79937536, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 69.059, "write_ms": 124.229, "flush_ms": 239.341}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 436.43, "user_ms": 393.228, "system_ms": 37.546, "peak_rss_bytes": 87277568, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.217, "write_ms": 122.987, "flush_ms": 243.425},
+        "rust_before": {"elapsed_ms": 438.512, "user_ms": 394.681, "system_ms": 36.946, "peak_rss_bytes": 67207168, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 67.992, "write_ms": 131.58, "flush_ms": 237.472},
+        "rust_dedicated_thread": {"elapsed_ms": 431.447, "user_ms": 389.198, "system_ms": 35.959, "peak_rss_bytes": 61374464, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.378, "write_ms": 123.501, "flush_ms": 239.161}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 444.373, "user_ms": 398.225, "system_ms": 38.688, "peak_rss_bytes": 66846720, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.207, "write_ms": 127.132, "flush_ms": 247.554},
+        "rust_before": {"elapsed_ms": 443.14, "user_ms": 399.331, "system_ms": 38.842, "peak_rss_bytes": 67289088, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 70.557, "write_ms": 131.546, "flush_ms": 239.474},
+        "rust_dedicated_thread": {"elapsed_ms": 434.445, "user_ms": 389.677, "system_ms": 37.981, "peak_rss_bytes": 87556096, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.345, "write_ms": 123.114, "flush_ms": 238.391}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 440.258, "user_ms": 396.433, "system_ms": 37.541, "peak_rss_bytes": 61325312, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.278, "write_ms": 124.573, "flush_ms": 245.961},
+        "rust_before": {"elapsed_ms": 441.463, "user_ms": 396.928, "system_ms": 37.779, "peak_rss_bytes": 61407232, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 69.028, "write_ms": 131.028, "flush_ms": 240.099},
+        "rust_dedicated_thread": {"elapsed_ms": 464.627, "user_ms": 412.235, "system_ms": 40.269, "peak_rss_bytes": 86851584, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.21, "write_ms": 124.826, "flush_ms": 270.066}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 439.669, "user_ms": 394.478, "system_ms": 37.941, "peak_rss_bytes": 66977792, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 68.838, "write_ms": 124.351, "flush_ms": 244.985},
+        "rust_before": {"elapsed_ms": 450.366, "user_ms": 399.914, "system_ms": 43.657, "peak_rss_bytes": 87638016, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 76.171, "write_ms": 131.547, "flush_ms": 240.751},
+        "rust_dedicated_thread": {"elapsed_ms": 436.307, "user_ms": 391.718, "system_ms": 37.888, "peak_rss_bytes": 65536000, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.305, "write_ms": 124.434, "flush_ms": 242.105}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 437.57, "user_ms": 394.891, "system_ms": 36.405, "peak_rss_bytes": 62472192, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.802, "write_ms": 124.657, "flush_ms": 243.699},
+        "rust_before": {"elapsed_ms": 444.35, "user_ms": 399.799, "system_ms": 38.267, "peak_rss_bytes": 67190784, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 69.041, "write_ms": 133.61, "flush_ms": 240.255},
+        "rust_dedicated_thread": {"elapsed_ms": 432.467, "user_ms": 389.14, "system_ms": 36.927, "peak_rss_bytes": 62717952, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.603, "write_ms": 124.174, "flush_ms": 239.345}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 437.774, "user_ms": 396.112, "system_ms": 35.402, "peak_rss_bytes": 61390848, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.475, "write_ms": 123.875, "flush_ms": 245.001},
+        "rust_before": {"elapsed_ms": 444.799, "user_ms": 399.615, "system_ms": 36.554, "peak_rss_bytes": 67289088, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 68.906, "write_ms": 133.091, "flush_ms": 241.329},
+        "rust_dedicated_thread": {"elapsed_ms": 437.909, "user_ms": 393.816, "system_ms": 37.142, "peak_rss_bytes": 61390848, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.238, "write_ms": 125.372, "flush_ms": 244.001}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 444.307, "user_ms": 398.381, "system_ms": 38.847, "peak_rss_bytes": 87343104, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 71.993, "write_ms": 124.669, "flush_ms": 246.079},
+        "rust_before": {"elapsed_ms": 438.887, "user_ms": 396.799, "system_ms": 35.656, "peak_rss_bytes": 61243392, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 66.55, "write_ms": 131.543, "flush_ms": 239.43},
+        "rust_dedicated_thread": {"elapsed_ms": 441.846, "user_ms": 396.267, "system_ms": 38.509, "peak_rss_bytes": 87965696, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.752, "write_ms": 126.189, "flush_ms": 241.124}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 438.435, "user_ms": 395.956, "system_ms": 35.655, "peak_rss_bytes": 61210624, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 66.858, "write_ms": 124.018, "flush_ms": 246.104},
+        "rust_before": {"elapsed_ms": 439.936, "user_ms": 396.735, "system_ms": 37.014, "peak_rss_bytes": 61308928, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 67.62, "write_ms": 130.86, "flush_ms": 239.893},
+        "rust_dedicated_thread": {"elapsed_ms": 436.778, "user_ms": 393.565, "system_ms": 36.492, "peak_rss_bytes": 65323008, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.458, "write_ms": 126.565, "flush_ms": 241.357}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 439.654, "user_ms": 395.572, "system_ms": 37.504, "peak_rss_bytes": 67076096, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 69.732, "write_ms": 123.937, "flush_ms": 244.616},
+        "rust_before": {"elapsed_ms": 447.967, "user_ms": 397.981, "system_ms": 43.712, "peak_rss_bytes": 61456384, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 74.486, "write_ms": 131.837, "flush_ms": 240.386},
+        "rust_dedicated_thread": {"elapsed_ms": 438.929, "user_ms": 394.902, "system_ms": 37.931, "peak_rss_bytes": 61669376, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.04, "write_ms": 126.812, "flush_ms": 242.547}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 441.923, "user_ms": 397.811, "system_ms": 37.442, "peak_rss_bytes": 67092480, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 69.897, "write_ms": 124.829, "flush_ms": 245.746},
+        "rust_before": {"elapsed_ms": 455.044, "user_ms": 405.989, "system_ms": 41.235, "peak_rss_bytes": 87588864, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 73.48, "write_ms": 136.252, "flush_ms": 243.723},
+        "rust_dedicated_thread": {"elapsed_ms": 475.644, "user_ms": 418.259, "system_ms": 43.563, "peak_rss_bytes": 87670784, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 71.105, "write_ms": 128.157, "flush_ms": 274.634}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 446.047, "user_ms": 400.015, "system_ms": 39.609, "peak_rss_bytes": 65323008, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 69.38, "write_ms": 127.706, "flush_ms": 247.39},
+        "rust_before": {"elapsed_ms": 454.858, "user_ms": 404.487, "system_ms": 42.965, "peak_rss_bytes": 87769088, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 71.782, "write_ms": 138.828, "flush_ms": 242.37},
+        "rust_dedicated_thread": {"elapsed_ms": 441.014, "user_ms": 394.181, "system_ms": 39.383, "peak_rss_bytes": 89554944, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 72.051, "write_ms": 125.652, "flush_ms": 241.644}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 444.814, "user_ms": 400.062, "system_ms": 37.916, "peak_rss_bytes": 67125248, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 70.16, "write_ms": 124.974, "flush_ms": 248.003},
+        "rust_before": {"elapsed_ms": 451.795, "user_ms": 400.944, "system_ms": 44.037, "peak_rss_bytes": 67026944, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 75.858, "write_ms": 133.443, "flush_ms": 241.031},
+        "rust_dedicated_thread": {"elapsed_ms": 438.568, "user_ms": 391.902, "system_ms": 39.531, "peak_rss_bytes": 67223552, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 70.185, "write_ms": 125.367, "flush_ms": 241.497}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 449.219, "user_ms": 400.752, "system_ms": 41.37, "peak_rss_bytes": 67092480, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 70.975, "write_ms": 128.124, "flush_ms": 248.697},
+        "rust_before": {"elapsed_ms": 448.085, "user_ms": 400.66, "system_ms": 40.675, "peak_rss_bytes": 86638592, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 71.403, "write_ms": 132.391, "flush_ms": 242.755},
+        "rust_dedicated_thread": {"elapsed_ms": 438.028, "user_ms": 392.513, "system_ms": 38.795, "peak_rss_bytes": 63012864, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 68.769, "write_ms": 126.148, "flush_ms": 241.745}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 443.183, "user_ms": 397.837, "system_ms": 39.757, "peak_rss_bytes": 62406656, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993", "startup_ms": 67.846, "write_ms": 124.787, "flush_ms": 249.103},
+        "rust_before": {"elapsed_ms": 441.166, "user_ms": 398.457, "system_ms": 36.47, "peak_rss_bytes": 61276160, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36", "startup_ms": 66.705, "write_ms": 131.828, "flush_ms": 241.331},
+        "rust_dedicated_thread": {"elapsed_ms": 438.583, "user_ms": 393.306, "system_ms": 38.776, "peak_rss_bytes": 61489152, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859", "startup_ms": 67.058, "write_ms": 128.399, "flush_ms": 241.675}
+      }
+    ]
+  },
+  "full_offline_objects_long": {
+    "procedure": "Full offline render to M4A in the inherited environment.",
+    "fixture": "objects-long",
+    "input_sha256": "f44839fdb7661f67b1d31d99ace15c48666d2a7116924bbf33cb32c406bd86cd",
+    "rounds_per_binary": 12,
+    "warmups_per_binary": 1,
+    "load_averages_start": [
+      3.845,
+      4.667,
+      4.231
+    ],
+    "load_averages_end": [
+      4.043,
+      4.645,
+      4.236
+    ],
+    "summary_by_environment": [
+      {
+        "pad_bytes": null,
+        "cpp_reference": {
+          "payloads": {
+            "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993": 12
+          },
+          "medians": {
+            "elapsed_ms": 660.251,
+            "user_ms": 551.827,
+            "system_ms": 67.569,
+            "peak_rss_bytes": 86917120.0
+          }
+        },
+        "rust_before": {
+          "payloads": {
+            "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36": 12
+          },
+          "medians": {
+            "elapsed_ms": 666.108,
+            "user_ms": 555.577,
+            "system_ms": 69.075,
+            "peak_rss_bytes": 86032384.0
+          }
+        },
+        "rust_dedicated_thread": {
+          "payloads": {
+            "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859": 12
+          },
+          "medians": {
+            "elapsed_ms": 659.512,
+            "user_ms": 549.229,
+            "system_ms": 68.637,
+            "peak_rss_bytes": 86786048.0
+          }
+        }
+      }
+    ],
+    "rounds": [
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 658.431, "user_ms": 551.634, "system_ms": 59.563, "peak_rss_bytes": 61259776, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 666.928, "user_ms": 546.174, "system_ms": 61.147, "peak_rss_bytes": 85442560, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 670.557, "user_ms": 545.183, "system_ms": 64.649, "peak_rss_bytes": 77135872, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 659.949, "user_ms": 549.848, "system_ms": 67.961, "peak_rss_bytes": 87441408, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 667.942, "user_ms": 550.874, "system_ms": 72.396, "peak_rss_bytes": 67223552, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 660.059, "user_ms": 546.206, "system_ms": 65.915, "peak_rss_bytes": 66994176, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 660.025, "user_ms": 552.02, "system_ms": 65.622, "peak_rss_bytes": 87195648, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 717.148, "user_ms": 577.843, "system_ms": 69.782, "peak_rss_bytes": 85344256, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 657.708, "user_ms": 543.194, "system_ms": 71.655, "peak_rss_bytes": 87556096, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 895.246, "user_ms": 569.629, "system_ms": 81.12, "peak_rss_bytes": 87474176, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 659.332, "user_ms": 548.848, "system_ms": 69.925, "peak_rss_bytes": 61489152, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 658.964, "user_ms": 551.145, "system_ms": 70.702, "peak_rss_bytes": 87343104, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 656.02, "user_ms": 556.286, "system_ms": 63.777, "peak_rss_bytes": 70057984, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 714.824, "user_ms": 575.785, "system_ms": 74.963, "peak_rss_bytes": 70172672, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 680.734, "user_ms": 555.319, "system_ms": 68.141, "peak_rss_bytes": 70336512, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 665.463, "user_ms": 554.02, "system_ms": 70.651, "peak_rss_bytes": 87752704, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 646.643, "user_ms": 553.669, "system_ms": 63.821, "peak_rss_bytes": 71417856, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 656.128, "user_ms": 550.436, "system_ms": 73.291, "peak_rss_bytes": 67452928, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_before", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 658.833, "user_ms": 552.447, "system_ms": 69.655, "peak_rss_bytes": 79970304, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 650.753, "user_ms": 555.907, "system_ms": 69.054, "peak_rss_bytes": 87523328, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 661.286, "user_ms": 553.11, "system_ms": 72.965, "peak_rss_bytes": 87818240, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["cpp_reference", "rust_dedicated_thread", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 675.083, "user_ms": 550.572, "system_ms": 67.176, "peak_rss_bytes": 87572480, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 684.957, "user_ms": 564.018, "system_ms": 69.721, "peak_rss_bytes": 87572480, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 667.195, "user_ms": 547.91, "system_ms": 68.722, "peak_rss_bytes": 86835200, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "cpp_reference", "rust_dedicated_thread"],
+        "cpp_reference": {"elapsed_ms": 666.622, "user_ms": 552.879, "system_ms": 68.439, "peak_rss_bytes": 87441408, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 665.288, "user_ms": 557.05, "system_ms": 69.01, "peak_rss_bytes": 87621632, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 658.813, "user_ms": 545.936, "system_ms": 68.552, "peak_rss_bytes": 65929216, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_before", "rust_dedicated_thread", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 676.116, "user_ms": 550.679, "system_ms": 66.864, "peak_rss_bytes": 86638592, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 654.267, "user_ms": 551.68, "system_ms": 65.952, "peak_rss_bytes": 87670784, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 655.94, "user_ms": 549.728, "system_ms": 65.798, "peak_rss_bytes": 87719936, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "cpp_reference", "rust_before"],
+        "cpp_reference": {"elapsed_ms": 639.746, "user_ms": 551.363, "system_ms": 65.609, "peak_rss_bytes": 70402048, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 717.039, "user_ms": 574.122, "system_ms": 69.097, "peak_rss_bytes": 86622208, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 647.216, "user_ms": 548.73, "system_ms": 67.189, "peak_rss_bytes": 86736896, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      },
+      {
+        "pad_bytes": null,
+        "order": ["rust_dedicated_thread", "rust_before", "cpp_reference"],
+        "cpp_reference": {"elapsed_ms": 660.477, "user_ms": 550.133, "system_ms": 71.728, "peak_rss_bytes": 67207168, "file_bytes": 1376230, "mdat_sha256": "893a588d04c8b8a8955952cc5ad8dc3f74502e60340fe6571d727de15fc8e993"},
+        "rust_before": {"elapsed_ms": 648.162, "user_ms": 555.248, "system_ms": 67.131, "peak_rss_bytes": 87506944, "file_bytes": 1376250, "mdat_sha256": "b4a0f9827bd9047437de4534da8316c26253d56a4f938327c27aed54a54b7a36"},
+        "rust_dedicated_thread": {"elapsed_ms": 671.19, "user_ms": 552.674, "system_ms": 71.555, "peak_rss_bytes": 87834624, "file_bytes": 1376244, "mdat_sha256": "dc7df0facee6bf5f0e3725e0d56216db1ada1af3e5e830a2e54696738623b859"}
+      }
+    ]
+  }
+}

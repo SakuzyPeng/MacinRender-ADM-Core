@@ -45,15 +45,27 @@ pub fn run_child(
     drc_music: bool,
     caf: bool,
 ) -> i32 {
-    let mut out = io::stdout().lock();
+    // Give AudioToolbox its own stack. On the CLI thread, changing the length of the
+    // launch environment can change the encoded payload for the same PCM.
     #[cfg(target_os = "macos")]
-    let result = worker::run(input, output, layout, bitrate, drc_music, caf, &mut out);
+    let result = std::thread::scope(|scope| {
+        let worker = std::thread::Builder::new()
+            .spawn_scoped(scope, || {
+                let mut out = io::stdout().lock();
+                worker::run(input, output, layout, bitrate, drc_music, caf, &mut out)
+            })
+            .map_err(|e| Error::new(3, format!("APAC: cannot start encoder thread ({e})"), ""))?;
+        worker
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    });
     #[cfg(not(target_os = "macos"))]
     let result = {
         let _ = (input, output, layout, bitrate, drc_music, caf);
         Err::<(), _>(unsupported())
     };
     if let Err(error) = result {
+        let mut out = io::stdout().lock();
         let _ = writeln!(out, "E {} {}", error.code, error.message);
         let _ = out.flush();
         return 1;
