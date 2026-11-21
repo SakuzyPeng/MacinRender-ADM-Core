@@ -1,33 +1,29 @@
-// 22.2 LFE routing in the islands (R3 F2 / F3): the Windows system-spatial sink's LFE pair
-// recombination, and on macOS the Apple backend through the C ABI (direct, split-power and the dual-LFE
-// refusal) and its island table (the LFE side bus in offline and stream renders, a live override on
+// 22.2 LFE routing of the Apple backend (R3 F2 / F3, macOS only): through the C ABI (direct, split-power
+// and the dual-LFE refusal) and its island table (the LFE side bus in offline and stream renders, a live override on
 // it, and a channel whose blocks change from LFE to full range). The shared rules and the EAR / VBAP
 // renders are Rust tests (mradm-render tests/routing.rs, mradm-engine tests/lfe_render.rs).
 #include <algorithm>
-#include <cmath>
-#include <cstdlib>
-#include <iostream>
-#include <string>
-#include <string_view>
-#include <vector>
-
-#include "../support/rust_services_test.h"
-#include "render_common.h"
-#ifdef __APPLE__
 #include <atomic>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <numbers>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #include "adm/audio_io.h"
 #include "adm/c_api.h"
 
 #include "../support/apple_island_driver.h"
 #include "../support/direct_speakers_fixture.h"
-#endif
+#include "../support/rust_services_test.h"
+#include "render_common.h"
 
 namespace {
 
@@ -38,7 +34,6 @@ bool check(bool condition, const std::string& message) {
     return condition;
 }
 
-#ifdef __APPLE__
 class FileGuard {
   public:
     explicit FileGuard(std::filesystem::path path) : path_(std::move(path)) {}
@@ -363,25 +358,12 @@ bool verify_apple_side_bus_stream_and_override() {
          ok;
     return ok;
 }
-#endif
 
 } // namespace
 
-// The Windows system-spatial sink folds a split-power 22.2 LFE pair back to unity (moved here from
-// scene_output_c_api_test, R3 E3).
-bool verify_lfe_pair_recombination() {
-    const float half = mradm::render_common::k_lfe_split_power_gain;
-    return check(std::abs(mradm::render_common::mix_lfe_pair(half, half, true) - 1.0F) < 1.0e-6F &&
-                     mradm::render_common::mix_lfe_pair(1.0F, 0.0F, false) == 1.0F,
-                 "dual-LFE recombination keeps unity gain");
-}
-
 int main() {
     mradm_test::bind_rust_services();
-    bool ok = verify_lfe_pair_recombination();
-#ifdef __APPLE__
-    ok = verify_apple_backend() && ok;
+    bool ok = verify_apple_backend();
     ok = verify_apple_side_bus_stream_and_override() && ok;
-#endif
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

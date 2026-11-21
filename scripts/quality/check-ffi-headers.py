@@ -37,8 +37,6 @@ CAPI_FFI_HEADERS: list[str] = []
 CBINDGEN_VERSION = "0.29.2"
 
 FFI_HEADERS = [
-    "src/adm_dsp/room_ffi.h",
-    "src/adm_render_common/layout_ffi.h",
     "src/adm_metadata/adm_ffi.h",
     "src/adm_metadata/scene_ffi.h",
     "src/adm_audio/wav_ffi.h",
@@ -76,7 +74,6 @@ ISLAND_RECORDS = {
     "MradmMiniaudioIsland": "MiniaudioIsland",
     "MradmPlatformIslands": "PlatformIslands",
     "MradmRenderLiveOverride": "RenderLiveOverride",
-    "MradmRoomScreenGeometry": "RoomScreenGeometry",
     "MradmRustServices": "RustServices",
     "MradmRustTestServices": "RustTestServices",
     "MradmSystemSpatialIsland": "SystemSpatialIsland",

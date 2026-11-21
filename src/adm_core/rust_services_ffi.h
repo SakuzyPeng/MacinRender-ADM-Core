@@ -4,7 +4,6 @@
 #pragma once
 #include "../adm_apple/apple_plan_ffi.h"
 #include "../adm_audio/wav_ffi.h"
-#include "../adm_render_common/layout_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,9 +40,6 @@ typedef struct MradmRustServices {
     void (*dsp_scene_rotation_destroy)(void*);
     int32_t (*dsp_scene_rotation_update)(void*, const float*, size_t);
     int32_t (*dsp_scene_rotation_apply)(const void*, const float*, size_t, float*, size_t, uint32_t);
-    // geometry: 0 standard ADM nominal positions, 1 Apple effective positions (layout_ffi.h).
-    int32_t (*scene_layouts)(uint32_t, const MradmLayoutEntry**, size_t*, uint8_t*, size_t);
-    int32_t (*scene_view)(const MradmSceneHandle*, MradmSceneImportInfo*, MradmAdmView*, uint8_t*, size_t);
     void (*scene_destroy)(MradmSceneHandle*);
     // Bit 1: *gain written; bit 2: *head_locked written; otherwise the channel inherits.
     uint32_t (*render_live_override)(const MradmRenderOverride*, size_t, MradmAdmText, MradmAdmText, float*, uint32_t*);

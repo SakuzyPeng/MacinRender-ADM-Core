@@ -10,7 +10,6 @@
 #include "adm/options.h"
 #include "adm/render.h"
 
-#include "../adm_dsp/room_ffi.h"
 #include "engine_ffi.h"
 #include "routing_ffi.h"
 

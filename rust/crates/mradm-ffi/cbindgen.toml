@@ -30,7 +30,6 @@ include = [
     "MiniaudioIsland",
     "PlatformIslands",
     "RenderLiveOverride",
-    "RoomScreenGeometry",
     "RustServices",
     "RustTestServices",
     "SystemSpatialIsland",

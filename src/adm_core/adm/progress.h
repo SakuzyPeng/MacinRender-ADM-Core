@@ -54,9 +54,4 @@ class ProgressSink {
     virtual void on_progress(const ProgressEvent& event) = 0;
 };
 
-class NullProgressSink final : public ProgressSink {
-  public:
-    void on_progress(const ProgressEvent&) override {}
-};
-
 } // namespace mradm

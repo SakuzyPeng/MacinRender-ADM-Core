@@ -1,52 +1,25 @@
 #pragma once
 
+// The render settings the Apple island reads (RenderPlan in render.h); the engine's options are in Rust.
+// The standard headers stay as before for the islands that rely on them transitively.
+#include <array>
+#include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "adm/room.h"
-#include "adm/screen.h"
+#include "adm/errors.h"
 
 namespace mradm {
-
-enum class OutputBitDepth {
-    f32, // WAVE_FORMAT_IEEE_FLOAT — default; preserves headroom above 0 dBFS
-    i24, // 24-bit integer PCM
-    i16, // 16-bit integer PCM
-};
-
-enum class RendererSelection {
-    automatic,
-    ear,
-    saf,
-    hoa,
-    apple,
-    binaural,
-    saf_binaural,   // SAF HRTF binaural backend
-    triple_balance, // Cartesian room renderer with offline and realtime monitoring
-    room_binaural,  // Native room response and 3DoF binaural rendering
-};
 
 enum class SpeakerSpreadMode {
     automatic, // Triple Balance size; otherwise MDAP for 3D layouts, none for 2D
     none,      // ignore extent and use the selected renderer's point panner
     mdap,      // always use MDAP (multi-directional amplitude panning) for 3D layouts
-};
-
-enum class TripleBalanceMode {
-    standard,
-    d, // Coherent size distribution; offline 48 kHz / 9.1.6 and experimental 22.2.
-};
-
-// Effective loudspeaker coordinates used by software speaker renderers. `standard`
-// preserves the existing project / ADM nominal geometry; `apple` uses the fixed
-// coordinates reported by CoreAudio for the matching standard layout tags. The
-// Apple renderer itself always uses CoreAudio's geometry regardless of this option.
-enum class SpeakerGeometry {
-    standard,
-    apple,
 };
 
 // Routing policy for ADM DirectSpeakers content. `automatic` is resolved by the
@@ -58,13 +31,6 @@ enum class DirectSpeakersRoutingMode {
     label,
     position,
     matrix,
-};
-
-// HpTF(耳机传输函数)补偿的 Preamp 安全策略。AutoEq 的 ParametricEQ 文件自带一行
-// `Preamp:`,用来把整条曲线压到不削波;但手改过的文件或非 AutoEq 来源没有这个保证。
-enum class HptfPreampMode {
-    warn_only, // 默认:严格使用文件里的 Preamp,合成响应仍 > 0 dB 时只记一条警告
-    auto_trim, // 按可听频段响应的保守上界增加衰减;瞬态峰值仍由输出保护器处理
 };
 
 enum class BinauralSpreadMode {
@@ -96,129 +62,6 @@ struct ListenerOrientation {
     float pitch_deg{0.0F}; // [-90, 90]
     float roll_deg{0.0F};  // [-180, 180]
     [[nodiscard]] bool is_identity() const noexcept { return yaw_deg == 0.0F && pitch_deg == 0.0F && roll_deg == 0.0F; }
-};
-
-struct RenderOptions {
-    RendererSelection renderer{RendererSelection::automatic};
-    // Public two-channel output is always binaural. Speaker layouts remain
-    // multichannel-only; the internal 0+2+0 path is reserved for diagnostics/tests.
-    std::string output_layout{"binaural"};
-    // Ordinary channel-based WAVE input. nullopt means automatic detection:
-    // ADM when AXML is present, otherwise a recognised WAVE channel mask.
-    // A non-"auto" layout or a non-empty label list explicitly selects channel-bed input.
-    std::optional<std::string> input_layout;
-    std::vector<std::string> input_channel_labels;
-    // Monitor-only: route the multichannel monitor output through the macOS system Spatial
-    // Audio stack (AVSampleBufferAudioRenderer) for system HRTF + dynamic head tracking,
-    // instead of requiring a multichannel raw device. Raw stereo devices require binaural output.
-    // Requires a supported speaker output_layout (5.1 … 22.2); ignored by offline rendering.
-    bool monitor_system_spatial{false};
-    bool measure_loudness{false};       // opt-in: loudness norm applies global gain
-    float loudness_target_lufs{-23.0F}; // EBU R128 broadcast standard
-    bool peak_limit{true};
-    float peak_limit_dbtp{-1.0F}; // True Peak target in dBTP (broadcast standard)
-    // Opt-in peak makeup: after loudness adjustment, raise global gain up to
-    // peak_limit_dbtp when measured True Peak is below the ceiling.
-    bool peak_normalize_to_limit{false};
-    // Unconstrained final gain in dB, applied after all automatic gain staging
-    // (loudness normalisation, peak makeup, peak limiting). Intentionally NOT
-    // subject to peak limiting: it is added after the peak clamp is computed, so it
-    // can push the signal above the peak ceiling and above 0 dBFS (integer outputs
-    // may then clip). 0 = no-op. Folded into the applied gain, so reported metrics
-    // and file metadata reflect it.
-    double final_gain_db{0.0};
-    OutputBitDepth output_bit_depth{OutputBitDepth::f32};
-    // Opus MKA output: target bitrate per channel in kbps (VBR hint).
-    // 0 = auto (64 kbps/ch; minimum 128 kbps for stereo).
-    uint32_t opus_bitrate_per_ch_kbps{0};
-    // APAC output (macOS only): total target/hint bitrate in kbps.
-    // The encoder may produce a measured average bitrate that differs substantially.
-    // 0 = layout default for spatial/HOA layouts, otherwise encoder default.
-    uint32_t apac_bitrate_kbps{0};
-    // APAC DRC profile: true = Music (cdrc=1), false = None (cdrc=0).
-    bool apac_drc_music{true};
-    // APAC output container. MPEG-4 is selected by default for .m4a/.mp4; CAF is
-    // opt-in so ordinary .caf output remains float32 PCM unless explicitly requested.
-    enum class ApacContainer : uint8_t { mpeg4, caf };
-    ApacContainer apac_container{ApacContainer::mpeg4};
-    // User SOFA HRIR file for the binaural renderer. Empty = built-in KEMAR.
-    std::optional<std::filesystem::path> sofa_path;
-    // Optional ADM semantic render policy JSON. Applied to the imported scene
-    // before handing metadata to the selected renderer.
-    std::optional<std::filesystem::path> semantic_policy_path;
-    // Optional in-memory semantic policy JSON (UTF-8). When set it takes precedence
-    // over semantic_policy_path, letting a GUI apply an edited policy without a temp
-    // file. nullopt = no in-memory policy.
-    std::optional<std::string> semantic_policy_json;
-    // Optional DirectSpeakers sparse routing matrix. Required when
-    // direct_speakers_routing_mode == matrix and rejected for every other mode.
-    // In-memory JSON takes precedence over the path when both are present.
-    std::optional<std::filesystem::path> direct_speakers_matrix_path;
-    std::optional<std::string> direct_speakers_matrix_json;
-    // Optional effective semantic report JSON for debugging policy matches.
-    std::optional<std::filesystem::path> semantic_report_path;
-    // When true, the effective semantic report is also captured in-memory and
-    // returned via RenderResult::semantic_report_json (independent of whether
-    // semantic_report_path requests a file copy).
-    bool capture_semantic_report{false};
-    // Default gain-interpolation ramp used when jumpPosition=false and the ADM block
-    // carries no explicit interpolationLength.  Set to 0 for instant switching.
-    uint32_t default_interp_ms{5};
-    // De-zipper window for rapidly changing Objects metadata, in sample frames.
-    // 0 disables renderer-side control-rate smoothing and follows ADM blocks sample-accurately.
-    // Backend-dependent: the Apple AUSpatialMixer backend currently ignores this
-    // option and relies on SpatialMixer's internal parameter smoothing.
-    uint32_t object_smoothing_frames{0};
-    SpeakerGeometry speaker_geometry{SpeakerGeometry::standard};
-    DirectSpeakersRoutingMode direct_speakers_routing_mode{DirectSpeakersRoutingMode::automatic};
-    SpeakerSpreadMode speaker_spread_mode{SpeakerSpreadMode::automatic};
-    TripleBalanceMode triple_balance_mode{TripleBalanceMode::standard};
-    BinauralSpreadMode binaural_spread_mode{BinauralSpreadMode::automatic};
-    LfeRoutingMode lfe_routing_mode{LfeRoutingMode::direct};
-    // Apple AUSpatialMixer binaural only. PresentPreset resets several unit/bus
-    // parameters, so the Apple backend applies it before restoring ADM-driven setup.
-    AppleSpatialPreset apple_spatial_preset{AppleSpatialPreset::off};
-    // Apple AUSpatialMixer speaker output only. false clears InterAuralDelay and
-    // DistanceAttenuation so ADM gains match SAF/Logic-style speaker rendering;
-    // true restores Apple's native rendering flags (legacy MacinRender behavior).
-    bool apple_speaker_rendering_flags{false};
-    // 听者头部朝向。Apple binaural 后端（HeadYaw/Pitch/Roll）与 SAF binaural 后端（逐源 HRTF 方向旋转）
-    // 实装；其它后端忽略。
-    ListenerOrientation listener_orientation{};
-    // Output time-range trim, in seconds, on the rendered timeline (which equals
-    // the input timeline). render_start_sec clips the head; render_end_sec is an
-    // absolute end time on the same timeline (nullopt = render to the end).
-    // The backend renders the full timeline but measures loudness/True-Peak only
-    // over the kept window, so the trimmed file's metrics/metadata describe the
-    // segment that is actually written.
-    double render_start_sec{0.0};
-    std::optional<double> render_end_sec;
-    // IAMF output container when MR_ADM_ENABLE_IAMF=ON.
-    // obu: raw .iamf OBU stream (default); mp4: ISOBMFF encapsulation via mp4box/ffmpeg.
-    // Requires --iamf-container mp4 on the CLI; the engine ignores this field for non-IAMF outputs.
-    enum class IamfContainer : uint8_t { obu, mp4 };
-    IamfContainer iamf_container{IamfContainer::obu};
-    // Optional IAMF scalable channel layer list. Empty = preserve the current single-layer
-    // output_layout behavior. When set, RenderService validates the list for IAMF outputs.
-    std::vector<std::string> iamf_layers;
-    // Internal diagnostics/tests only. The CLI never exposes this; normal users
-    // cannot request speaker-stereo ADM rendering.
-    bool internal_allow_speaker_stereo{false};
-    // Cooperative cancellation. A default-constructed token has no associated
-    // stop-state, so stop_requested() is always false (renders never cancel).
-    // When a live token is supplied (via the C ABI cancel-token object or a
-    // std::stop_source), requesting a stop makes the active render abort at the
-    // next chunk/stage boundary and return ErrorCode::cancelled. The token only
-    // references shared state, so copying RenderOptions stays cheap and safe.
-    std::stop_token cancel_token;
-    RoomConfig room{};
-    ScreenConfig screens{};
-};
-
-struct RenderRequest {
-    std::filesystem::path input_path;
-    std::optional<std::filesystem::path> output_path;
-    RenderOptions options;
 };
 
 } // namespace mradm

@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 39,
-      "lines": 4882
+      "files": 33,
+      "lines": 4147
     },
     "islands": {
       "files": 4,
@@ -15,15 +15,15 @@
     },
     "island-interfaces": {
       "files": 10,
-      "lines": 1029
+      "lines": 1007
     },
     "tests": {
       "files": 21,
-      "lines": 8289
+      "lines": 8128
     },
     "rust": {
       "files": 402,
-      "lines": 150165
+      "lines": 149940
     },
     "rust-vendor": {
       "files": 175,
@@ -37,7 +37,7 @@
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
     "rust/crates/mradm-engine": 26850,
-    "rust/crates/mradm-ffi": 20482,
+    "rust/crates/mradm-ffi": 20257,
     "rust/crates/mradm-islands-sys": 230,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
@@ -60,21 +60,21 @@
     "src/adm_apple/island_driver.h": 113,
     "src/adm_audio": 367,
     "src/adm_c_api": 27,
-    "src/adm_core": 1137,
-    "src/adm_dsp": 252,
+    "src/adm_core": 808,
+    "src/adm_dsp": 231,
     "src/adm_engine/platform_island.cpp": 136,
     "src/adm_engine/platform_island.h": 14,
-    "src/adm_metadata": 252,
+    "src/adm_metadata": 28,
     "src/adm_realtime": 55,
     "src/adm_realtime/miniaudio_island.c": 137,
     "src/adm_realtime/miniaudio_island.h": 46,
     "src/adm_realtime/system_spatial_island.cpp": 30,
-    "src/adm_realtime/system_spatial_island.h": 156,
-    "src/adm_render_common": 783,
+    "src/adm_realtime/system_spatial_island.h": 134,
+    "src/adm_render_common": 622,
     "src/adm_render_room/cuda": 512,
     "tests/manual": 817,
     "tests/support": 1379,
-    "tests/unit": 6093
+    "tests/unit": 5932
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,
@@ -86,6 +86,6 @@
     "src/adm_realtime/miniaudio_island.c": 137,
     "src/adm_realtime/miniaudio_island.h": 46,
     "src/adm_realtime/system_spatial_island.cpp": 30,
-    "src/adm_realtime/system_spatial_island.h": 156
+    "src/adm_realtime/system_spatial_island.h": 134
   }
 }

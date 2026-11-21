@@ -31,10 +31,4 @@ struct DirectSpeakersMatrix {
     std::vector<DirectSpeakersMatrixRoute> routes;
 };
 
-// Parse the strict v1 JSON schema from memory. `source_label` is diagnostic
-// context (for example "<memory>" or a file path).
-[[nodiscard]] Result<DirectSpeakersMatrix> parse_direct_speakers_matrix(std::string_view json,
-                                                                        std::string_view source_label = "<memory>");
-
-
 } // namespace mradm

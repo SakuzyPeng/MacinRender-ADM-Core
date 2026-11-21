@@ -93,12 +93,6 @@ enum class LfeTarget {
 
 inline constexpr std::size_t k_22_2_lfe1_index = 3U;
 inline constexpr std::size_t k_22_2_lfe2_index = 9U;
-inline constexpr float k_lfe_split_power_gain = 0.70710678118654752440F;
-
-[[nodiscard]] constexpr float mix_lfe_pair(float first, float second, bool both_active) noexcept {
-    return (first + second) * (both_active ? k_lfe_split_power_gain : 1.0F);
-}
-
 // The 22.2 LFE routing decision a backend prepared (Rust mradm-render `lfe_routing`).
 struct LfeRoutingPlan {
     bool applies_to_22_2{false};

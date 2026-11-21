@@ -271,11 +271,12 @@ if(MR_ADM_CORE_BUILD_TESTS)
         endif()
     endif()
 
-    add_executable(mr_adm_speaker_layouts_tests tests/unit/speaker_layouts_test.cpp)
-    target_link_libraries(mr_adm_speaker_layouts_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_speaker_layouts_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_speaker_layouts_tests)
-    add_test(NAME mr_adm_speaker_layouts_tests COMMAND mr_adm_speaker_layouts_tests)
+    # The Apple island's live override resolution and live-gain de-zipper (render_common.h).
+    add_executable(mr_adm_live_override_tests tests/unit/live_override_test.cpp)
+    target_link_libraries(mr_adm_live_override_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMCAPI)
+    mr_adm_core_apply_warnings(mr_adm_live_override_tests)
+    mr_adm_core_apply_static_analysis(mr_adm_live_override_tests)
+    add_test(NAME mr_adm_live_override_tests COMMAND mr_adm_live_override_tests)
 
     # The Apple island's DirectSpeakers matrix rendering; the Rust backends' cases are Rust tests.
     if(APPLE)
@@ -287,17 +288,17 @@ if(MR_ADM_CORE_BUILD_TESTS)
         add_test(NAME mr_adm_direct_speakers_matrix_render_tests COMMAND mr_adm_direct_speakers_matrix_render_tests)
     endif()
 
-    # The island LFE pair recombination; on macOS also the Apple backend through the C ABI and its
-    # island table (the EAR / VBAP routing is tested in mradm-engine tests/lfe_render.rs, R3 F2).
-    add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
-    target_link_libraries(mr_adm_lfe_routing_tests PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMCAPI)
+    # The Apple backend's 22.2 LFE routing through the C ABI and its island table (the EAR / VBAP
+    # routing is tested in mradm-engine tests/lfe_render.rs, R3 F2; the Windows sink's LFE pair in
+    # mradm-ffi windows_spatial, 7.5).
     if(APPLE)
+        add_executable(mr_adm_lfe_routing_tests tests/unit/lfe_routing_test.cpp)
         target_link_libraries(mr_adm_lfe_routing_tests
-            PRIVATE MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio)
+            PRIVATE MacinRender::ADMRenderCommon MacinRender::ADMCAPI MacinRender::ADMRenderApple MacinRender::ADMAudio)
+        mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
+        mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
+        add_test(NAME mr_adm_lfe_routing_tests COMMAND mr_adm_lfe_routing_tests)
     endif()
-    mr_adm_core_apply_warnings(mr_adm_lfe_routing_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_lfe_routing_tests)
-    add_test(NAME mr_adm_lfe_routing_tests COMMAND mr_adm_lfe_routing_tests)
 
     set(_mr_rust_test_features --no-default-features)
     if(MR_ADM_ENABLE_SOFA)

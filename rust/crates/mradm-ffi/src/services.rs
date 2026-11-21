@@ -2,10 +2,10 @@
 //! function pointers that the C ABI hands to the islands (`mradm_islands_bind`) before it first calls
 //! one. The entries are not exported by name, so a Rust `cdylib` exports only the `adm_*` C ABI
 //! (6.6): rustc exports every `#[no_mangle]` function of the whole crate graph.
-use crate::adm::{Text, View};
+use crate::adm::Text;
 use crate::render::{RenderLfeRouting, RenderOverride};
 use crate::render_apple::{RenderApplePlan, RenderApplePlanView, RenderAppleRequest};
-use crate::scene::{DirectMatrix, DirectMatrixView, LayoutEntry, SceneHandle, SceneImportInfo};
+use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
 use crate::wav::{Info, OutputHandle, ReadHandle};
 use crate::{meter, output_dsp, render, render_apple, scene, scene_math, wav};
 use mradm_dsp::{gain::GainBank, meter::Meter, scene_math::Rotation};
@@ -70,15 +70,6 @@ pub struct RustServices {
     dsp_scene_rotation_update: unsafe extern "C" fn(*mut Rotation, *const f32, usize) -> i32,
     dsp_scene_rotation_apply:
         unsafe extern "C" fn(*const Rotation, *const f32, usize, *mut f32, usize, u32) -> i32,
-    scene_layouts:
-        unsafe extern "C" fn(u32, *mut *const LayoutEntry, *mut usize, *mut u8, usize) -> i32,
-    scene_view: unsafe extern "C" fn(
-        *const SceneHandle,
-        *mut SceneImportInfo,
-        *mut View,
-        *mut u8,
-        usize,
-    ) -> i32,
     scene_destroy: unsafe extern "C" fn(*mut SceneHandle),
     render_live_override:
         unsafe extern "C" fn(*const RenderOverride, usize, Text, Text, *mut f32, *mut u32) -> u32,
@@ -169,8 +160,6 @@ pub(crate) static SERVICES: RustServices = RustServices {
     dsp_scene_rotation_destroy: scene_math::mradm_dsp_scene_rotation_destroy,
     dsp_scene_rotation_update: scene_math::mradm_dsp_scene_rotation_update,
     dsp_scene_rotation_apply: scene_math::mradm_dsp_scene_rotation_apply,
-    scene_layouts: scene::mradm_scene_layouts,
-    scene_view: scene::mradm_scene_view,
     scene_destroy: scene::mradm_scene_destroy,
     render_live_override: render::mradm_render_live_override,
     render_lfe_gain: render::mradm_render_lfe_gain,

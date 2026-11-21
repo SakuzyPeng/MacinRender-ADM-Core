@@ -36,8 +36,6 @@ target_sources(
             adm_core/adm/options.h
             adm_core/adm/progress.h
             adm_core/adm/render.h
-            adm_core/adm/room.h
-            adm_core/adm/screen.h
 )
 
 target_include_directories(mr_adm_core INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/../include"
@@ -72,7 +70,6 @@ target_sources(
     PRIVATE
         adm_render_common/engine_records.cpp
         adm_render_common/render_common.cpp
-        adm_render_common/speaker_layouts.cpp
 )
 target_include_directories(mr_adm_render_common PUBLIC adm_render_common)
 target_link_libraries(mr_adm_render_common PUBLIC MacinRender::ADMCore Threads::Threads

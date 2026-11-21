@@ -82,9 +82,7 @@ template <class F> void control(const F& f) noexcept {
 
 } // namespace sink
 
-// The table of a sink (the engine takes it over). Sink has start and stop; flush, pause, resume,
-// mark_end, set_volume and progress default to no-ops, has_device_volume to false and
-// pull_is_realtime_playback to true.
+// The table of the sink (the engine takes it over): every control of AVSampleBufferDevice.
 template <class Sink> MradmDeviceTable device_table(std::unique_ptr<Sink> device) {
     static constexpr auto of = [](void* ctx) -> Sink& { return *static_cast<Sink*>(ctx); };
     MradmDeviceTable t{};
@@ -105,43 +103,23 @@ template <class Sink> MradmDeviceTable device_table(std::unique_ptr<Sink> device
         }
     };
     t.stop = [](void* ctx) noexcept { sink::control([&] { of(ctx).stop(); }); };
-    if constexpr (requires(Sink& s) { s.flush(); }) {
-        t.flush = [](void* ctx) noexcept { sink::control([&] { of(ctx).flush(); }); };
-    }
-    if constexpr (requires(Sink& s) { s.pause(); }) {
-        t.pause = [](void* ctx) noexcept { sink::control([&] { of(ctx).pause(); }); };
-    }
-    if constexpr (requires(Sink& s) { s.resume(); }) {
-        t.resume = [](void* ctx) noexcept { sink::control([&] { of(ctx).resume(); }); };
-    }
-    if constexpr (requires(Sink& s) { s.mark_end(); }) {
-        t.mark_end = [](void* ctx) noexcept { sink::control([&] { of(ctx).mark_end(); }); };
-    }
-    t.realtime = [](void* ctx) noexcept -> uint32_t {
-        if constexpr (requires(Sink& s) { s.pull_is_realtime_playback(); }) {
-            return of(ctx).pull_is_realtime_playback() ? 1U : 0U;
-        } else {
-            return 1U;
-        }
+    t.flush = [](void* ctx) noexcept { sink::control([&] { of(ctx).flush(); }); };
+    t.pause = [](void* ctx) noexcept { sink::control([&] { of(ctx).pause(); }); };
+    t.resume = [](void* ctx) noexcept { sink::control([&] { of(ctx).resume(); }); };
+    t.mark_end = [](void* ctx) noexcept { sink::control([&] { of(ctx).mark_end(); }); };
+    t.realtime = [](void* ctx) noexcept -> uint32_t { return of(ctx).pull_is_realtime_playback() ? 1U : 0U; };
+    t.has_volume = [](void* ctx) noexcept -> uint32_t { return of(ctx).has_device_volume() ? 1U : 0U; };
+    t.set_volume = [](void* ctx, float gain) noexcept { sink::control([&] { of(ctx).set_volume(gain); }); };
+    t.progress = [](void* ctx, MradmEngineSceneDeviceProgress* out) noexcept {
+        sink::control([&] {
+            const AudioDeviceProgress p = of(ctx).progress();
+            *out = {p.presented_frames,
+                    p.has_media_clock ? 1U : 0U,
+                    p.failed ? 1U : 0U,
+                    p.recovering ? 1U : 0U,
+                    p.underruns};
+        });
     };
-    if constexpr (requires(Sink& s) { s.has_device_volume(); }) {
-        t.has_volume = [](void* ctx) noexcept -> uint32_t { return of(ctx).has_device_volume() ? 1U : 0U; };
-    }
-    if constexpr (requires(Sink& s) { s.set_volume(1.0F); }) {
-        t.set_volume = [](void* ctx, float gain) noexcept { sink::control([&] { of(ctx).set_volume(gain); }); };
-    }
-    if constexpr (requires(Sink& s) { s.progress(); }) {
-        t.progress = [](void* ctx, MradmEngineSceneDeviceProgress* out) noexcept {
-            sink::control([&] {
-                const AudioDeviceProgress p = of(ctx).progress();
-                *out = {p.presented_frames,
-                        p.has_media_clock ? 1U : 0U,
-                        p.failed ? 1U : 0U,
-                        p.recovering ? 1U : 0U,
-                        p.underruns};
-            });
-        };
-    }
     t.destroy = [](void* ctx) noexcept { delete &of(ctx); };
     return t;
 }
