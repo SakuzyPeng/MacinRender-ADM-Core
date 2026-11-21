@@ -936,7 +936,13 @@ C1 已完成（2026-11-21）：MP4 元数据 atom 改由 `mradm-ffi` `mp4_metada
 - `metadata_io.cpp`、生产已不调用的 C++ WAV / CAF 元数据包装与函数表的两项（35 → 33）删除，C++ 岛不再接岛 9；
 - 3,000 个随机 atom 序列上与 C++ 逐字节、逐错误相同，两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。
 
-生产 C/C++ 7,141 → 6,720 行。C2、C3、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+生产 C/C++ 7,141 → 6,720 行。
+
+C2 已完成（同日）：MP4 打包器（mp4box / ffmpeg）的探测与运行改由 `mradm-ffi` `mp4_packager` 经 `std::process` 实现，输出格式文档的打包器可用性也在 Rust 探测：
+- `iamf_io.cpp` 的进程辅助与打包器、平台表的 `iamf_mp4_packager` 删除，C++ 岛只剩 APAC 与 IAMF；
+- 17 个假打包器场景与 C++ 相同，ffmpeg 版本解析在 5,002 行上与 `sscanf` 相同（超出 `int` 的未定义情形除外），两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。
+
+生产 C/C++ 6,720 → 6,311 行。C3、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
 
 ## 每个迁移切片的验证
 

@@ -36,29 +36,19 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
         return 1;
     }
     const auto& e = *request;
-    if (e.island < 1U || e.island > 8U || (e.island >= 2U && e.island <= 5U)) {
-        return 2; // Not a C++ audio island (the Apple backend has its own; FLAC, Opus and metadata are in Rust).
+    if (e.island != 6U && e.island != 7U) {
+        return 2; // Not a C++ audio island: APAC and IAMF are; the others are in Rust or the Apple island.
     }
     try {
         *reply = {};
         reply->ffmpeg_major = -1;
-        std::optional<Cancel> cancel; // The probe takes no stop token.
-        if (e.island >= 6U) {
-            cancel.emplace(*context);
-        }
-        const auto token = cancel ? cancel->token() : std::stop_token{};
+        const Cancel cancel(*context);
+        const auto token = cancel.token();
         Progress progress(*context);
         const auto src = native(e.src.utf8);
         const auto dst = native(e.dst.utf8);
         const auto layout = text(e.layout);
-        switch (e.island) {
-        case 1: {
-            const auto packager = detect_iamf_mp4_packager();
-            reply->packager = static_cast<uint32_t>(packager.kind);
-            reply->ffmpeg_major = packager.ffmpeg_major;
-            break;
-        }
-        case 6:
+        if (e.island == 6U) {
             done(*reply,
                  convert_to_apac(src,
                                  dst,
@@ -68,8 +58,7 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
                                  e.caf != 0U ? ApacContainer::caf : ApacContainer::mpeg4,
                                  token,
                                  &progress));
-            break;
-        case 7: {
+        } else {
             std::vector<std::string> layers;
             for (const auto& layer : std::span{e.layers, e.layers_len}) {
                 layers.push_back(text(layer));
@@ -83,11 +72,6 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
                                  e.has_peak != 0U ? std::optional<double>(e.peak_dbtp) : std::nullopt,
                                  token,
                                  layers));
-            break;
-        }
-        default: // 8
-            done(*reply, package_iamf_to_mp4(src, dst, token));
-            break;
         }
     } catch (...) {
         fail(*reply, {ErrorCode::internal_error, "render island failed", {}});

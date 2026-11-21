@@ -57,14 +57,13 @@ typedef struct MradmEngineSpatialLayout {
     uint16_t reserved;
 } MradmEngineSpatialLayout;
 
-// The islands' platform facts (src/adm_engine/platform_island.h): encoder and MP4 packager
-// availability, the Apple backend's process-lifetime record (NULL without it) and its LFE
+// The islands' platform facts (src/adm_engine/platform_island.h): encoder availability (the MP4
+// packager is probed in Rust), the Apple backend's process-lifetime record (NULL without it) and its LFE
 // self-test (-1 without it), and the system-spatial layouts (process-lifetime records). Any entry
 // may be NULL. The engine probes only what each caller needs, as the C++ catalog did.
 typedef struct MradmPlatformIslands {
     uint32_t (*apac)(void);
     uint32_t (*iamf)(void);
-    uint32_t (*iamf_mp4_packager)(void);
     const MradmEngineBackend* (*apple)(void);
     int32_t (*apple_lfe_routing_ok)(void);
     void (*system_spatial)(const MradmEngineSpatialLayout** layouts, size_t* len);

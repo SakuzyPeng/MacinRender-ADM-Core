@@ -151,24 +151,6 @@ Result<void> convert_to_iamf(const std::string& src_path,
                              const std::stop_token& cancel_token = {},
                              const std::vector<std::string>& scalable_layers = {});
 
-// IAMF-to-MP4 packaging (ISOBMFF Annex A encapsulation).
-// Prefers mp4box (GPAC) over ffmpeg; the packager is selected once at
-// detection time and used as-is — no runtime fallback on failure.
-enum class IamfMp4PackagerKind : uint8_t { none, mp4box, ffmpeg };
-struct IamfMp4PackagerInfo {
-    IamfMp4PackagerKind kind{IamfMp4PackagerKind::none};
-    int ffmpeg_major{-1};   // populated only when kind == ffmpeg
-    std::string executable; // actual binary name found in PATH ("mp4box", "MP4Box", "ffmpeg")
-};
-// Detect the best available IAMF-to-MP4 packager in PATH (mp4box > ffmpeg).
-IamfMp4PackagerInfo detect_iamf_mp4_packager();
-bool iamf_mp4_packager_available();
-// Package a raw .iamf OBU stream into an ISOBMFF container (.mp4).
-// Returns unsupported if no suitable packager is found in PATH.
-Result<void> package_iamf_to_mp4(const std::string& iamf_path,
-                                 const std::string& mp4_path,
-                                 const std::stop_token& cancel_token = {});
-
 enum class ApacContainer {
     mpeg4,
     caf,

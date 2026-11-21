@@ -1,6 +1,6 @@
 # 七期 7.2：编码器迁入 Rust
 
-> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 进行中（C1 MP4 元数据已完成，2026-11-21）；D（APAC 编排）待做。
+> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 进行中（C1 MP4 元数据、C2 MP4 打包器已完成，2026-11-21）；D（APAC 编排）待做。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单与对照方法见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.2 把编码器的 C++ 封装迁入 Rust：
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | A | FLAC 写出与 Vorbis comment；删除 dr_flac 与没有生产调用者的 FLAC 读取链 | 已完成 |
 | B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装与 Tags | 已完成 |
-| C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | C1 已完成 |
+| C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | C1、C2 已完成 |
 | D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 待做 |
 
 ## A：FLAC
@@ -222,6 +222,43 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 **发布说明**：
 - MP4 元数据的字节、错误码与文字不变；写入改为经临时文件替换，失败时原文件不再可能被截断；
 - 维护者在 macOS 复核：`apac_smoke_test`，以及 CLI 记录中 `encode-apac-*` 的元数据与迁移前一致。
+
+### C2：MP4 打包器
+
+**迁入 Rust 的部分**：`mradm-ffi` `mp4_packager`（原 `iamf_io.cpp` 的进程辅助、`detect_iamf_mp4_packager` 与 `package_iamf_to_mp4`）。
+- **查找**：POSIX 按 `PATH` 各目录（跳过空项）用 `access(X_OK)` 依次找 `mp4box`、`MP4Box`，再找 `ffmpeg`，返回名字本身，运行时再经 `PATH` 解析，与 `execvp` 相同；Windows 照原实现调用 `SearchPathW`（`.exe` 扩展名）；
+- **ffmpeg 版本**：运行 `ffmpeg -version`，退出码非 0 或没有输出时视为没有打包器；首行按 `sscanf("ffmpeg version %d.")` 的规则解析（格式中的空白匹配任意长度的空白、`%d` 跳过前导空白并接受正负号），主版本须大于 0；
+- **运行**：经 `std::process` 直接运行，不走 shell；stdout 与 stderr 共用一个管道，最多保留 4096 字节，截断时只追加一次 `...(truncated)`；取消每 20 ms 检查一次。POSIX 上打包器在自己的进程组中运行，取消时向进程组发 SIGTERM，500 ms 后发 SIGKILL；Windows 上终止进程，`CREATE_NO_WINDOW`。被信号结束时退出码为 -1；无法启动时与原实现的 `execvp` 失败一样视为退出码 127、没有输出；
+- **打包**：mp4box 为 `-add <iamf> -new <mp4>`，ffmpeg 为 `-y -i <iamf> -c copy <mp4>`；失败消息为 `mp4box packaging failed: ` / `ffmpeg packaging failed: ` 加去掉末尾换行的输出，context 为空；找不到打包器时为原来的 unsupported 消息；取消为 `render cancelled`，context 为 `path=<mp4>`。
+
+`Runner::run` 接下 `Island::ProbeMp4Packager` 与 `Island::PackageMp4`。输出格式文档的打包器可用性（只在 IAMF 构建中探测）也改由 Rust 探测，`MradmPlatformIslands` 删除 `iamf_mp4_packager` 字段，`platform_island.cpp` 删除对应函数。C++ 岛只剩 APAC（岛 6）与 IAMF（岛 7）。
+
+**删除**：`iamf_io.cpp` 的 POSIX / Windows 进程辅助（`run_process`、`find_in_path`、输出截断）与打包器的探测和运行；`audio_io.h` 的 `IamfMp4PackagerKind`、`IamfMp4PackagerInfo`、`detect_iamf_mp4_packager`、`iamf_mp4_packager_available` 与 `package_iamf_to_mp4`；`island.cpp` 的岛 1 与岛 8；平台表的 `iamf_mp4_packager`（C 头与 Rust）。
+
+**测试**：`mradm-ffi` `mp4_packager` 的 Rust 测试（Unix）在临时目录中放假的打包器脚本，`PATH` 只含这些目录与脚本用到的几个工具的链接，不受机器上安装的 ffmpeg / mp4box 影响：
+- 查找顺序（`mp4box` 在每个目录都先于 `MP4Box`）、空项与不可执行文件；
+- ffmpeg 版本的 `sscanf` 规则（13 种首行）、非 0 退出、无输出、版本只在 stderr；
+- 输出合并、截断（10,000 字节）、退出码、找不到程序（127）、被信号结束（-1）、开始前取消；
+- 取消时进程组先收到 SIGTERM、被忽略后 500 ms 收到 SIGKILL，留下的孙进程随进程组结束；
+- 两种打包器的参数（含空格的路径）、失败消息（`\r` 保留、末尾 `\n` 去掉）、unsupported 与两种取消。
+
+这些测试加入 ctest `mr_adm_encoder_tests`。`audio_island_test` 改为检查 C++ 岛不接岛 1 与岛 8。
+
+**对照与故障注入**：
+- 本机 CLI 不产生 IAMF，所以另做了对照：17 个假打包器场景（各种查找结果、版本行、失败输出、截断、信号、`\r\n`、空格路径）分别交给仍在的 C++ `detect_iamf_mp4_packager` / `package_iamf_to_mp4` 与 Rust，探测结果、错误码、消息与 context 全部相同；
+- ffmpeg 版本解析与 C `sscanf` 在 5,002 行随机首行上对照：824 行解析出版本，结果相同；只有 155 行的数字超出 `int`（C 的 `sscanf` 在此为未定义行为，glibc 截断成任意值），Rust 视为没有版本；
+- 故障注入：失败消息改为同时去掉 `\r`，1 个场景不同；ffmpeg 参数 `copy` 改为 `-copy`，2 个场景不同；
+- 删除 C++ 之后，CLI 记录与迁移前的构建对照，134 条命令 0 差异。
+
+**其他检查**：ctest 25/25；Rust 质量检查、两个目标的交叉 clippy（含 Windows 的 `SearchPathW` 与 `CommandExt`）、FFI 头校验与 `check-changed.sh` 通过。
+
+**规模**：生产 C/C++ 6,720 → 6,311 行；岛接口 1,036 → 1,014 行。
+
+**发布说明**：
+- 打包器的选择、参数、消息与取消行为不变。
+- ffmpeg 主版本超出 32 位整数时视为没有可用的 ffmpeg（原实现结果未定义）。
+- Windows：原实现把原生窄路径当作 UTF-8 转宽字符，非 ASCII 路径会被破坏；现在路径经 UTF-8 正确传递。程序解析改用 Rust 标准库：在 `PATH` 与系统目录中查找，不再查找当前目录（`SearchPathW` 的探测不变）。
+- 维护者复核：带 bridge 的构建在 macOS / Windows 上以 mp4box 与 ffmpeg ≥ 7 打包 IAMF MP4，含取消；Windows 的进程终止与输出捕获只在交叉 clippy 中编译过。
 
 ## 维护者实机复核
 

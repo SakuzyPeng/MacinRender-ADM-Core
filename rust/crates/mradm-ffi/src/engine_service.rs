@@ -600,8 +600,8 @@ impl render::Islands for Runner<'_> {
     }
 }
 
-/// The islands implemented in Rust (PCM consistency 7.2): FLAC and Opus MKA encoding and the
-/// FLAC, Matroska and MP4 metadata.
+/// The islands implemented in Rust (PCM consistency 7.2): FLAC and Opus MKA encoding, the FLAC,
+/// Matroska and MP4 metadata, and the MP4 packager's probe and run.
 /// Their progress and cancellation go through the same bridge as the C++ islands'.
 fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
     let user: *mut c_void = ptr::from_ref(bridge).cast_mut().cast();
@@ -628,6 +628,17 @@ fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
         }
         Island::WriteMetadata { path, fields } if crate::mp4_metadata::is_mp4(&path.utf8) => {
             crate::mp4_metadata::write_metadata(&path.utf8, fields)
+        }
+        Island::PackageMp4 { src, dst } => {
+            crate::mp4_packager::package(&src.utf8, &dst.utf8, &cancelled)
+        }
+        Island::ProbeMp4Packager => {
+            let found = crate::mp4_packager::detect();
+            return Some(Reply {
+                packager: found.kind,
+                ffmpeg_major: found.ffmpeg_major,
+                ..Reply::default()
+            });
         }
         _ => return None,
     };
@@ -837,7 +848,19 @@ mod tests {
                 .unwrap();
             assert_eq!((reply.error, reply.metrics.lufs), (None, Some(-20.)));
             // Other islands without an audio runner are returned.
-            assert!(islands.run(&Island::ProbeMp4Packager, None, &map).is_none());
+            let path = |p: &str| PathText {
+                utf8: p.into(),
+                display: p.into(),
+            };
+            let apac = Island::EncodeApac {
+                src: path("in.wav"),
+                dst: path("out.m4a"),
+                layout: "binaural".into(),
+                bitrate: 0,
+                drc_music: true,
+                caf: false,
+            };
+            assert!(islands.run(&apac, None, &map).is_none());
             let failed = islands
                 .run(&Island::ApplePrepare(Box::new(plan("bad"))), None, &map)
                 .unwrap();

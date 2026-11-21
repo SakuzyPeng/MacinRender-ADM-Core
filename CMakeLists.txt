@@ -340,7 +340,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         DEPENDS mr_adm_rust
         USES_TERMINAL VERBATIM)
     add_test(NAME mr_adm_encoder_tests
-        COMMAND ${_mr_encoder_test_command} -- flac::tests:: opus_mka::tests:: mp4_metadata::tests:: flac_outputs_are_encoded_and_tagged)
+        COMMAND ${_mr_encoder_test_command} -- flac::tests:: opus_mka::tests:: mp4_metadata::tests:: mp4_packager::tests:: flac_outputs_are_encoded_and_tagged)
     set_tests_properties(mr_adm_encoder_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)

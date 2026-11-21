@@ -60,15 +60,14 @@ pub struct EngineSpatialLayout {
     reserved: u16,
 }
 
-/// The islands' platform facts (`src/adm_engine/platform_island.h`): encoder and packager
-/// availability, the Apple backend's process-lifetime record (null without it) and LFE self-test
+/// The islands' platform facts (`src/adm_engine/platform_island.h`): encoder availability, the
+/// Apple backend's process-lifetime record (null without it) and LFE self-test
 /// (-1 without it), and the system-spatial layouts (process-lifetime records). Entries may be
 /// null (the fact is absent).
 #[repr(C)]
 pub struct PlatformIslands {
     apac: Option<unsafe extern "C" fn() -> u32>,
     iamf: Option<unsafe extern "C" fn() -> u32>,
-    iamf_mp4_packager: Option<unsafe extern "C" fn() -> u32>,
     apple: Option<unsafe extern "C" fn() -> *const EngineBackend>,
     apple_lfe_routing_ok: Option<unsafe extern "C" fn() -> i32>,
     system_spatial: Option<unsafe extern "C" fn(*mut *const EngineSpatialLayout, *mut usize)>,
@@ -170,6 +169,15 @@ unsafe fn backend(b: &EngineBackend) -> Option<Backend> {
 /// Every non-null entry of `p` must be callable from this thread, write only through the pointers
 /// it is given, and return records that live for the process (see [`PlatformIslands`]).
 pub unsafe fn platform(p: &PlatformIslands, facts: Facts) -> Option<Platform> {
+    unsafe { platform_with(p, facts, &crate::mp4_packager::available) }
+}
+
+/// [`platform`] with the MP4 packager probe (in Rust since PCM consistency 7.2 C2) given.
+unsafe fn platform_with(
+    p: &PlatformIslands,
+    facts: Facts,
+    packager: &dyn Fn() -> bool,
+) -> Option<Platform> {
     let flag = |f: Option<unsafe extern "C" fn() -> u32>| f.is_some_and(|f| unsafe { f() } != 0);
     let (formats, capabilities) = match facts {
         Facts::Render => (false, false),
@@ -179,7 +187,7 @@ pub unsafe fn platform(p: &PlatformIslands, facts: Facts) -> Option<Platform> {
         let apac = flag(p.apac);
         let iamf = flag(p.iamf);
         // The packager probe runs only in IAMF builds.
-        (apac, iamf, iamf && flag(p.iamf_mp4_packager))
+        (apac, iamf, iamf && packager())
     } else {
         (false, matches!(facts, Facts::Render) && flag(p.iamf), false)
     };
@@ -238,9 +246,9 @@ mod tests {
         probed("iamf");
         1
     }
-    unsafe extern "C" fn yes_packager() -> u32 {
+    fn yes_packager() -> bool {
         probed("packager");
-        1
+        true
     }
     unsafe extern "C" fn lfe() -> i32 {
         probed("lfe");
@@ -259,7 +267,6 @@ mod tests {
         let islands = PlatformIslands {
             apac: Some(yes_apac),
             iamf: Some(yes_iamf),
-            iamf_mp4_packager: Some(yes_packager),
             apple: None,
             apple_lfe_routing_ok: Some(lfe),
             system_spatial: Some(spatial),
@@ -273,7 +280,7 @@ mod tests {
             Facts::Document(3),
             Facts::Document(4),
         ] {
-            let p = unsafe { platform(&islands, facts) }.unwrap();
+            let p = unsafe { platform_with(&islands, facts, &yes_packager) }.unwrap();
             seen.push((
                 std::mem::take(&mut *PROBED.lock().unwrap()),
                 p.apac,
