@@ -13,8 +13,6 @@ include = ["mradm-dsp", "macin-adm", "macin-bwf", "mradm-wav", "mradm-ear"]
 include = [
     "AppleIslands",
     "AppleSettings",
-    "DeviceEnumeration",
-    "DeviceIslands",
     "DevicePull",
     "DeviceTable",
     "EngineBackend",
@@ -29,9 +27,12 @@ include = [
     "EngineSpatialLayout",
     "IamfEncodeOptions",
     "IslandContext",
+    "MiniaudioFormats",
+    "MiniaudioIsland",
     "PlatformIslands",
     "RenderLiveOverride",
     "RoomScreenGeometry",
     "RustServices",
     "RustTestServices",
+    "SystemSpatialIsland",
 ]

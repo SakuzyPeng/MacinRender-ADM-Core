@@ -1,12 +1,12 @@
 // avsamplebuffer_device.mm
 //
-// macOS-only IAudioOutputDevice backed by AVSampleBufferAudioRenderer. Instead of opening a
+// macOS-only output device backed by AVSampleBufferAudioRenderer. Instead of opening a
 // raw multichannel hardware device (the miniaudio path), it enqueues the monitor's
 // multichannel PCM (e.g. 7.1.4) into the system media playback stack, which spatializes it to
 // the headphone route with dynamic head tracking. The monitor engine pulls exactly as it does
-// for any IAudioOutputDevice; the AudioChannelLayoutTag (apple_layouts) is what makes the
+// for any output device; the AudioChannelLayoutTag (apple_layouts) is what makes the
 // system treat the stream as spatial content. Apple framework types stay confined to adm_apple
-// (ADR 0003); the factory returns the third-party-free IAudioOutputDevice interface.
+// (ADR 0003); the factory returns the MradmDeviceTable Rust drives (system_spatial_island.h).
 
 #include <algorithm>
 #include <atomic>
@@ -24,8 +24,8 @@
 #include "adm/errors.h"
 
 #include "apple_layouts.h"
-#include "audio_output_device.h"
 #include "buffered_media_timeline.h"
+#include "system_spatial_island.h"
 
 namespace mradm::realtime {
 namespace {
@@ -56,12 +56,12 @@ constexpr std::size_t k_stall_high_frames = 9600; // ~200 ms (= prefill depth)
 constexpr uint64_t k_feed_interval_ns = 10U * 1000U * 1000U;
 constexpr uint64_t k_feed_leeway_ns = 2U * 1000U * 1000U;
 
-class AVSampleBufferDevice final : public IAudioOutputDevice {
+class AVSampleBufferDevice final {
   public:
     explicit AVSampleBufferDevice(std::string layout_id) : layout_id_(std::move(layout_id)) {}
-    ~AVSampleBufferDevice() override { stop(); }
+    ~AVSampleBufferDevice() { stop(); }
 
-    [[nodiscard]] Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) override {
+    [[nodiscard]] Result<void> start(uint32_t channels, uint32_t sample_rate, PullFn pull) {
         const auto* layout = apple_layouts::find_apple_speaker_layout(layout_id_);
         if (layout == nullptr) {
             return make_error(
@@ -115,7 +115,7 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         return {};
     }
 
-    void stop() override {
+    void stop() {
         stopping_.store(true, std::memory_order_release);
         dispatch_source_t timer = feed_timer_;
         feed_timer_ = nil;
@@ -143,20 +143,19 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         pull_ = nullptr;
     }
 
-    [[nodiscard]] uint32_t actual_sample_rate() const override { return sample_rate_; }
-    [[nodiscard]] bool pull_is_realtime_playback() const override { return false; }
-    [[nodiscard]] AudioDeviceProgress progress() const override {
+    [[nodiscard]] bool pull_is_realtime_playback() const { return false; }
+    [[nodiscard]] AudioDeviceProgress progress() const {
         return {presented_.load(), true, failed_.load(), false, underruns_.load()};
     }
-    void mark_end() override { end_marked_.store(true); }
-    [[nodiscard]] bool has_device_volume() const override { return true; }
-    void set_volume(float gain) override {
+    void mark_end() { end_marked_.store(true); }
+    [[nodiscard]] bool has_device_volume() const { return true; }
+    void set_volume(float gain) {
         if (queue_ != nil) {
             dispatch_sync(queue_, ^{ renderer_.volume = gain; });
         }
     }
 
-    void flush() override {
+    void flush() {
         if (queue_ == nil) {
             return;
         }
@@ -170,7 +169,7 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         });
     }
 
-    void pause() override {
+    void pause() {
         if (queue_ == nil) {
             return;
         }
@@ -180,7 +179,7 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
         });
     }
 
-    void resume() override {
+    void resume() {
         if (queue_ == nil) {
             return;
         }
@@ -417,8 +416,8 @@ class AVSampleBufferDevice final : public IAudioOutputDevice {
 
 } // namespace
 
-std::unique_ptr<IAudioOutputDevice> make_avsamplebuffer_device(std::string layout_id) {
-    return std::make_unique<AVSampleBufferDevice>(std::move(layout_id));
+MradmDeviceTable make_avsamplebuffer_device(std::string layout_id) {
+    return device_table(std::make_unique<AVSampleBufferDevice>(std::move(layout_id)));
 }
 
 } // namespace mradm::realtime

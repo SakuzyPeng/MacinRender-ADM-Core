@@ -17,6 +17,12 @@ pub mod islands {
     };
     pub use crate::services::RustServices;
 
+    /// This build's output devices: miniaudio (hardware and the null backend) and, on macOS and
+    /// Windows, the system-spatial sink.
+    pub fn devices() -> *const DeviceIslands {
+        &raw const crate::render::device_island::DEVICES
+    }
+
     /// The Rust services the islands call: the C ABI hands this table to the islands
     /// (`mradm_islands_bind`) before it first calls one.
     pub fn services() -> *const RustServices {

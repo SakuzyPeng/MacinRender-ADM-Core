@@ -11,7 +11,7 @@
 #include "adm/render_apple.h"
 #endif
 #ifdef _WIN32
-#include "audio_output_device.h"
+#include "system_spatial_island.h"
 #endif
 
 namespace mradm::engine {

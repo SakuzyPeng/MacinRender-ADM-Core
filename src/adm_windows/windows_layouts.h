@@ -40,7 +40,7 @@
 // of the interleaved pull() buffer drives routes[i]. A wrong mapping swaps speaker positions
 // (front-left leaks elsewhere), so the table is verified by ear on real hardware with a per-channel
 // test tone. Windows COM / SpatialAudio types stay confined to adm_windows (ADR 0003); the device
-// factory returns the third-party-free IAudioOutputDevice.
+// factory returns the MradmDeviceTable Rust drives.
 namespace mradm::windows_layouts {
 
 inline constexpr uint16_t k_auto_object_slot = std::numeric_limits<uint16_t>::max();

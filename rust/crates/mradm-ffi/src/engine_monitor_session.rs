@@ -334,9 +334,7 @@ mod tests {
             .unwrap()
             .push(format!("{kind} {} {geometry} {}", text(&layout), text(&id)));
         if kind == HARDWARE && text(&id) == "missing" {
-            return unsafe {
-                crate::render::engine_monitor::island_error_for_test(e, 2, "no device")
-            };
+            return unsafe { crate::render::engine_monitor::island_error(e, 2, "no device") };
         }
         0
     }

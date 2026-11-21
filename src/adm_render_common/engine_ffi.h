@@ -180,14 +180,10 @@ typedef struct MradmDevicePull {
     void* user;
     size_t (*pull)(void* user, float* out, size_t len, size_t frames);
 } MradmDevicePull;
-// One playback device of an enumeration; the texts live during the call.
-typedef struct MradmDeviceEnumeration {
-    void* user;
-    void (*each)(void* user, MradmAdmText id, MradmAdmText name, uint32_t is_default);
-} MradmDeviceEnumeration;
-// An opened output device (src/adm_realtime/device_island.h). start begins pulling (the pull record
-// is copied) and returns 0 or an error code (100: the device threw, its message the exception's).
-// destroy releases the device (after stop).
+// An opened output device (miniaudio from Rust, or a system-spatial sink of
+// src/adm_realtime/system_spatial_island.h). start begins pulling (the pull record is copied) and
+// returns 0 or an error code (100: the device threw, its message the exception's). An absent entry is
+// a no-op (realtime: false, has_volume: false). destroy releases the device (after stop).
 typedef struct MradmDeviceTable {
     void* ctx;
     int32_t (*start)(void* ctx,
@@ -207,21 +203,15 @@ typedef struct MradmDeviceTable {
     void (*destroy)(void* ctx);
 } MradmDeviceTable;
 
-// The output devices. open kind 0 is the system-spatial sink over layout (geometry: SpeakerGeometry),
-// 1 the hardware device device_id ("" = default), 2 miniaudio's null backend; it returns 0 with
-// *output set or an error code (unsupported: no system-spatial sink on this platform; 100: the factory
-// threw, its message the exception's).
-// system_spatial is 1 where the platform has that sink. enumerate calls each once per playback device.
-typedef struct MradmDeviceIslands {
-    uint32_t system_spatial;
-    int32_t (*open)(uint32_t kind,
-                    MradmAdmText layout,
+// The platform's system-spatial sink (macOS and Windows only): open returns 0 with *output set over
+// layout (geometry: SpeakerGeometry) or an error code (100: the factory threw, its message the
+// exception's).
+typedef struct MradmSystemSpatialIsland {
+    int32_t (*open)(MradmAdmText layout,
                     uint32_t geometry,
-                    MradmAdmText device_id,
                     MradmDeviceTable* output,
                     const MradmEngineIslandError* error);
-    void (*enumerate)(const MradmDeviceEnumeration* devices);
-} MradmDeviceIslands;
+} MradmSystemSpatialIsland;
 
 #ifdef __cplusplus
 }

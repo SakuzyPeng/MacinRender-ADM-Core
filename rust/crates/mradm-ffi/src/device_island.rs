@@ -1,8 +1,10 @@
-//! The output devices (`src/adm_realtime/device_island.h`, `MradmDeviceIslands`): miniaudio, its
-//! null backend and the platform's system-spatial sink, opened and driven from Rust for the
-//! monitor session and the Scene output.
-use super::engine_monitor::{Buffers, EngineIslandError};
+//! The output devices, opened and driven from Rust for the monitor session and the Scene output:
+//! miniaudio and its null backend over `src/adm_realtime/miniaudio_island.h`, and the platform's
+//! system-spatial sink (`src/adm_realtime/system_spatial_island.h`, macOS and Windows), each a
+//! [`DeviceTable`] (7.3; before it, one C++ device island opened all three).
+use super::engine_monitor::{Buffers, EngineIslandError, island_error};
 use super::engine_scene_output::EngineSceneDeviceProgress;
+use super::miniaudio;
 use crate::adm::Text;
 use mradm_engine::scene::output::DeviceProgress;
 use mradm_render::routing::Error;
@@ -19,14 +21,14 @@ pub struct DevicePull {
     pub pull: Option<unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize) -> usize>,
 }
 
-/// One playback device per `each` call (`enumerate`).
-#[repr(C)]
+/// One playback device per `each` call (`enumerate`); the texts live during the call.
 pub struct DeviceEnumeration {
     pub user: *mut c_void,
     pub each: Option<unsafe extern "C" fn(*mut c_void, Text, Text, u32)>,
 }
 
-/// An opened output device (`IAudioOutputDevice`); `destroy` releases it after `stop`.
+/// An opened output device (`MradmDeviceTable`); `destroy` releases it after `stop`. An absent entry
+/// is a no-op (`realtime` and `has_volume`: false).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct DeviceTable {
@@ -53,8 +55,8 @@ pub struct DeviceTable {
 }
 
 /// The platform's output devices. `open` kind: 0 the system-spatial sink, 1 the hardware device,
-/// 2 the null backend; `system_spatial` is 1 where the platform has that sink.
-#[repr(C)]
+/// 2 the null backend; `system_spatial` is 1 where the platform has that sink. The tests and the
+/// probe substitute their own.
 pub struct DeviceIslands {
     pub system_spatial: u32,
     pub open: Option<
@@ -68,6 +70,81 @@ pub struct DeviceIslands {
         ) -> i32,
     >,
     pub enumerate: Option<unsafe extern "C" fn(*const DeviceEnumeration)>,
+}
+
+/// The system-spatial sink of macOS and Windows (`MradmSystemSpatialIsland`).
+#[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
+#[repr(C)]
+pub struct SystemSpatialIsland {
+    pub open:
+        Option<unsafe extern "C" fn(Text, u32, *mut DeviceTable, *const EngineIslandError) -> i32>,
+}
+
+#[cfg(any(target_os = "macos", windows))]
+unsafe extern "C" {
+    fn mradm_system_spatial_island() -> *const SystemSpatialIsland;
+}
+
+/// This build's devices.
+pub static DEVICES: DeviceIslands = DeviceIslands {
+    system_spatial: cfg!(any(target_os = "macos", windows)) as u32,
+    open: Some(open_device),
+    enumerate: Some(enumerate_devices),
+};
+
+unsafe extern "C" fn open_device(
+    kind: u32,
+    layout: Text,
+    geometry: u32,
+    device_id: Text,
+    output: *mut DeviceTable,
+    e: *const EngineIslandError,
+) -> i32 {
+    let Some(output) = (unsafe { output.as_mut() }) else {
+        return 1;
+    };
+    if kind != SYSTEM_SPATIAL {
+        let id = unsafe { super::bytes(&device_id) }.unwrap_or_default();
+        *output = miniaudio::open(kind == NULL_BACKEND, id);
+        return 0;
+    }
+    #[cfg(any(target_os = "macos", windows))]
+    {
+        // SAFETY: the island returns its process-lifetime table.
+        match unsafe { (*mradm_system_spatial_island()).open } {
+            Some(open) => unsafe { open(layout, geometry, output, e) },
+            None => unsafe { island_error(e, 6, "output devices are unavailable") },
+        }
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = (layout, geometry);
+        unsafe {
+            island_error(
+                e,
+                mradm_engine::request::code::UNSUPPORTED,
+                "System spatial output is unavailable on this platform",
+            )
+        }
+    }
+}
+
+unsafe extern "C" fn enumerate_devices(devices: *const DeviceEnumeration) {
+    let Some(DeviceEnumeration {
+        user,
+        each: Some(each),
+    }) = (unsafe { devices.as_ref() })
+    else {
+        return;
+    };
+    miniaudio::enumerate(&mut |id, name, is_default| unsafe {
+        each(
+            *user,
+            Text::bytes(id),
+            Text::bytes(name),
+            u32::from(is_default),
+        );
+    });
 }
 
 /// `open` kinds.
