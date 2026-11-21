@@ -1,6 +1,6 @@
 # 七期 7.2：编码器迁入 Rust
 
-> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 进行中（C1 MP4 元数据、C2 MP4 打包器已完成，2026-11-21）；D（APAC 编排）待做。
+> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 已完成（C1 MP4 元数据、C2 MP4 打包器、C3 IAMF bridge，2026-11-21，IAMF 与 Windows 部分待维护者复核）；D（APAC 编排）待做。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单与对照方法见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.2 把编码器的 C++ 封装迁入 Rust：
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | A | FLAC 写出与 Vorbis comment；删除 dr_flac 与没有生产调用者的 FLAC 读取链 | 已完成 |
 | B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装与 Tags | 已完成 |
-| C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | C1、C2 已完成 |
+| C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | 已完成 |
 | D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 待做 |
 
 ## A：FLAC
@@ -259,6 +259,45 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 - ffmpeg 主版本超出 32 位整数时视为没有可用的 ffmpeg（原实现结果未定义）。
 - Windows：原实现把原生窄路径当作 UTF-8 转宽字符，非 ASCII 路径会被破坏；现在路径经 UTF-8 正确传递。程序解析改用 Rust 标准库：在 `PATH` 与系统目录中查找，不再查找当前目录（`SearchPathW` 的探测不变）。
 - 维护者复核：带 bridge 的构建在 macOS / Windows 上以 mp4box 与 ffmpeg ≥ 7 打包 IAMF MP4，含取消；Windows 的进程终止与输出捕获只在交叉 clippy 中编译过。
+
+### C3：IAMF bridge
+
+**迁入 Rust 的部分**：`mradm-ffi` `iamf`（原 `iamf_io.cpp` 的 `convert_to_iamf` 与 `iamf_encoding_available`）。
+- `mr_iamf_aom_bridge_abi_version` 与 `mr_iamf_aom_encode_wav_to_iamf` 经手写 `extern` 调用，`MrIamfAomEncodeOptions` 为 `#[repr(C)]` 的 `IamfEncodeOptions`，接口以 bridge 自己的头 `tools/iamf_aom_bridge/mr_iamf_aom_bridge.h` 为准（`src/adm_audio/iamf_aom_bridge.h` 是它的副本，随 C++ 删除）；
+- 检查顺序照原实现：取消（`render cancelled`，`path=<iamf>`）、9.1.6 / atmos916（unsupported）、读源文件（错误码与文字来自 WAVE 读取，`path=<wav>`）、48 kHz（invalid_argument）、bridge ABI 为 0 或大于 3（io_error）、ABI 低于 3 时不接受 scalable layers（unsupported）；
+- 选项照原实现填写：`abi_version` 取 bridge 的版本，profile 为 AUTO，响度与峰值带“有值”标记；ABI ≥ 2 时填 `struct_size` 与取消回调，ABI ≥ 3 且有层时填逗号分隔的层；
+- 取消回调可能在 bridge 自己的线程上调用：回调读取岛上下文的取消检查（原 C++ 的 `Cancel` 同样从监视线程读取），panic 视为未取消；
+- bridge 返回 `CANCELLED` 或调用方已取消时为 `render cancelled`；其他非 0 结果为 `AOM IAMF bridge encode failed: ` 加 bridge 的错误文字（为空时为 `unknown bridge error`），context 为 `path=<iamf>`；
+- 路径：POSIX 传 UTF-8；Windows 照原实现的 `std::filesystem::path::string()` 转为当前代码页（`WideCharToMultiByte`，`CP_ACP`），代码页表示不了的路径报 internal（原实现在此抛异常，岛报 `render island failed`）。
+
+**条件编译**：bridge 只在 `MR_ADM_ENABLE_IAMF=ON` 的构建中链接。岛的 CMake 工程此时在链接清单里写 `feature:iamf`，`mradm-islands-sys` 把它转成 `cargo::metadata=feature_iamf=1`，`mradm-ffi` 新增的 `build.rs` 据 `DEP_MRADM_ISLANDS_FEATURE_IAMF` 设置 `cfg(mradm_iamf)`。没有 bridge 时 `.iamf` 输出照旧报 unsupported（`IAMF encoding requires MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools bridge`），不回退到任何自写的 OBU writer。
+
+`Runner::run` 接下 `Island::EncodeIamf`；平台事实的 IAMF 可用性改为 Rust 的编译期常量，`MradmPlatformIslands` 删除 `iamf` 字段。C++ 音频岛只剩 APAC（岛 6）。
+
+**删除**：`iamf_io.cpp`、`src/adm_audio/iamf_aom_bridge.h`、`audio_io.h` 的 `convert_to_iamf` 与 `iamf_encoding_available`、`island.cpp` 的岛 7、`mr_adm_audio` 对 bridge 的链接与 `MR_ADM_ENABLE_IAMF` 定义、平台表的 `iamf`（C 头与 Rust）、`platform_island.cpp` 的对应函数；`iamf_smoke_test.cpp` 与 ctest `mr_adm_iamf_smoke_tests`。
+
+**测试**：`mradm-ffi` `iamf` 的 Rust 测试：
+- 没有 bridge 的构建：unsupported 的码、文字与空 context（即使已取消）；
+- 有 bridge 的构建（原 `iamf_smoke_test` 的检查）：开始前取消、9.1.6 / atmos916、源文件缺失、44.1 kHz 源；
+- 取消回调读取闭包、panic 与空指针时返回 0；
+- `IamfEncodeOptions` 在 64 位目标上的字段偏移与大小（104 字节）。
+
+`IamfEncodeOptions` 另由 FFI 头校验与 bridge 的头逐字段配对（`ISLAND_RECORDS`，头列入 `FFI_HEADERS`）。这些测试加入 ctest `mr_adm_encoder_tests`。
+
+**对照与故障注入**：本机没有 AOM SDK，所以写了一个与 bridge ABI 相同的桩库：记录收到的选项（各字段、回调与层），按环境变量返回成功、带文字或空文字的失败、非常规返回码、`CANCELLED`，或在自己的线程上轮询取消回调。
+- 用仍在的 C++ `convert_to_iamf` 与 Rust 分别链接桩库，跑 22 个用例：ABI 1 / 2 / 3 / 0 / 4，有无层与响度，各种失败与取消（含 30 ms 后由 bridge 线程轮询到的取消），9.1.6 / atmos916，源缺失、损坏、44.1 / 96 kHz，含空格与非 ASCII 的路径。结果码、文字、context 与桩库记录的选项全部相同；
+- 有 bridge 的 Rust 单元测试在桩库下通过；
+- 故障注入：ABI 1 时也填 `struct_size`，2 条选项记录不同；去掉对 `CANCELLED` 返回码的判断，1 个结果不同；
+- 删除 C++ 之后，CLI 记录与迁移前的构建对照，134 条命令 0 差异（没有 bridge 的构建在请求判定时就拒绝 `.iamf`，读的是 Rust 的 IAMF 可用性）；
+- 有无 `cfg(mradm_iamf)` 两种情形都在本机、Windows 与 macOS 目标上跑过 clippy；FFI 头校验对 bridge 选项结构的字段改动报错（故障注入）。
+
+**其他检查**：ctest 24/24（`mr_adm_iamf_smoke_tests` 删除）；Rust 质量检查、FFI 头校验（58 个结构体）与 `check-changed.sh` 通过。
+
+**规模**：生产 C/C++ 6,311 → 6,100 行；岛接口 1,014 → 988 行；C++ 测试 8,380 → 8,324 行。
+
+**发布说明**：
+- IAMF 的选项、结果与消息不变。
+- 需维护者用真实 bridge 复核：macOS / Windows 上带 `MR_ADM_ENABLE_IAMF=ON` 的构建（含 `cmake` crate 直接构建的路径）链接 bridge，`encode-iamf-*` 与 IAMF MP4 的 CLI 记录与迁移前一致，取消生效；Windows 的代码页转换与 DLL 导入库只在交叉 clippy 中编译过。
 
 ## 维护者实机复核
 

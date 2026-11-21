@@ -100,10 +100,6 @@ uint32_t apac() noexcept {
     return audio::apac_encoding_available() ? 1U : 0U;
 }
 
-uint32_t iamf() noexcept {
-    return audio::iamf_encoding_available() ? 1U : 0U;
-}
-
 #ifdef __APPLE__
 const BackendRecords& apple_records() {
     static const BackendRecords records{apple_capabilities()};
@@ -152,7 +148,6 @@ void system_spatial(const MradmEngineSpatialLayout** layouts, size_t* len) noexc
 }
 
 constexpr MradmPlatformIslands k_platform{&apac,
-                                          &iamf,
 #ifdef __APPLE__
                                           &apple,
                                           &apple_lfe_routing_ok,

@@ -1,8 +1,4 @@
-#include <optional>
-#include <span>
 #include <stop_token>
-#include <string>
-#include <vector>
 
 #include "adm/audio_io.h"
 
@@ -36,8 +32,8 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
         return 1;
     }
     const auto& e = *request;
-    if (e.island != 6U && e.island != 7U) {
-        return 2; // Not a C++ audio island: APAC and IAMF are; the others are in Rust or the Apple island.
+    if (e.island != 6U) {
+        return 2; // Only APAC is a C++ audio island; the others are in Rust or the Apple island.
     }
     try {
         *reply = {};
@@ -47,32 +43,15 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
         Progress progress(*context);
         const auto src = native(e.src.utf8);
         const auto dst = native(e.dst.utf8);
-        const auto layout = text(e.layout);
-        if (e.island == 6U) {
-            done(*reply,
-                 convert_to_apac(src,
-                                 dst,
-                                 layout,
-                                 e.bitrate,
-                                 e.drc_music != 0U,
-                                 e.caf != 0U ? ApacContainer::caf : ApacContainer::mpeg4,
-                                 token,
-                                 &progress));
-        } else {
-            std::vector<std::string> layers;
-            for (const auto& layer : std::span{e.layers, e.layers_len}) {
-                layers.push_back(text(layer));
-            }
-            done(*reply,
-                 convert_to_iamf(src,
-                                 dst,
-                                 layout,
-                                 e.bitrate,
-                                 e.has_lufs != 0U ? std::optional<double>(e.lufs) : std::nullopt,
-                                 e.has_peak != 0U ? std::optional<double>(e.peak_dbtp) : std::nullopt,
-                                 token,
-                                 layers));
-        }
+        done(*reply,
+             convert_to_apac(src,
+                             dst,
+                             text(e.layout),
+                             e.bitrate,
+                             e.drc_music != 0U,
+                             e.caf != 0U ? ApacContainer::caf : ApacContainer::mpeg4,
+                             token,
+                             &progress));
     } catch (...) {
         fail(*reply, {ErrorCode::internal_error, "render island failed", {}});
     }

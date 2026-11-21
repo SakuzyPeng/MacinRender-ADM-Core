@@ -942,7 +942,13 @@ C2 已完成（同日）：MP4 打包器（mp4box / ffmpeg）的探测与运行�
 - `iamf_io.cpp` 的进程辅助与打包器、平台表的 `iamf_mp4_packager` 删除，C++ 岛只剩 APAC 与 IAMF；
 - 17 个假打包器场景与 C++ 相同，ffmpeg 版本解析在 5,002 行上与 `sscanf` 相同（超出 `int` 的未定义情形除外），两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。
 
-生产 C/C++ 6,720 → 6,311 行。C3、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+生产 C/C++ 6,720 → 6,311 行。
+
+C3 已完成（同日）：IAMF bridge 由 `mradm-ffi` `iamf` 经手写 `extern` 调用，只在链接清单含 `feature:iamf` 时以 `cfg(mradm_iamf)` 编译，平台的 IAMF 可用性也在 Rust：
+- `iamf_io.cpp`、它的 bridge 头副本、平台表的 `iamf` 与 `iamf_smoke_test` 删除，C++ 音频岛只剩 APAC；
+- 与 C++ 同样链接一个 ABI 相同的桩 bridge，22 个用例的结果与传给 bridge 的选项全部相同，两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。真实 bridge 待维护者复核。
+
+生产 C/C++ 6,311 → 6,100 行。D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
 
 ## 每个迁移切片的验证
 

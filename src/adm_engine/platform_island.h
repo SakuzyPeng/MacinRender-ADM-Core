@@ -1,4 +1,4 @@
-// The islands' platform facts as the engine reads them: encoder availability (the audio island), the Apple backend's
+// The islands' platform facts as the engine reads them: APAC availability (the audio island), the Apple backend's
 // capability records and LFE self-test (the Apple island) and the system-spatial sink's layouts (the Apple or Windows
 // island).
 #pragma once

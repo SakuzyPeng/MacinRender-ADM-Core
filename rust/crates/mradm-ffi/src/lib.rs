@@ -21,6 +21,7 @@ mod engine_render;
 mod engine_service;
 mod flac;
 mod hptf;
+mod iamf;
 mod metadata_temp;
 mod meter;
 mod mp4_metadata;
