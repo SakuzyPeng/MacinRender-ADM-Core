@@ -6,7 +6,6 @@
 #include <string_view>
 #include <vector>
 
-#include "adm/audio_io.h"
 #include "adm/capability.h"
 #ifdef __APPLE__
 #include "adm/render_apple.h"
@@ -96,10 +95,6 @@ class BackendRecords {
     MradmEngineBackend record_{};
 };
 
-uint32_t apac() noexcept {
-    return audio::apac_encoding_available() ? 1U : 0U;
-}
-
 #ifdef __APPLE__
 const BackendRecords& apple_records() {
     static const BackendRecords records{apple_capabilities()};
@@ -147,15 +142,15 @@ void system_spatial(const MradmEngineSpatialLayout** layouts, size_t* len) noexc
     *len = records.size();
 }
 
-constexpr MradmPlatformIslands k_platform{&apac,
+constexpr MradmPlatformIslands k_platform{
 #ifdef __APPLE__
-                                          &apple,
-                                          &apple_lfe_routing_ok,
+    &apple,
+    &apple_lfe_routing_ok,
 #else
-                                          nullptr,
-                                          nullptr,
+    nullptr,
+    nullptr,
 #endif
-                                          &system_spatial};
+    &system_spatial};
 
 } // namespace
 } // namespace mradm::engine

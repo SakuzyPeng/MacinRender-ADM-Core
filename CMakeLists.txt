@@ -340,7 +340,10 @@ if(MR_ADM_CORE_BUILD_TESTS)
         DEPENDS mr_adm_rust
         USES_TERMINAL VERBATIM)
     add_test(NAME mr_adm_encoder_tests
-        COMMAND ${_mr_encoder_test_command} -- flac::tests:: opus_mka::tests:: iamf::tests:: mp4_metadata::tests:: mp4_packager::tests:: flac_outputs_are_encoded_and_tagged)
+        COMMAND ${_mr_encoder_test_command} --
+            apac:: engine_service::tests::apple:: engine::tests::each_caller_probes_only_its_facts
+            flac::tests:: opus_mka::tests:: iamf::tests:: mp4_metadata::tests:: mp4_packager::tests::
+            flac_outputs_are_encoded_and_tagged)
     set_tests_properties(mr_adm_encoder_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)
@@ -348,13 +351,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_warnings(mr_adm_meter_tests)
     mr_adm_core_apply_static_analysis(mr_adm_meter_tests)
     add_test(NAME mr_adm_meter_tests COMMAND mr_adm_meter_tests)
-
-    # Island dispatch rejects null requests and leaves unrelated islands to their owners.
-    add_executable(mr_adm_audio_island_tests tests/unit/audio_island_test.cpp)
-    target_link_libraries(mr_adm_audio_island_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_audio_island_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_audio_island_tests)
-    add_test(NAME mr_adm_audio_island_tests COMMAND mr_adm_audio_island_tests)
 
     add_executable(mr_adm_apac_smoke_tests tests/unit/apac_smoke_test.cpp)
     target_link_libraries(mr_adm_apac_smoke_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)

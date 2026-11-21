@@ -9,7 +9,6 @@
 #include "adm/audio_io.h"
 #include "adm/errors.h"
 
-#include "audio_io_internal.h"
 #include "wav_backend.h"
 
 namespace mradm::audio {

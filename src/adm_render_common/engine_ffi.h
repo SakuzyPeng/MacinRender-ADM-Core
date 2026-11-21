@@ -1,5 +1,5 @@
 // Private boundary of the islands Rust calls (mradm-engine): the backend capability records the
-// platform facts return, the offline render's island events and replies, the Apple backend's table
+// platform facts return, render callbacks and replies, the Apple backend's table
 // and the output devices. Backend records are process-lifetime Rust data and are never freed. The
 // entries only tests and tools call are in tests/support/ffi/engine_test_ffi.h.
 #pragma once
@@ -57,24 +57,14 @@ typedef struct MradmEngineSpatialLayout {
     uint16_t reserved;
 } MradmEngineSpatialLayout;
 
-// The islands' platform facts (src/adm_engine/platform_island.h): APAC availability (IAMF and the MP4
-// packager are Rust's), the Apple backend's process-lifetime record (NULL without it) and its LFE
-// self-test (-1 without it), and the system-spatial layouts (process-lifetime records). Any entry
-// may be NULL. The engine probes only what each caller needs, as the C++ catalog did.
+// Apple backend capabilities, the LFE self-test and system-spatial layouts. Entries may be NULL.
 typedef struct MradmPlatformIslands {
-    uint32_t (*apac)(void);
     const MradmEngineBackend* (*apple)(void);
     int32_t (*apple_lfe_routing_ok)(void);
     void (*system_spatial)(const MradmEngineSpatialLayout** layouts, size_t* len);
 } MradmPlatformIslands;
 
 // ── The offline render service ────────────────────────────────────────────────────────────────
-
-// A path's UTF-8 text and its spelling in messages.
-typedef struct MradmEnginePath {
-    MradmAdmText utf8;
-    MradmAdmText display;
-} MradmEnginePath;
 
 typedef struct MradmEngineProgress {
     uint32_t stage;
@@ -86,42 +76,7 @@ typedef struct MradmEngineProgress {
     MradmAdmText message;
 } MradmEngineProgress;
 
-// kind 0 nothing, 1 progress, 2 log (level, module, message), 3 island, 4 done. Islands: 1 MP4
-// packager probe, 2 Apple prepare, 3 Apple render, 4 FLAC, 5 Opus MKA, 6 APAC, 7 IAMF, 8 MP4
-// packaging, 9 metadata; src / dst the files (the Apple plan's output in dst).
-typedef struct MradmEngineRenderEvent {
-    uint32_t kind;
-    MradmEngineProgress progress;
-    uint32_t level;
-    MradmAdmText module;
-    MradmAdmText message;
-    uint32_t island;
-    MradmEnginePath src;
-    MradmEnginePath dst;
-    MradmAdmText layout;
-    uint32_t bitrate;
-    uint32_t drc_music;
-    uint32_t caf;
-    uint32_t has_lufs;
-    uint32_t has_peak;
-    double lufs;
-    double peak_dbtp;
-    const MradmAdmText* layers;
-    size_t layers_len;
-    uint32_t has_window;
-    uint64_t window_start;
-    uint64_t window_count;
-    uint32_t has_meter_window;
-    uint64_t meter_start;
-    uint64_t meter_count;
-    uint32_t has_matrix;
-    MradmDirectMatrixView matrix;
-    MradmAdmText encoder;
-    MradmAdmText date_utc;
-    MradmAdmText renderer;
-} MradmEngineRenderEvent;
-
-// code 0 for success; the Apple render's metrics; packager 0 none, 1 mp4box, 2 ffmpeg.
+// Error or metrics returned by the Apple backend.
 typedef struct MradmEngineIslandReply {
     int32_t code;
     MradmAdmText message;
@@ -130,8 +85,6 @@ typedef struct MradmEngineIslandReply {
     uint32_t has_peak;
     double lufs;
     double peak_dbtp;
-    uint32_t packager;
-    int32_t ffmpeg_major;
 } MradmEngineIslandReply;
 // The caller's side of an island run inside mradm_engine_render_next: cancelled polls its stop token
 // (possibly from another thread), progress receives an event mapped into the render's range, log a

@@ -948,7 +948,9 @@ C3 已完成（同日）：IAMF bridge 由 `mradm-ffi` `iamf` 经手写 `extern`
 - `iamf_io.cpp`、它的 bridge 头副本、平台表的 `iamf` 与 `iamf_smoke_test` 删除，C++ 音频岛只剩 APAC；
 - 与 C++ 同样链接一个 ABI 相同的桩 bridge，22 个用例的结果与传给 bridge 的选项全部相同，两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。真实 bridge 待维护者复核。
 
-生产 C/C++ 6,311 → 6,100 行。D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+生产 C/C++ 6,311 → 6,100 行。
+
+D 已完成。Rust 接管 APAC worker、心跳、取消与超时清理，Apple 岛保留 AudioToolbox 的打开、写帧和关闭操作，通用 C++ 音频岛入口已删除。生产 C/C++ 降至 5,248 行。macOS arm64 的 IAMF 开、关两种 Release 配置与 Windows x64 各完成 134 条 CLI 对照，均有逐字节零差异记录。额外复测中，参考实现和候选均能生成相同的两种 APAC 载荷。采样条件和差异见 [7.2 记录](RUST_ISLAND_ENCODERS.md#release-验收)。
 
 ## 每个迁移切片的验证
 

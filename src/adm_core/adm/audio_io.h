@@ -4,13 +4,11 @@
 #include <ios>
 #include <memory>
 #include <optional>
-#include <stop_token>
 #include <string>
 #include <variant>
 #include <vector>
 
 #include "adm/errors.h"
-#include "adm/progress.h"
 
 namespace mradm::audio {
 
@@ -132,42 +130,5 @@ class WriterHandle {
     explicit WriterHandle(FloatCafWriter w) : impl_(std::move(w)) {}
     std::variant<FloatWavWriter, FloatCafWriter> impl_;
 };
-
-enum class ApacContainer {
-    mpeg4,
-    caf,
-};
-
-// Encode a fully post-processed float32 WAV (src_path) to APAC in the requested
-// container (.m4a / .mp4 MPEG-4 by default, or .caf). Requires macOS
-// (AudioToolbox); returns
-// ErrorCode::unsupported on other platforms.
-// layout_id controls channel mapping:
-//   "binaural" → request Binaural 2ch input layout (no swap; afinfo reports APAC output as Stereo)
-//   "0+2+0"    → MPEG_2_0 stereo (no swap)
-//   "wav71"    → AudioUnit_7_1  (ch4↔ch6, ch5↔ch7 swap applied before encoding)
-//   "hoa3"     → HOA_ACN_SN3D 16ch (ACN 0..15, no swap)
-//   "5.1.4"    → Atmos_5_1_4   (no swap)
-//   "7.1.4"    → Atmos_7_1_4   (no swap)
-//   "9.1.6"    → Atmos_9_1_6   (no swap)
-//   "22.2"     → CICP_13       (no swap)
-// bitrate_kbps: total target/hint in kbps; 0 = layout default for spatial/HOA
-// layouts, otherwise encoder default. The APAC encoder may produce a measured
-// average bitrate that differs substantially.
-// drc_music: true = Music DRC (cdrc=1), false = None (cdrc=0).
-// progress: optional frame-level encode progress, emitted as RenderOperation::encode_apac by default.
-// Whether APAC encoding is available in this build (macOS / AudioToolbox only).
-// On non-Apple platforms convert_to_apac returns ErrorCode::unsupported.
-bool apac_encoding_available();
-
-Result<void> convert_to_apac(const std::string& src_path,
-                             const std::string& apac_path,
-                             const std::string& layout_id = {},
-                             uint32_t bitrate_kbps = 0,
-                             bool drc_music = true,
-                             ApacContainer container = ApacContainer::mpeg4,
-                             const std::stop_token& cancel_token = {},
-                             ProgressSink* progress = nullptr,
-                             RenderOperation operation = RenderOperation::encode_apac);
 
 } // namespace mradm::audio

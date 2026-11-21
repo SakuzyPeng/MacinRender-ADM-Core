@@ -1,0 +1,464 @@
+{
+  "reference_commit": "9c238e102fdcf1592ab7839d408ef3834b2ab08d",
+  "cli": {
+    "macos_iamf_on": {
+      "commands": 134,
+      "differences": [],
+      "informational": []
+    },
+    "macos_iamf_off": {
+      "commands": 134,
+      "differences": [],
+      "informational": []
+    },
+    "windows_iamf_off": {
+      "commands": 134,
+      "differences": [],
+      "informational": []
+    },
+    "macos_iamf_on_fixed_install_path": {
+      "commands": 134,
+      "differences": [
+        {
+          "candidate_bytes": 154477,
+          "command": "render-apac",
+          "first_difference": 830,
+          "item": "files/outputs/render-apac/out.m4a",
+          "reference_bytes": 154478
+        }
+      ],
+      "informational": []
+    }
+  },
+  "apac_m4a": {
+    "fixture": "objects-point",
+    "layout": "4+7+0",
+    "frames": 48000,
+    "channels": 12,
+    "staging_float32_pcm_bytes": 2304000,
+    "staging_float32_pcm_sha256": "ddb053c3a0b957b5a42c3c3a82c59fc24c5147b6908d72e03dc7bab415803421",
+    "heartbeat_stdout_sha256": "5eef35d73f4169fe24aa28b388e50bb09e9a9883eb4b7dcabe392a48cc71c8ca",
+    "same_executable_location_and_files": [
+      {
+        "mdat_sha256": "1e0686e9c43de0159d20ce5eee22398ac36d9cb9de90bc2b2ee7714d3ce604d3",
+        "reference_observations": 11,
+        "candidate_observations": 9
+      },
+      {
+        "mdat_sha256": "a8986bf5696c6fca47dddcdf12f24e23a432bca297802f71e388a7769aefefa8",
+        "reference_observations": 1,
+        "candidate_observations": 3
+      }
+    ]
+  },
+  "offline_performance": {
+    "platform": {
+      "macos": "27.2.1",
+      "arch": "arm64",
+      "cpu": "Apple M4 Pro",
+      "power": "AC"
+    },
+    "configuration": {
+      "profile": "Release",
+      "sofa": true,
+      "iamf": true
+    },
+    "binary_sha256": {
+      "reference": "1c181077e7c3983adedc6559383987598c15e139b2eedea562beed77eb74404b",
+      "candidate": "2628c69183a0d176fdd9a3f4789fd0500df4e58a66fe05a6ec22a689ae5cefdd"
+    },
+    "fixture": {
+      "name": "objects-long",
+      "sha256": "f44839fdb7661f67b1d31d99ace15c48666d2a7116924bbf33cb32c406bd86cd"
+    },
+    "output_layout": "7.1.4",
+    "output_container": "MPEG-4",
+    "arguments": [
+      "render",
+      "-i",
+      "objects-long.wav",
+      "-o",
+      "out.m4a",
+      "--output-layout",
+      "7.1.4"
+    ],
+    "repeat_staging_wav_sha256": "9299e22eb74f6299fc1b11e335b15e65e52917a7803fbe8df9b30f9c4af82fe3",
+    "method": "One warmup per executable and scenario. Alternate the first executable in each measured pair. Sample wall time around spawn/wait and ru_maxrss in bytes from macOS wait4. In before_encoder the replacement helper exits with a diagnostic immediately.",
+    "load_average_after_first_series": [
+      4.56689453125,
+      4.220703125,
+      3.84130859375
+    ],
+    "load_average_after_repeat": [
+      3.6240234375,
+      3.8017578125,
+      3.71826171875
+    ],
+    "columns": [
+      "reference_ms",
+      "candidate_ms",
+      "reference_peak_rss_bytes",
+      "candidate_peak_rss_bytes"
+    ],
+    "series": {
+      "full_first": {
+        "rounds": [
+          [
+            876.656,
+            876.767,
+            79003648,
+            79118336
+          ],
+          [
+            877.991,
+            891.075,
+            79085568,
+            84819968
+          ],
+          [
+            865.941,
+            890.607,
+            79052800,
+            105005056
+          ],
+          [
+            887.335,
+            901.944,
+            84934656,
+            105447424
+          ],
+          [
+            871.75,
+            870.699,
+            79085568,
+            104382464
+          ],
+          [
+            881.919,
+            890.612,
+            79167488,
+            79036416
+          ]
+        ],
+        "medians": {
+          "reference": {
+            "elapsed_ms": 877.3235,
+            "peak_rss_bytes": 79085568.0
+          },
+          "candidate": {
+            "elapsed_ms": 890.6095,
+            "peak_rss_bytes": 94601216.0
+          }
+        }
+      },
+      "full_fixed_executable_path": {
+        "rounds": [
+          [
+            876.736,
+            865.383,
+            79020032,
+            105512960
+          ],
+          [
+            899.061,
+            870.313,
+            85098496,
+            84967424
+          ],
+          [
+            903.606,
+            878.248,
+            105660416,
+            106283008
+          ],
+          [
+            942.736,
+            872.265,
+            105627648,
+            83509248
+          ],
+          [
+            917.082,
+            885.678,
+            80986112,
+            79134720
+          ],
+          [
+            879.038,
+            898.168,
+            85016576,
+            84508672
+          ],
+          [
+            894.087,
+            891.152,
+            105267200,
+            79101952
+          ],
+          [
+            889.627,
+            871.281,
+            105463808,
+            105414656
+          ],
+          [
+            897.928,
+            978.32,
+            105545728,
+            87654400
+          ],
+          [
+            892.541,
+            966.682,
+            79265792,
+            85131264
+          ],
+          [
+            874.16,
+            875.268,
+            79020032,
+            106233856
+          ],
+          [
+            862.426,
+            891.38,
+            79052800,
+            84852736
+          ]
+        ],
+        "medians": {
+          "reference": {
+            "elapsed_ms": 893.3140000000001,
+            "peak_rss_bytes": 85057536.0
+          },
+          "candidate": {
+            "elapsed_ms": 881.963,
+            "peak_rss_bytes": 85049344.0
+          }
+        }
+      },
+      "worker": {
+        "rounds": [
+          [
+            561.801,
+            577.496,
+            79069184,
+            105431040
+          ],
+          [
+            559.383,
+            559.989,
+            79183872,
+            79036416
+          ],
+          [
+            583.357,
+            565.934,
+            88326144,
+            79298560
+          ],
+          [
+            585.446,
+            594.957,
+            94879744,
+            105447424
+          ],
+          [
+            591.295,
+            578.493,
+            103448576,
+            101318656
+          ],
+          [
+            572.069,
+            564.752,
+            79069184,
+            84819968
+          ]
+        ],
+        "medians": {
+          "reference": {
+            "elapsed_ms": 577.713,
+            "peak_rss_bytes": 83755008.0
+          },
+          "candidate": {
+            "elapsed_ms": 571.7149999999999,
+            "peak_rss_bytes": 93069312.0
+          }
+        }
+      },
+      "before_encoder": {
+        "rounds": [
+          [
+            373.165,
+            366.284,
+            32636928,
+            32030720
+          ],
+          [
+            364.383,
+            358.931,
+            32079872,
+            32030720
+          ],
+          [
+            363.918,
+            352.081,
+            32063488,
+            31899648
+          ],
+          [
+            364.515,
+            362.208,
+            32161792,
+            32014336
+          ],
+          [
+            364.345,
+            363.437,
+            32210944,
+            32096256
+          ],
+          [
+            364.384,
+            357.714,
+            32047104,
+            31916032
+          ]
+        ],
+        "medians": {
+          "reference": {
+            "elapsed_ms": 364.3835,
+            "peak_rss_bytes": 32120832.0
+          },
+          "candidate": {
+            "elapsed_ms": 360.5695,
+            "peak_rss_bytes": 32022528.0
+          }
+        }
+      },
+      "worker_repeat": {
+        "rounds": [
+          [
+            570.186,
+            550.191,
+            79151104,
+            85082112
+          ],
+          [
+            569.335,
+            549.966,
+            79216640,
+            79101952
+          ],
+          [
+            564.732,
+            564.044,
+            79216640,
+            79052800
+          ],
+          [
+            554.513,
+            559.625,
+            79134720,
+            105447424
+          ],
+          [
+            572.807,
+            552.625,
+            85147648,
+            107413504
+          ],
+          [
+            586.877,
+            559.865,
+            105152512,
+            84901888
+          ],
+          [
+            556.617,
+            554.052,
+            79069184,
+            79282176
+          ],
+          [
+            552.532,
+            546.411,
+            79052800,
+            79134720
+          ],
+          [
+            555.337,
+            552.102,
+            79118336,
+            79069184
+          ],
+          [
+            561.356,
+            555.477,
+            79118336,
+            79347712
+          ],
+          [
+            558.009,
+            549.008,
+            79020032,
+            83476480
+          ],
+          [
+            556.487,
+            557.421,
+            79085568,
+            79151104
+          ],
+          [
+            563.279,
+            559.619,
+            79101952,
+            79396864
+          ],
+          [
+            560.354,
+            553.085,
+            106332160,
+            79151104
+          ],
+          [
+            565.066,
+            551.491,
+            79151104,
+            79298560
+          ],
+          [
+            569.69,
+            550.532,
+            79200256,
+            104480768
+          ],
+          [
+            565.19,
+            577.479,
+            79265792,
+            79265792
+          ],
+          [
+            560.474,
+            548.944,
+            79020032,
+            79003648
+          ]
+        ],
+        "medians": {
+          "reference": {
+            "elapsed_ms": 562.3175,
+            "peak_rss_bytes": 79142912.0
+          },
+          "candidate": {
+            "elapsed_ms": 552.855,
+            "peak_rss_bytes": 79290368.0
+          }
+        }
+      }
+    }
+  }
+}

@@ -7,10 +7,10 @@
 
 #include "adm/render.h"
 
-#include "../adm_audio/island_driver.h"
 #include "../adm_core/direct_matrix_records.h"
 #include "../adm_render_common/scene_handle.h"
 #include "apple_backend.h"
+#include "island_driver.h"
 
 // The Apple backend behind the engine: RenderPlans from the engine's settings over the existing
 // AUSpatialMixer backend, whose stream is the monitor's island table. Exceptions stay on this
@@ -52,7 +52,6 @@ template <class F> int32_t replied(MradmEngineIslandReply* reply, const F& f) no
         return 1;
     }
     *reply = {};
-    reply->ffmpeg_major = -1;
     try {
         f(*reply);
     } catch (...) {

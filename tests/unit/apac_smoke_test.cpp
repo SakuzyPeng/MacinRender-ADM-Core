@@ -14,6 +14,7 @@
 
 #include "adm/audio_io.h"
 #include "adm/errors.h"
+#include "adm/progress.h"
 
 #ifdef __APPLE__
 #include <AudioToolbox/AudioToolbox.h>
@@ -55,25 +56,38 @@ struct ProgressSnapshot {
     uint64_t total_frames{};
 };
 
-class CapturingProgressSink final : public mradm::ProgressSink {
-  public:
-    void on_progress(const mradm::ProgressEvent& event) override {
-        events_.push_back({event.stage,
-                           event.operation,
-                           event.fraction,
-                           event.stage_fraction,
-                           event.current_frame,
-                           event.total_frames});
+using ProgressEvents = std::vector<ProgressSnapshot>;
+
+void capture_progress(void* user, const MradmEngineProgress* event) {
+    static_cast<ProgressEvents*>(user)->push_back({static_cast<mradm::RenderStage>(event->stage),
+                                                   static_cast<mradm::RenderOperation>(event->operation),
+                                                   event->fraction,
+                                                   event->stage_fraction,
+                                                   event->current,
+                                                   event->total});
+}
+
+MradmAdmText utf8(std::string_view s) {
+    return {reinterpret_cast<const uint8_t*>(s.data()), s.size()};
+}
+
+mradm::Result<void> encode(const std::string& src,
+                           const std::string& dst,
+                           const std::string& layout,
+                           bool caf = false,
+                           ProgressEvents* events = nullptr) {
+    std::array<uint8_t, 512> message{};
+    const MradmIslandContext driver{events, nullptr, events == nullptr ? nullptr : capture_progress, nullptr};
+    const auto code = mradm::rust().tests->apac_encode(
+        utf8(src), utf8(dst), utf8(layout), caf ? 1U : 0U, &driver, message.data(), message.size());
+    if (code != 0) {
+        return mradm::make_error(
+            static_cast<mradm::ErrorCode>(code), reinterpret_cast<const char*>(message.data()), {});
     }
+    return {};
+}
 
-    [[nodiscard]] const std::vector<ProgressSnapshot>& events() const noexcept { return events_; }
-
-  private:
-    std::vector<ProgressSnapshot> events_;
-};
-
-bool verify_apac_progress(const CapturingProgressSink& progress, uint64_t expected_frames) {
-    const auto& events = progress.events();
+bool verify_apac_progress(const ProgressEvents& events, uint64_t expected_frames) {
     bool ok = check(events.size() > 2U, "APAC progress should include intermediate frame events");
     bool stage_ok = true;
     bool operation_ok = true;
@@ -248,10 +262,9 @@ bool verify_apac_wav71_swap() {
         return false;
     }
 
-    CapturingProgressSink progress;
-    auto res =
-        mradm::audio::convert_to_apac(wav, m4a, "wav71", 0U, true, mradm::audio::ApacContainer::mpeg4, {}, &progress);
-    if (!check(res.has_value(), "convert_to_apac(wav71) failed")) {
+    ProgressEvents progress;
+    auto res = encode(wav, m4a, "wav71", false, &progress);
+    if (!check(res.has_value(), "APAC encode failed for wav71")) {
         return false;
     }
     if (!verify_apac_progress(progress, 48000U)) {
@@ -294,8 +307,8 @@ bool verify_apac_atmos514() {
     if (!write_test_wav(wav, 10, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "5.1.4");
-    if (!check(res.has_value(), "convert_to_apac(5.1.4) failed")) {
+    auto res = encode(wav, m4a, "5.1.4");
+    if (!check(res.has_value(), "APAC encode failed for 5.1.4")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "atmos514 .m4a not created")) {
@@ -312,8 +325,8 @@ bool verify_apac_atmos714() {
     if (!write_test_wav(wav, 12, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "7.1.4");
-    if (!check(res.has_value(), "convert_to_apac(7.1.4) failed")) {
+    auto res = encode(wav, m4a, "7.1.4");
+    if (!check(res.has_value(), "APAC encode failed for 7.1.4")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "atmos714 .m4a not created")) {
@@ -330,8 +343,8 @@ bool verify_apac_atmos916() {
     if (!write_test_wav(wav, 16, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "9.1.6");
-    if (!check(res.has_value(), "convert_to_apac(9.1.6) failed")) {
+    auto res = encode(wav, m4a, "9.1.6");
+    if (!check(res.has_value(), "APAC encode failed for 9.1.6")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "atmos916 .m4a not created")) {
@@ -348,8 +361,8 @@ bool verify_apac_222() {
     if (!write_test_wav(wav, 24, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "22.2");
-    if (!check(res.has_value(), "convert_to_apac(22.2) failed")) {
+    auto res = encode(wav, m4a, "22.2");
+    if (!check(res.has_value(), "APAC encode failed for 22.2")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "22.2 .m4a not created")) {
@@ -367,8 +380,8 @@ bool verify_apac_hoa3() {
     if (!write_test_wav(wav, 16U, 48000U, 48000U)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "hoa3");
-    if (!check(res.has_value(), "convert_to_apac(hoa3) failed")) {
+    auto res = encode(wav, m4a, "hoa3");
+    if (!check(res.has_value(), "APAC encode failed for hoa3")) {
         return false;
     }
     if (!check(std::filesystem::exists(m4a), "HOA3 .m4a not created")) {
@@ -393,8 +406,8 @@ bool verify_apac_binaural() {
     if (!write_test_wav(wav, 2, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "binaural");
-    if (!check(res.has_value(), "convert_to_apac(binaural) failed")) {
+    auto res = encode(wav, m4a, "binaural");
+    if (!check(res.has_value(), "APAC encode failed for binaural")) {
         std::cerr << res.error().message << "\n";
         return false;
     }
@@ -404,9 +417,6 @@ bool verify_apac_binaural() {
     if (!check(std::filesystem::file_size(m4a) > 10000U, "binaural .m4a suspiciously small")) {
         return false;
     }
-    const auto utf8 = [](std::string_view s) {
-        return MradmAdmText{reinterpret_cast<const uint8_t*>(s.data()), s.size()};
-    };
     std::array<uint8_t, 512> message{};
     const auto meta_code = mradm::rust().tests->mp4_write_metadata(utf8(m4a),
                                                                    utf8("MacinRender Test"),
@@ -444,8 +454,8 @@ bool verify_apac_caf_container() {
     if (!write_test_wav(wav, 10, 48000, 48000)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, caf, "5.1.4", 0U, true, mradm::audio::ApacContainer::caf);
-    if (!check(res.has_value(), "convert_to_apac(5.1.4 CAF) failed")) {
+    auto res = encode(wav, caf, "5.1.4", true);
+    if (!check(res.has_value(), "APAC encode failed for 5.1.4 CAF")) {
         if (!res.has_value()) {
             std::cerr << res.error().message << "\n";
         }
@@ -471,11 +481,8 @@ bool verify_apac_caf_container() {
 #endif
 }
 
-// Drives the parent-side stall watchdog: the encoder runs in a forked mradm
-// subprocess, and MRADM_APAC_TEST_FORCE_STALL makes that child spin forever in
-// the flush phase (emulating the AudioToolbox spin-hang observed at pathological
-// bitrates). With the flush budget shrunk via env, the watchdog must SIGKILL the
-// child and surface a clear error in well under the real 15 s budget — never hang.
+// MRADM_APAC_TEST_FORCE_STALL stops the worker just before the AudioToolbox flush.
+// Under a short flush budget the parent must reclaim the stalled process and report the bitrate error.
 // Requires the subprocess path (helper set via MRADM_APAC_HELPER by the caller).
 bool verify_apac_stall_watchdog() {
     const std::string wav = mr_test::temp_prefix() + "mr_apac_stall_src.wav";
@@ -488,7 +495,7 @@ bool verify_apac_stall_watchdog() {
     mr_test::set_env("MRADM_APAC_TEST_FORCE_STALL", "1");
     mr_test::set_env("MRADM_APAC_FLUSH_BUDGET_MS", "1500");
     const auto t0 = std::chrono::steady_clock::now();
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "5.1.4");
+    auto res = encode(wav, m4a, "5.1.4");
     const auto elapsed = std::chrono::steady_clock::now() - t0;
     mr_test::unset_env("MRADM_APAC_TEST_FORCE_STALL");
     mr_test::unset_env("MRADM_APAC_FLUSH_BUDGET_MS");
@@ -506,8 +513,7 @@ bool verify_apac_stall_watchdog() {
 }
 
 bool verify_apac_wrong_layout_rejected() {
-    auto res = mradm::audio::convert_to_apac(
-        mr_test::temp_prefix() + "nope.wav", mr_test::temp_prefix() + "nope.m4a", "bogus-layout");
+    auto res = encode(mr_test::temp_prefix() + "nope.wav", mr_test::temp_prefix() + "nope.m4a", "bogus-layout");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::unsupported,
                  "unsupported layout should be rejected");
 }
@@ -520,7 +526,7 @@ bool verify_apac_wrong_samplerate_rejected() {
     if (!write_test_wav(wav, 2, 44100, 44100)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "0+2+0");
+    auto res = encode(wav, m4a, "0+2+0");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::invalid_argument,
                  "44100 Hz input should be rejected for APAC");
 }
@@ -533,7 +539,7 @@ bool verify_apac_wrong_channelcount_rejected() {
     if (!write_test_wav(wav, 2, 48000, 480)) {
         return false;
     }
-    auto res = mradm::audio::convert_to_apac(wav, m4a, "wav71");
+    auto res = encode(wav, m4a, "wav71");
     return check(!res.has_value() && res.error().code == mradm::ErrorCode::invalid_argument,
                  "2ch WAV with wav71 layout (requires 8ch) should be rejected");
 }
@@ -546,8 +552,8 @@ int main() {
     std::cout << "APAC smoke tests skipped (not macOS)\n";
     return EXIT_SUCCESS;
 #elif !defined(MRADM_EXE_PATH)
-    // APAC now always encodes via a forked mradm subprocess (stall watchdog).
-    // Without the CLI there is no helper to fork, so the encoder is intentionally
+    // APAC encoding requires the bundled mradm worker.
+    // Without the CLI there is no helper to launch, so the encoder is intentionally
     // unavailable and there is nothing to exercise here.
     std::cout << "APAC smoke tests skipped (requires the bundled mradm helper / CLI build)\n";
     return EXIT_SUCCESS;

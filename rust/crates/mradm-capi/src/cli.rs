@@ -14,7 +14,7 @@ use mradm_engine::render::{PathText, Request as EngineRequest, RoomOptions, Sofa
 use mradm_ffi::api::islands::Text;
 use mradm_ffi::api::render::EngineProgress;
 use mradm_ffi::api::room::RoomProfileHandle;
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::c_int;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -76,31 +76,6 @@ impl Drop for Sigint {
     fn drop(&mut self) {
         unsafe { signal(SIGINT, self.previous) };
     }
-}
-
-#[cfg(not(test))]
-unsafe extern "C" {
-    /// `run_apac_encode_child` with its protocol lines on stdout; the exit code.
-    fn mradm_audio_apac_child(
-        src: *const c_char,
-        dst: *const c_char,
-        layout: *const c_char,
-        bitrate: u32,
-        drc_music: u32,
-        caf: u32,
-    ) -> i32;
-}
-
-#[cfg(test)]
-unsafe fn mradm_audio_apac_child(
-    _: *const c_char,
-    _: *const c_char,
-    _: *const c_char,
-    _: u32,
-    _: u32,
-    _: u32,
-) -> i32 {
-    1
 }
 
 /// The command line's render events.
@@ -368,24 +343,7 @@ impl Service for Engine {
         drc_music: bool,
         caf: bool,
     ) -> i32 {
-        // Command-line arguments hold no NUL.
-        let (Ok(input), Ok(output), Ok(layout)) = (
-            CString::new(input),
-            CString::new(output),
-            CString::new(layout),
-        ) else {
-            return 1;
-        };
-        unsafe {
-            mradm_audio_apac_child(
-                input.as_ptr(),
-                output.as_ptr(),
-                layout.as_ptr(),
-                bitrate,
-                u32::from(drc_music),
-                u32::from(caf),
-            )
-        }
+        mradm_ffi::api::render::run_apac_child(input, output, layout, bitrate, drc_music, caf)
     }
 
     fn interrupt(&self) -> Option<Sigint> {

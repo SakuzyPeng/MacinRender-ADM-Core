@@ -1,6 +1,5 @@
-// The islands' platform facts as the engine reads them: APAC availability (the audio island), the Apple backend's
-// capability records and LFE self-test (the Apple island) and the system-spatial sink's layouts (the Apple or Windows
-// island).
+// Platform facts used by the Rust engine: Apple backend capabilities and the LFE self-test,
+// and system-spatial layouts from the Apple or Windows sink.
 #pragma once
 #include "../adm_render_common/engine_ffi.h"
 #ifdef __cplusplus

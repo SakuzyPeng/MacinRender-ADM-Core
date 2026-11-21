@@ -1,15 +1,12 @@
-//! Private boundary of the offline render service (`mradm-engine`
-//! `render`): the C++ `RenderService` steps a handle; the islands a registered runner accepts run
-//! inside the step, the others are returned and answered. Texts in events and results live until
-//! the next call on the handle.
+//! Offline rendering over the Rust encoders and the Apple backend.
 use crate::adm::Text;
 use crate::engine_render::FfiHost;
 use crate::render::RenderPrepared;
 use crate::render::apple_island::{Apple, AppleIslands, Preparation, Settings};
-use crate::scene::{DirectMatrix, DirectMatrixView, SceneHandle};
+use crate::scene::SceneHandle;
 use mradm_engine::offline::{Metrics, Progress};
-use mradm_engine::render::{self, Event, Island, Outcome, PathText, Render, Reply, Request, Reuse};
-use mradm_engine::request::{self, Packager};
+use mradm_engine::render::{self, Event, Island, Outcome, Render, Reply, Request, Reuse};
+use mradm_engine::request;
 use mradm_scene::RenderScene;
 use std::{
     cell::{Cell, RefCell},
@@ -17,14 +14,6 @@ use std::{
     ptr, slice,
     sync::Arc,
 };
-
-/// A path's UTF-8 text and the caller's spelling of it in messages.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EnginePath {
-    pub utf8: Text,
-    pub display: Text,
-}
 
 /// A progress event (`ProgressEvent`).
 #[repr(C)]
@@ -39,45 +28,7 @@ pub struct EngineProgress {
     pub message: Text,
 }
 
-/// One event: `kind` 0 nothing, 1 progress, 2 log (`level`, `module`, `message`), 3 island, 4
-/// done (`mradm_engine_render_result`). Islands: 1 MP4 packager probe, 2 Apple prepare, 3 Apple
-/// render, 4 FLAC, 5 Opus MKA, 6 APAC, 7 IAMF, 8 MP4 packaging, 9 metadata; `src` / `dst` the
-/// files, the Apple plan's output in `dst`.
-#[repr(C)]
-pub struct EngineRenderEvent {
-    pub kind: u32,
-    pub progress: EngineProgress,
-    pub level: u32,
-    pub module: Text,
-    pub message: Text,
-    pub island: u32,
-    pub src: EnginePath,
-    pub dst: EnginePath,
-    pub layout: Text,
-    pub bitrate: u32,
-    pub drc_music: u32,
-    pub caf: u32,
-    pub has_lufs: u32,
-    pub has_peak: u32,
-    pub lufs: f64,
-    pub peak_dbtp: f64,
-    pub layers: *const Text,
-    pub layers_len: usize,
-    pub has_window: u32,
-    pub window_start: u64,
-    pub window_count: u64,
-    pub has_meter_window: u32,
-    pub meter_start: u64,
-    pub meter_count: u64,
-    pub has_matrix: u32,
-    pub matrix: DirectMatrixView,
-    pub encoder: Text,
-    pub date_utc: Text,
-    pub renderer: Text,
-}
-
-/// An island's answer: `code` 0 for success; the Apple render's metrics; the probed packager (0
-/// none, 1 mp4box, 2 ffmpeg) and ffmpeg major version (-1 unknown).
+/// The Apple backend's reply, with an error or the rendered metrics.
 #[repr(C)]
 pub struct EngineIslandReply {
     pub code: i32,
@@ -87,8 +38,6 @@ pub struct EngineIslandReply {
     pub has_peak: u32,
     pub lufs: f64,
     pub peak_dbtp: f64,
-    pub packager: u32,
-    pub ffmpeg_major: i32,
 }
 
 /// A render in progress over the islands of its runner.
@@ -220,7 +169,7 @@ unsafe fn string(t: &Text) -> Option<String> {
     unsafe { bytes(t) }.map(|b| String::from_utf8_lossy(b).into_owned())
 }
 
-fn progress_record(p: &Progress) -> EngineProgress {
+pub(crate) fn progress_record(p: &Progress) -> EngineProgress {
     EngineProgress {
         stage: p.stage,
         operation: p.operation,
@@ -229,177 +178,6 @@ fn progress_record(p: &Progress) -> EngineProgress {
         current: p.current,
         total: p.total,
         message: Text::new(p.message),
-    }
-}
-
-fn empty_path() -> EnginePath {
-    EnginePath {
-        utf8: Text::new(""),
-        display: Text::new(""),
-    }
-}
-
-fn path_record(p: &PathText) -> EnginePath {
-    EnginePath {
-        utf8: Text::new(&p.utf8),
-        display: Text::new(&p.display),
-    }
-}
-
-fn empty_event() -> EngineRenderEvent {
-    EngineRenderEvent {
-        kind: 0,
-        progress: progress_record(&Progress {
-            stage: 0,
-            operation: 0,
-            fraction: 0.,
-            stage_fraction: 0.,
-            current: 0,
-            total: 0,
-            message: "",
-        }),
-        level: 0,
-        module: Text::new(""),
-        message: Text::new(""),
-        island: 0,
-        src: empty_path(),
-        dst: empty_path(),
-        layout: Text::new(""),
-        bitrate: 0,
-        drc_music: 0,
-        caf: 0,
-        has_lufs: 0,
-        has_peak: 0,
-        lufs: 0.,
-        peak_dbtp: 0.,
-        layers: ptr::null(),
-        layers_len: 0,
-        has_window: 0,
-        window_start: 0,
-        window_count: 0,
-        has_meter_window: 0,
-        meter_start: 0,
-        meter_count: 0,
-        has_matrix: 0,
-        matrix: DirectMatrix::empty_view(),
-        encoder: Text::new(""),
-        date_utc: Text::new(""),
-        renderer: Text::new(""),
-    }
-}
-
-/// The texts and matrix an island record borrows besides the island itself.
-#[derive(Default)]
-struct IslandStorage {
-    texts: Vec<Text>,
-    matrix: Option<Box<DirectMatrix>>,
-}
-
-/// Fills `e` with `island`, borrowing it and `storage`.
-fn island_fields(island: &Island, storage: &mut IslandStorage, e: &mut EngineRenderEvent) {
-    e.kind = 3;
-    let apple = |e: &mut EngineRenderEvent, plan: &render::ApplePlan| {
-        e.dst = path_record(&plan.output_path);
-        e.layout = Text::new(&plan.output_layout);
-        if let Some(w) = plan.window {
-            e.has_window = 1;
-            e.window_start = w.start;
-            e.window_count = w.count;
-        }
-        if let Some(w) = plan.meter_window {
-            e.has_meter_window = 1;
-            e.meter_start = w.start;
-            e.meter_count = w.count;
-        }
-    };
-    match island {
-        Island::ProbeMp4Packager => e.island = 1,
-        Island::ApplePrepare(plan) | Island::AppleRender(plan) => {
-            e.island = if matches!(island, Island::ApplePrepare(_)) {
-                2
-            } else {
-                3
-            };
-            apple(e, plan);
-            if let Some(m) = &plan.matrix {
-                let matrix = DirectMatrix::new(m.clone());
-                e.has_matrix = 1;
-                e.matrix = matrix.view();
-                storage.matrix = Some(matrix);
-            }
-        }
-        Island::EncodeFlac { src, dst } => {
-            e.island = 4;
-            e.src = path_record(src);
-            e.dst = path_record(dst);
-        }
-        Island::EncodeOpus {
-            src,
-            dst,
-            layout,
-            bitrate,
-        } => {
-            e.island = 5;
-            e.src = path_record(src);
-            e.dst = path_record(dst);
-            e.layout = Text::new(layout);
-            e.bitrate = *bitrate;
-        }
-        Island::EncodeApac {
-            src,
-            dst,
-            layout,
-            bitrate,
-            drc_music,
-            caf,
-        } => {
-            e.island = 6;
-            e.src = path_record(src);
-            e.dst = path_record(dst);
-            e.layout = Text::new(layout);
-            e.bitrate = *bitrate;
-            e.drc_music = u32::from(*drc_music);
-            e.caf = u32::from(*caf);
-        }
-        Island::EncodeIamf {
-            src,
-            dst,
-            layout,
-            bitrate,
-            lufs,
-            peak_dbtp,
-            layers,
-        } => {
-            e.island = 7;
-            e.src = path_record(src);
-            e.dst = path_record(dst);
-            e.layout = Text::new(layout);
-            e.bitrate = *bitrate;
-            e.has_lufs = u32::from(lufs.is_some());
-            e.lufs = lufs.unwrap_or(0.);
-            e.has_peak = u32::from(peak_dbtp.is_some());
-            e.peak_dbtp = peak_dbtp.unwrap_or(0.);
-            storage.texts = layers.iter().map(|l| Text::new(l)).collect();
-            e.layers = storage.texts.as_ptr();
-            e.layers_len = storage.texts.len();
-        }
-        Island::PackageMp4 { src, dst } => {
-            e.island = 8;
-            e.src = path_record(src);
-            e.dst = path_record(dst);
-        }
-        Island::WriteMetadata { path, fields } => {
-            e.island = 9;
-            e.dst = path_record(path);
-            e.encoder = Text::new(&fields.encoder);
-            e.date_utc = Text::new(&fields.date_utc);
-            e.renderer = Text::new(&fields.renderer);
-            e.layout = Text::new(&fields.output_layout);
-            e.has_lufs = u32::from(fields.lufs.is_some());
-            e.lufs = fields.lufs.unwrap_or(0.);
-            e.has_peak = u32::from(fields.peak_dbtp.is_some());
-            e.peak_dbtp = fields.peak_dbtp.unwrap_or(0.);
-        }
     }
 }
 
@@ -418,12 +196,8 @@ pub(crate) unsafe fn reply_of(r: &EngineIslandReply) -> Reply {
             lufs: (r.has_lufs != 0).then_some(r.lufs),
             peak_dbtp: (r.has_peak != 0).then_some(r.peak_dbtp),
         },
-        packager: match r.packager {
-            1 => Packager::Mp4box,
-            2 => Packager::Ffmpeg,
-            _ => Packager::None,
-        },
-        ffmpeg_major: r.ffmpeg_major,
+        ffmpeg_major: -1,
+        ..Reply::default()
     }
 }
 
@@ -440,19 +214,9 @@ pub struct IslandContext {
     pub log: Option<unsafe extern "C" fn(*mut c_void, u32, Text, Text)>,
 }
 
-/// A library's islands: `run` returns 0 when it ran the island (any failure in the reply) and
-/// nonzero to leave it to the caller as an island event; `apple` (may be null) runs the Apple
-/// backend's islands.
-#[repr(C)]
+/// Driver callbacks used by the encoders and the optional Apple backend table.
 #[derive(Clone, Copy)]
 pub struct IslandRunner {
-    pub run: Option<
-        unsafe extern "C" fn(
-            *const EngineRenderEvent,
-            *const IslandContext,
-            *mut EngineIslandReply,
-        ) -> i32,
-    >,
     pub driver: IslandContext,
     pub apple: *const AppleIslands,
 }
@@ -507,13 +271,10 @@ pub(crate) fn empty_reply() -> EngineIslandReply {
         has_peak: 0,
         lufs: 0.,
         peak_dbtp: 0.,
-        packager: 0,
-        ffmpeg_major: -1,
     }
 }
 
-/// The registered islands of one step: the audio runner and the Apple table, with the render's
-/// Apple preparation.
+/// Runs an encoder or an Apple backend operation within one render step.
 struct Runner<'a> {
     islands: &'a IslandRunner,
     apple: Option<Apple>,
@@ -584,19 +345,7 @@ impl render::Islands for Runner<'_> {
                 .apple
                 .map(|apple| self.apple(apple, island, scene, &bridge));
         }
-        if let Some(reply) = own_island(island, &bridge) {
-            return Some(reply);
-        }
-        let run = self.islands.run?;
-        let mut storage = IslandStorage::default();
-        let mut e = empty_event();
-        island_fields(island, &mut storage, &mut e);
-        let context = bridge.context();
-        let mut reply = empty_reply();
-        if unsafe { run(&e, &context, &mut reply) } != 0 {
-            return None;
-        }
-        Some(unsafe { reply_of(&reply) })
+        own_island(island, &bridge)
     }
 }
 
@@ -613,7 +362,7 @@ impl SharedUser {
     }
 }
 
-/// The islands implemented in Rust (PCM consistency 7.2): FLAC, Opus MKA and IAMF encoding, the
+/// The islands implemented in Rust (PCM consistency 7.2): FLAC, Opus MKA, APAC and IAMF encoding, the
 /// FLAC, Matroska and MP4 metadata, and the MP4 packager's probe and run.
 /// Their progress and cancellation go through the same bridge as the C++ islands'.
 fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
@@ -641,6 +390,24 @@ fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
         }
         Island::WriteMetadata { path, fields } if crate::mp4_metadata::is_mp4(&path.utf8) => {
             crate::mp4_metadata::write_metadata(&path.utf8, fields)
+        }
+        Island::EncodeApac {
+            src,
+            dst,
+            layout,
+            bitrate,
+            drc_music,
+            caf,
+        } => {
+            let request = crate::apac::Request {
+                src: &src.utf8,
+                dst: &dst.utf8,
+                layout,
+                bitrate: *bitrate,
+                drc_music: *drc_music,
+                caf: *caf,
+            };
+            crate::apac::encode(&request, &cancelled, &progress)
         }
         Island::EncodeIamf {
             src,
@@ -711,7 +478,7 @@ mod tests {
     mod apple {
         use super::*;
         use crate::render::apple_island::{ApplePrepared, AppleSettings};
-        use mradm_engine::render::{AppleOptions, ApplePlan};
+        use mradm_engine::render::{AppleOptions, ApplePlan, PathText};
         use mradm_render::offline::Window;
         use std::sync::Mutex;
 
@@ -799,8 +566,13 @@ mod tests {
 
         #[derive(Default)]
         struct Driver {
+            cancelled: bool,
             logs: Vec<String>,
             fractions: Vec<f64>,
+        }
+
+        unsafe extern "C" fn driver_cancelled(user: *mut c_void) -> u32 {
+            u32::from(unsafe { (*user.cast::<Driver>()).cancelled })
         }
 
         unsafe extern "C" fn driver_progress(user: *mut c_void, e: *const EngineProgress) {
@@ -850,10 +622,9 @@ mod tests {
         fn the_apple_runner_prepares_renders_and_keeps_the_preparation() {
             let mut driver = Driver::default();
             let runner = IslandRunner {
-                run: None,
                 driver: IslandContext {
                     user: ptr::from_mut(&mut driver).cast(),
-                    cancelled: None,
+                    cancelled: Some(driver_cancelled),
                     progress: Some(driver_progress),
                     log: Some(driver_log),
                 },
@@ -883,7 +654,7 @@ mod tests {
                 .run(&Island::AppleRender(Box::new(plan("binaural"))), None, &map)
                 .unwrap();
             assert_eq!((reply.error, reply.metrics.lufs), (None, Some(-20.)));
-            // Other islands without an audio runner are returned.
+            // The Rust runner answers APAC itself. Pre-cancel so this dispatch test never spawns a worker.
             let path = |p: &str| PathText {
                 utf8: p.into(),
                 display: p.into(),
@@ -896,7 +667,15 @@ mod tests {
                 drc_music: true,
                 caf: false,
             };
-            assert!(islands.run(&apac, None, &map).is_none());
+            driver.cancelled = true;
+            let error = islands.run(&apac, None, &map).unwrap().error.unwrap();
+            let expected = if cfg!(target_os = "macos") {
+                request::Error::new(5, "render cancelled", "path=out.m4a")
+            } else {
+                request::Error::new(2, "APAC encoding requires macOS (AudioToolbox)", "")
+            };
+            assert_eq!(error, expected);
+            driver.cancelled = false;
             let failed = islands
                 .run(&Island::ApplePrepare(Box::new(plan("bad"))), None, &map)
                 .unwrap();

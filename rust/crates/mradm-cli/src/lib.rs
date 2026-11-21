@@ -155,7 +155,7 @@ pub trait Service {
         hrir: &[u8],
         quality: u32,
     ) -> Result<Vec<u8>, Vec<u8>>;
-    /// The APAC encode worker (`run_apac_encode_child`), writing its protocol lines on stdout;
+    /// The APAC encode worker, writing its protocol lines on stdout;
     /// the exit code.
     fn apac_encode_child(
         &self,

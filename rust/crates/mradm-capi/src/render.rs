@@ -3,7 +3,7 @@
 //! `adm_export_file` and the discovery documents (`adm_capabilities_json` and the others).
 //!
 //! The render steps `mradm-engine`'s render state machine through `mradm_ffi::api::render::RenderDriver`
-//! (R2), with the C++ islands (`mradm_audio_island`, the Apple islands) run inside each step, the
+//! with the encoders and Apple backend run inside each step, the
 //! caller's cancellation polled before every step and by the islands, and the progress and log
 //! lines forwarded as before.
 use crate::cancel::Flag;
@@ -18,9 +18,7 @@ use mradm_ffi::api::islands::AppleIslands;
 use mradm_ffi::api::islands::Text;
 use mradm_ffi::api::islands::{Facts, PlatformIslands};
 use mradm_ffi::api::render::RenderPrepared;
-use mradm_ffi::api::render::{
-    EngineIslandReply, EngineProgress, EngineRenderEvent, IslandContext, IslandRunner, RenderDriver,
-};
+use mradm_ffi::api::render::{EngineProgress, IslandContext, IslandRunner, RenderDriver};
 use std::ffi::{c_char, c_void};
 use std::ptr;
 use std::sync::Mutex;
@@ -34,11 +32,6 @@ pub(crate) mod islands {
     unsafe extern "C" {
         #[link_name = "mradm_platform_islands"]
         fn platform_islands() -> *const PlatformIslands;
-        pub(super) fn mradm_audio_island(
-            request: *const EngineRenderEvent,
-            context: *const IslandContext,
-            reply: *mut EngineIslandReply,
-        ) -> i32;
     }
     #[cfg(target_os = "macos")]
     unsafe extern "C" {
@@ -75,7 +68,7 @@ pub(crate) mod islands {
     }
 }
 
-// Unit tests link without the C++ islands: the platform reports no APAC, IAMF, Apple backend or
+// Unit tests link without the C++ islands: the platform supplies no Apple backend or
 // system spatial layouts, and every island request fails.
 #[cfg(test)]
 pub(crate) mod islands {
@@ -83,13 +76,6 @@ pub(crate) mod islands {
     static NO_PLATFORM: PlatformIslands = unsafe { std::mem::zeroed() };
     pub(crate) unsafe fn mradm_platform_islands() -> *const PlatformIslands {
         &NO_PLATFORM
-    }
-    pub(super) unsafe extern "C" fn mradm_audio_island(
-        _: *const EngineRenderEvent,
-        _: *const IslandContext,
-        _: *mut EngineIslandReply,
-    ) -> i32 {
-        1
     }
     pub(crate) fn apple() -> *const AppleIslands {
         ptr::null()
@@ -424,7 +410,6 @@ pub(crate) fn drive(
         failed: AtomicBool::new(false),
     };
     let runner = IslandRunner {
-        run: Some(islands::mradm_audio_island),
         driver: IslandContext {
             user: ptr::from_ref(&driver).cast_mut().cast(),
             cancelled: Some(island_cancelled),

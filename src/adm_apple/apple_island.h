@@ -1,5 +1,5 @@
 // The Apple backend's islands (AUSpatialMixer prepare, render and monitor stream), called by the
-// engine through MradmIslandRunner::apple and MradmEngineMonitorSessionHost::apple.
+// Rust offline renderer and file streaming monitor.
 #pragma once
 #include "../adm_render_common/engine_ffi.h"
 #ifdef __cplusplus

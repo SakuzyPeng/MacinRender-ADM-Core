@@ -122,6 +122,15 @@ pub struct RustTestServices {
         *mut usize,
     ) -> i32,
     scene_direct_matrix_destroy: unsafe extern "C" fn(*mut DirectMatrix),
+    apac_encode: unsafe extern "C" fn(
+        Text,
+        Text,
+        Text,
+        u32,
+        *const crate::engine_service::IslandContext,
+        *mut u8,
+        usize,
+    ) -> i32,
     mp4_write_metadata: unsafe extern "C" fn(Text, Text, Text, Text, Text, *mut u8, usize) -> i32,
 }
 
@@ -132,6 +141,7 @@ static TEST_SERVICES: RustTestServices = RustTestServices {
     scene_import: scene::mradm_scene_import,
     scene_direct_matrix_parse: scene::mradm_scene_direct_matrix_parse,
     scene_direct_matrix_destroy: scene::mradm_scene_direct_matrix_destroy,
+    apac_encode: crate::apac::test_encode,
     mp4_write_metadata: crate::mp4_metadata::mradm_mp4_write_metadata,
 };
 

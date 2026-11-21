@@ -1,6 +1,6 @@
 # 七期 7.2：编码器迁入 Rust
 
-> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 已完成（C1 MP4 元数据、C2 MP4 打包器、C3 IAMF bridge，2026-11-21，IAMF 与 Windows 部分待维护者复核）；D（APAC 编排）待做。
+> A、B、C 已合入。D 已在 macOS arm64 验证真实 APAC 编码，并在 Windows x64 验证不可用路径。D 的逐字节对照及 AudioToolbox 的重复性见本文末节。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单与对照方法见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.2 把编码器的 C++ 封装迁入 Rust：
@@ -13,7 +13,7 @@
 | A | FLAC 写出与 Vorbis comment；删除 dr_flac 与没有生产调用者的 FLAC 读取链 | 已完成 |
 | B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装与 Tags | 已完成 |
 | C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | 已完成 |
-| D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 待做 |
+| D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 已完成 |
 
 ## A：FLAC
 
@@ -300,7 +300,7 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 - IAMF 的选项、结果与消息不变。
 - 需维护者用真实 bridge 复核：macOS / Windows 上带 `MR_ADM_ENABLE_IAMF=ON` 的构建（含 `cmake` crate 直接构建的路径）链接 bridge，`encode-iamf-*` 与 IAMF MP4 的 CLI 记录与迁移前一致，取消生效；Windows 的代码页转换与 DLL 导入库只在交叉 clippy 中编译过。
 
-## 维护者实机复核
+## A、B 的维护者实机复核
 
 2026-11-20，macOS arm64 和 Windows x64 的 Release 构建均通过 15 项编码器及 C ABI FLAC 测试，也通过 CLI 冒烟。
 macOS 干净构建由 `mradm_native` 构建两个静态库。Windows 另外使用同版本 libFLAC 的 DLL 导入库，通过 9 项 FLAC 测试。
@@ -308,3 +308,39 @@ macOS 干净构建由 `mradm_native` 构建两个静态库。Windows 另外使�
 用迁移前的 `c7544954` Release 构建对照，两个平台的 FLAC 与 Opus MKA 命令均无差异。
 Windows 的 134 条命令无契约差异。macOS 全表中曾出现一条 APAC 的容器字节差异。
 迁移前构建可产生两种 APAC 结果，在固定输入和输出路径下用两个版本复验，APAC 载荷逐字节一致。
+
+## D：APAC worker 与 AudioToolbox
+
+离线渲染的 `EncodeApac` 由 `mradm-ffi::apac` 处理。父进程优先使用可执行的 `MRADM_APAC_HELPER`，其次查找当前映像旁的 `mradm`，最后检查宿主可执行文件是否就是 `mradm`。相对路径的覆盖项相对于当前目录解析。用独立进程加载 C ABI 动态库，已验证缺少 helper、忽略 PATH 中的同名程序、使用库旁的 helper 和显式相对路径四种行为。
+
+父进程每 50 ms 检查取消和心跳。启动、块写入、收尾的默认超时分别为 30、10、15 秒，沿用 `MRADM_APAC_STARTUP_MS`、`MRADM_APAC_WRITE_STALL_MS` 和 `MRADM_APAC_FLUSH_BUDGET_MS`。stdout 与 stderr 共用非阻塞管道。取消或超时会终止整个进程组、回收 worker 并清理部分输出。Rust 测试覆盖拆行、混合两路输出、子进程错误、三个阶段分别超时，以及取消时回收后代进程。CLI 在编码中收到 SIGINT 时实测退出 130，保留已有目标文件并清除本次暂存文件。
+
+`mradm __apac-encode` 用 `mradm-wav` 每次读取最多 4,096 帧。worker 保留布局校验、空间布局默认码率和 `wav71` 的侧后声道交换。每次写完一块发送 `P <done> <total>`，收尾前发送 `F`，成功后再发送终态进度，失败时发送 `E <code> <message>`。Apple 岛通过 `MradmApacEncoder` 提供打开、写帧和关闭三个 AudioToolbox 操作。Windows 的 worker 继续返回退出码 1 和原来的 `E 2` 诊断。
+
+通用 C++ 入口 `mradm_audio_island`、`mradm_audio_apac_child` 及其私有事件记录已删除。C++ 音频模块只保留 Apple 渲染和测试使用的 WAVE/CAF 包装。生产 C/C++ 从 6,100 降至 5,248 行。岛接口从 988 增至 1,009 行，含新登记的 AudioToolbox 接口及实现。公开 C ABI 仍导出 164 个函数。
+
+### Release 验收
+
+参考实现为 `9c238e10`。每组均用同一构建树、命令表和 fixture 工具采集参考 CLI 和候选 CLI，使用仓库原有的逐字节比较器。
+
+| 平台与配置 | CLI 对照 | 额外核对 |
+| --- | --- | --- |
+| macOS arm64，IAMF 关闭 | 134 条，0 差异 | 真实 APAC M4A 和 CAF 解码、7.1 声道顺序、HOA3、元数据与强制收尾停滞 |
+| macOS arm64，启用 AOM bridge 与 MP4Box | 134 条，0 差异 | IAMF MP4 可读出 Audio Element 和 Mix Presentation 两组，保留 GPAC 文件缺少相邻 free atom 时的元数据告警 |
+| Windows x64，MSVC Release，IAMF/SOFA 关闭 | 134 条，0 差异 | APAC 不可用诊断、编码器、C ABI 和 CLI 测试 |
+
+macOS 默认 Release 配置还通过了 `mradm-capi` 的 122 项和 `mradm-ffi` 的 61 项库测试。编码器 CTest 包含 APAC 派发与平台能力测试。
+
+**APAC 的重复性。** 额外采集中，7.1.4 的 `render-apac` M4A 出现过 154,477 和 154,478 字节两种文件。首个归一化差异在偏移 830 的包长字段，音频载荷也相差 1 字节。截取送入两个 worker 的 48,000 帧、12 声道 float32 PCM，2,304,000 字节完全相同。使用同一可执行文件位置、输入和输出，分别改变进程环境的长度，两版均产生同样两种 `mdat` 摘要。心跳序列一致，其余 133 条命令、CAF 和 MP4 标签均通过对照。原始差异保留在记录中，比较器照常逐字节核对 APAC 载荷。
+
+### 耗时与峰值内存
+
+在接电的 macOS arm64 M4 Pro 上，用 12 秒 `objects-long` fixture 做 7.1.4 APAC 离线渲染。两个 Release 版本各预热一次，每轮交换执行顺序。表内为中位数，RSS 取自 macOS `wait4`。
+
+| 测量 | 每版轮数 | 参考耗时 | 候选耗时 | 参考峰值 RSS | 候选峰值 RSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 完整离线渲染，首次 | 6 | 877.3 ms | 890.6 ms | 75.4 MiB | 90.2 MiB |
+| 完整离线渲染，同一可执行文件位置复测 | 12 | 893.3 ms | 882.0 ms | 81.1 MiB | 81.1 MiB |
+| 直接编码同一份暂存 WAVE，复测 | 18 | 562.3 ms | 552.9 ms | 75.5 MiB | 75.6 MiB |
+
+首次完整渲染的候选 RSS 中位数增加 19.6%，触发复测。12 轮中两版均出现约 75–101 MiB 的样本。将 helper 换成启动即返回诊断的程序时，两版峰值中位数分别为 30.6 和 30.5 MiB。直接运行真实 worker 的 6 轮中也出现过 11.1% 的中位数差异，再测 18 轮为 0.2%。[逐轮数据、构建与载荷摘要](evidence/rust-apac-worker/validation.json)

@@ -20,7 +20,7 @@ add_library(mr_adm_core INTERFACE)
 add_library(MacinRender::ADMCore ALIAS mr_adm_core)
 
 # The C++ types the islands share (errors, options, progress and logging, capability and render
-# records, the audio island API): private to the build since 6.5 C, not installed; only c_api.h
+# records, the WAVE/CAF wrappers): private to the build since 6.5 C, not installed; only c_api.h
 # stays in include/adm.
 target_sources(
     mr_adm_core
@@ -85,9 +85,7 @@ if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
 endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF writers and APAC. WAVE sample I/O goes through Rust mradm-wav (wav_backend.h);
-# FLAC, Opus MKA and IAMF output, the MP4 packager and the file metadata are in Rust (mradm-ffi,
-# 7.2 A–C), which calls libFLAC, libopus and the IAMF bridge directly (the codec libraries below).
+# C++ wrappers for the Rust WAVE reader and WAVE/CAF writers used by the Apple renderer.
 
 add_library(mr_adm_audio STATIC)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
@@ -95,10 +93,7 @@ add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
 target_sources(
     mr_adm_audio
     PRIVATE
-        adm_audio/apac_io.cpp
-        adm_audio/apac_worker_island.cpp
         adm_audio/audio_handles.cpp
-        adm_audio/island.cpp
         adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -111,14 +106,6 @@ target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
     PRIVATE MacinRender::ADMDsp
 )
-if(APPLE)
-    find_library(MR_ADM_AUDIOTOOLBOX_FW AudioToolbox REQUIRED)
-    find_library(MR_ADM_COREFOUNDATION_FW CoreFoundation REQUIRED)
-    target_link_libraries(mr_adm_audio PRIVATE
-        ${MR_ADM_AUDIOTOOLBOX_FW}
-        ${MR_ADM_COREFOUNDATION_FW}
-    )
-endif()
 mr_adm_core_apply_warnings(mr_adm_audio)
 mr_adm_core_apply_static_analysis(mr_adm_audio)
 
@@ -129,6 +116,8 @@ if(APPLE)
     add_library(mr_adm_apple STATIC)
     add_library(MacinRender::ADMRenderApple ALIAS mr_adm_apple)
 
+    find_library(MR_ADM_AUDIOTOOLBOX_FW AudioToolbox REQUIRED)
+    find_library(MR_ADM_COREFOUNDATION_FW CoreFoundation REQUIRED)
     find_library(MR_ADM_AVFOUNDATION_FW AVFoundation REQUIRED)
     find_library(MR_ADM_COREMEDIA_FW CoreMedia REQUIRED)
     find_library(MR_ADM_FOUNDATION_FW Foundation REQUIRED)
@@ -137,6 +126,7 @@ if(APPLE)
         mr_adm_apple
         PRIVATE
             adm_apple/spatial_mixer_renderer.cpp
+            adm_apple/apac_encoder.cpp
             adm_apple/apple_island.cpp
             adm_apple/avsamplebuffer_device.mm
         PUBLIC
@@ -152,7 +142,7 @@ if(APPLE)
     target_link_libraries(mr_adm_apple
         PUBLIC MacinRender::ADMCore
         PRIVATE MacinRender::ADMDsp MacinRender::ADMAudio MacinRender::ADMRenderCommon
-                ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
+                ${MR_ADM_AUDIOTOOLBOX_FW} ${MR_ADM_COREFOUNDATION_FW} ${MR_ADM_AVFOUNDATION_FW} ${MR_ADM_COREMEDIA_FW} ${MR_ADM_FOUNDATION_FW}
     )
     # adm_apple consumes the realtime IAudioOutputDevice interface (third-party-free header) to
     # provide the AVSampleBufferAudioRenderer monitor sink. Include-only, no link dependency —
@@ -186,7 +176,7 @@ if(WIN32)
 endif()
 
 # ── islands ───────────────────────────────────────────────────────────────────
-# The C islands the Rust library calls by name besides the audio and Apple islands: the platform
+# The C islands the Rust library calls by name besides the Apple island: the platform
 # facts (mradm_platform_islands) and the output devices (mradm_device_islands: miniaudio here, the
 # system-spatial sinks in adm_apple / adm_windows).
 

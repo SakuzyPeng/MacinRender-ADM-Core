@@ -14,6 +14,7 @@ use std::{
     ptr, slice,
 };
 mod adm;
+mod apac;
 pub mod api;
 mod checked;
 mod engine;
@@ -42,6 +43,8 @@ mod services;
 mod spatial;
 #[cfg(test)]
 mod test_alloc;
+#[cfg(unix)]
+mod unix_process;
 mod wav;
 #[cfg(windows)]
 mod windows_path;

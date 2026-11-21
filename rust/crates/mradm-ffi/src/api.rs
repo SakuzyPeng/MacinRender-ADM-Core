@@ -27,11 +27,9 @@ pub mod islands {
 /// Offline render and preview: the engine state machine stepped over the islands, and the platform
 /// services of the engine (room floating-point environment, CUDA, room switching).
 pub mod render {
+    pub use crate::apac::run_child as run_apac_child;
     pub use crate::engine_render::{FfiHost, binaural_spread_of, speaker_spread_of};
-    pub use crate::engine_service::{
-        EngineIslandReply, EngineProgress, EngineRenderEvent, IslandContext, IslandRunner,
-        RenderDriver,
-    };
+    pub use crate::engine_service::{EngineProgress, IslandContext, IslandRunner, RenderDriver};
     pub use crate::render::RenderPrepared;
 }
 

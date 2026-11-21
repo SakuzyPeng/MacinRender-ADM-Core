@@ -46,6 +46,7 @@ FFI_HEADERS = [
     "src/adm_render_common/routing_ffi.h",
     "src/adm_render_common/engine_ffi.h",
     "src/adm_apple/apple_plan_ffi.h",
+    "src/adm_apple/apac_encoder.h",
     "src/adm_core/rust_services_ffi.h",
     "tests/support/ffi/island_test_ffi.h",
     # The official AOM IAMF bridge's interface, which mradm-ffi `iamf` calls (7.2 C3).
@@ -69,9 +70,8 @@ ISLAND_RECORDS = {
     "MradmEngineIslandStream": "EngineIslandStream",
     "MradmEngineLayout": "EngineLayout",
     "MradmEngineMode": "EngineMode",
-    "MradmEnginePath": "EnginePath",
     "MradmEngineProgress": "EngineProgress",
-    "MradmEngineRenderEvent": "EngineRenderEvent",
+    "MradmApacEncoder": "ApacEncoder",
     "MradmEngineSceneDeviceProgress": "EngineSceneDeviceProgress",
     "MradmEngineSpatialLayout": "EngineSpatialLayout",
     "MradmIslandContext": "IslandContext",
@@ -84,7 +84,7 @@ ISLAND_RECORDS = {
 }
 
 # C++ functions the Rust side imports (declared next to the records they take), not Rust exports.
-ISLAND_FUNCTIONS = {"mradm_islands_bind"}
+ISLAND_FUNCTIONS = {"mradm_islands_bind", "mradm_apple_apac_encoder"}
 
 # (function, zero-based parameter index, Rust spelling, C spelling) -> required array element/length.
 # These pointer spellings are compatible only while the underlying array keeps this exact shape.

@@ -6,6 +6,8 @@
 //! of it are kept. Cancellation is polled every 20 ms: on POSIX the packager runs in its own
 //! process group, which gets SIGTERM and, 500 ms later, SIGKILL; on Windows the process is
 //! terminated.
+#[cfg(unix)]
+use crate::unix_process::{set_nonblocking, signal_group};
 use mradm_engine::request::{Error, Packager};
 use std::ffi::{OsStr, OsString};
 use std::io::{self, PipeReader, Read};
@@ -222,10 +224,7 @@ fn configure(command: &mut Command) {
 #[cfg(unix)]
 fn signal(child: &mut std::process::Child, kill: bool) {
     let signal = if kill { libc::SIGKILL } else { libc::SIGTERM };
-    let pid = child.id() as libc::pid_t;
-    if unsafe { libc::kill(-pid, signal) } != 0 {
-        unsafe { libc::kill(pid, signal) };
-    }
+    signal_group(child, signal);
 }
 
 #[cfg(windows)]
@@ -233,18 +232,6 @@ fn signal(child: &mut std::process::Child, kill: bool) {
     if !kill {
         let _ = child.kill();
     }
-}
-
-#[cfg(unix)]
-fn set_nonblocking(reader: &PipeReader) -> io::Result<()> {
-    use std::os::fd::AsRawFd;
-
-    let fd = reader.as_raw_fd();
-    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-    if flags == -1 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
 }
 
 #[cfg(unix)]
