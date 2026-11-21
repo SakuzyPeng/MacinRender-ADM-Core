@@ -21,8 +21,11 @@ mod engine_render;
 mod engine_service;
 mod flac;
 mod hptf;
+mod iamf;
 mod metadata_temp;
 mod meter;
+mod mp4_metadata;
+mod mp4_packager;
 mod opus_mka;
 mod osc;
 mod output_dsp;
@@ -40,6 +43,8 @@ mod spatial;
 #[cfg(test)]
 mod test_alloc;
 mod wav;
+#[cfg(windows)]
+mod windows_path;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to
 /// the caller, making error reporting reentrant without thread-local allocation.

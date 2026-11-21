@@ -24,25 +24,6 @@ typedef struct MradmWavInfo {
 } MradmWavInfo;
 // cppcheck-suppress-end unusedStructMember
 
-// bext fields (wav_append_bext, which also writes the HOA3 ambi marker when requested and updates the
-// RIFF size or ds64.bw64Size). Byte strings are borrowed; a null pointer is valid only with length 0.
-// cppcheck-suppress-begin unusedStructMember
-typedef struct MradmWavBext {
-    const uint8_t* description;
-    size_t description_len;
-    const uint8_t* originator;
-    size_t originator_len;
-    const uint8_t* originator_reference;
-    size_t originator_reference_len;
-    const uint8_t* date_utc; // ISO 8601 UTC
-    size_t date_utc_len;
-    double loudness;
-    double true_peak;
-    uint8_t has_loudness;
-    uint8_t has_true_peak;
-    uint8_t hoa3_ambi; // also write the third-order AmbiX ambi marker
-} MradmWavBext;
-// cppcheck-suppress-end unusedStructMember
 #ifdef __cplusplus
 }
 #endif

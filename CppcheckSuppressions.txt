@@ -24,5 +24,6 @@ unusedStructMember:*/src/adm_realtime/audio_output_device.h
 unusedStructMember:*/src/adm_render_common/engine_ffi.h
 unusedStructMember:*/src/adm_metadata/scene_ffi.h
 unusedStructMember:*/src/adm_metadata/adm_ffi.h
+unusedStructMember:*/src/adm_core/rust_services_ffi.h
 # The island tests' part of the private FFI records is read by Rust across the boundary.
 unusedStructMember:*/tests/support/ffi/*

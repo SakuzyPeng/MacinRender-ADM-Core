@@ -1229,3 +1229,130 @@ fn integer_conversion_clips_and_rejects_nan() {
     assert!(!leaked, "temporary output leaked");
     fs::remove_dir_all(&root).unwrap();
 }
+
+/// The offset of the first top-level chunk `id` of a RIFF / RF64 file.
+fn chunk_at(bytes: &[u8], id: &[u8; 4]) -> Option<usize> {
+    let mut offset = 12;
+    let mut data_size = 0;
+    while offset + 8 <= bytes.len() {
+        let mut size = le32(bytes, offset + 4) as usize;
+        if &bytes[offset..offset + 4] == id {
+            return Some(offset);
+        }
+        if &bytes[offset..offset + 4] == b"ds64" {
+            data_size =
+                le32(bytes, offset + 16) as usize | ((le32(bytes, offset + 20) as usize) << 32);
+        } else if &bytes[offset..offset + 4] == b"data" && size == 0xFFFF_FFFF {
+            size = data_size;
+        }
+        offset += 8 + size + (size & 1);
+    }
+    None
+}
+
+/// The bext fields of a rendered WAVE (formerly `core_smoke_test` `verify_wav_metadata_write`):
+/// description, originator, its reference, the date and time, version 2 and the loudness and peak
+/// in hundredths; a HOA3 output also gets the 16-byte `ambi` marker.
+#[test]
+fn metadata_fields_land_in_bext_and_hoa3_gets_ambi() {
+    let root = scratch("bext-fields");
+    let path = root.join("stereo.WAV");
+    float_wav(&path, 2, 1, |i| if i == 0 { 0.125 } else { -0.125 });
+    let meta = MetadataFields {
+        encoder: "MacinRender Test".into(),
+        date_utc: "2026-05-22T14:30:15Z".into(),
+        renderer: "ear".into(),
+        output_layout: "0+2+0".into(),
+        lufs: Some(-23.5),
+        peak_dbtp: Some(-1.0),
+    };
+    meta.write_wav(&path).unwrap();
+    let bytes = fs::read(&path).unwrap();
+    let bext = chunk_at(&bytes, b"bext").expect("bext chunk");
+    assert_eq!(le32(&bytes, bext + 4), 602);
+    let field = |offset: usize, width: usize| {
+        let raw = &bytes[bext + 8 + offset..bext + 8 + offset + width];
+        let end = raw.iter().position(|&b| b == 0).unwrap_or(width);
+        String::from_utf8(raw[..end].to_vec()).unwrap()
+    };
+    let le16 =
+        |offset: usize| i16::from_le_bytes([bytes[bext + 8 + offset], bytes[bext + 9 + offset]]);
+    assert_eq!(field(0, 256), "renderer=ear layout=0+2+0");
+    assert_eq!(field(256, 32), "MacinRender Test");
+    assert_eq!(field(288, 32), "0+2+0");
+    assert_eq!(
+        &bytes[bext + 8 + 320..bext + 8 + 338],
+        b"2026-05-2214-30-15"
+    );
+    assert_eq!((le16(346), le16(412), le16(416)), (2, -2350, -100));
+    assert_eq!(read_all(&path).1, [0.125, -0.125], "the audio is unchanged");
+
+    let path = root.join("hoa3.wav");
+    float_wav(&path, 16, 1, |_| 0.0);
+    let hoa = MetadataFields {
+        output_layout: "hoa3".into(),
+        ..meta
+    };
+    hoa.write_wav(&path).unwrap();
+    let bytes = fs::read(&path).unwrap();
+    let ambi = chunk_at(&bytes, b"ambi").expect("ambi chunk");
+    assert_eq!(le32(&bytes, ambi + 4), 16);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+/// bext on an RF64 file whose data passes 4 GiB (formerly `core_smoke_test`
+/// `verify_rf64_sparse_metadata_write`): the chunk follows the data and ds64 keeps the 64-bit
+/// sizes. The file is sparse; Windows needs `MR_ADM_RUN_LARGE_FILE_TESTS`, NTFS allocates it.
+#[test]
+fn bext_follows_more_than_four_gib_of_rf64_data() {
+    if cfg!(windows) && std::env::var_os("MR_ADM_RUN_LARGE_FILE_TESTS").is_none() {
+        return;
+    }
+    use std::io::{Seek, SeekFrom, Write};
+    let root = scratch("bext-sparse");
+    let path = root.join("big.wav");
+    float_wav(&path, 1, 1, |_| 0.0);
+    let bytes = fs::read(&path).unwrap();
+    let ds64 = chunk_at(&bytes, b"ds64").expect("ds64");
+    let data = chunk_at(&bytes, b"data").expect("data");
+    const DATA: u64 = (1 << 32) + 4096;
+    let sparse = (data + 8) as u64 + DATA;
+    {
+        let mut file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+        file.set_len(sparse).unwrap();
+        file.seek(SeekFrom::Start(ds64 as u64 + 8)).unwrap();
+        for value in [sparse - 8, DATA, DATA / 4] {
+            file.write_all(&value.to_le_bytes()).unwrap();
+        }
+    }
+    let meta = MetadataFields {
+        encoder: "MacinRender Test".into(),
+        lufs: Some(-23.0),
+        ..MetadataFields::default()
+    };
+    meta.write_wav(&path).unwrap();
+    let size = fs::metadata(&path).unwrap().len();
+    assert_eq!(size, sparse + 8 + 602);
+    let mut file = File::open(&path).unwrap();
+    let mut read = |offset: u64, len: usize| {
+        use std::io::Read;
+        let mut buffer = vec![0; len];
+        file.seek(SeekFrom::Start(offset)).unwrap();
+        file.read_exact(&mut buffer).unwrap();
+        buffer
+    };
+    let ds64_values = read(ds64 as u64 + 8, 16);
+    assert_eq!(
+        u64::from_le_bytes(ds64_values[..8].try_into().unwrap()),
+        size - 8
+    );
+    assert_eq!(
+        u64::from_le_bytes(ds64_values[8..].try_into().unwrap()),
+        DATA
+    );
+    let header = read(sparse, 8);
+    assert_eq!(&header[..4], b"bext");
+    assert_eq!(le32(&header, 4), 602);
+    drop(file);
+    fs::remove_dir_all(&root).unwrap();
+}

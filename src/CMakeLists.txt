@@ -85,9 +85,9 @@ if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
 endif()
 
 # ── adm_audio ─────────────────────────────────────────────────────────────────
-# Float32 WAV/CAF, APAC, IAMF and metadata I/O. WAVE sample I/O goes through Rust mradm-wav
-# (wav_backend.h); FLAC and Opus MKA output and their metadata are in Rust (mradm-ffi `flac` /
-# `opus_mka`, 7.2 A / B), which calls libFLAC and libopus directly (the codec libraries below).
+# Float32 WAV/CAF writers and APAC. WAVE sample I/O goes through Rust mradm-wav (wav_backend.h);
+# FLAC, Opus MKA and IAMF output, the MP4 packager and the file metadata are in Rust (mradm-ffi,
+# 7.2 A–C), which calls libFLAC, libopus and the IAMF bridge directly (the codec libraries below).
 
 add_library(mr_adm_audio STATIC)
 add_library(MacinRender::ADMAudio ALIAS mr_adm_audio)
@@ -98,9 +98,7 @@ target_sources(
         adm_audio/apac_io.cpp
         adm_audio/apac_worker_island.cpp
         adm_audio/audio_handles.cpp
-        adm_audio/iamf_io.cpp
         adm_audio/island.cpp
-        adm_audio/metadata_io.cpp
         adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS
@@ -113,10 +111,6 @@ target_link_libraries(mr_adm_audio
     PUBLIC MacinRender::ADMCore
     PRIVATE MacinRender::ADMDsp
 )
-target_compile_definitions(mr_adm_audio PRIVATE MR_ADM_ENABLE_IAMF=$<BOOL:${MR_ADM_ENABLE_IAMF}>)
-if(MR_ADM_ENABLE_IAMF)
-    target_link_libraries(mr_adm_audio PRIVATE MacinRender::IamfAomBridge)
-endif()
 if(APPLE)
     find_library(MR_ADM_AUDIOTOOLBOX_FW AudioToolbox REQUIRED)
     find_library(MR_ADM_COREFOUNDATION_FW CoreFoundation REQUIRED)
@@ -252,10 +246,12 @@ elseif(WIN32)
 endif()
 list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_render_common mr_adm_audio mr_adm_rust_services)
 set(_mr_codec_libraries Opus::opus FLAC::FLAC)
-if(TARGET MacinRender::IamfAomBridge)
-    list(APPEND _mr_codec_libraries MacinRender::IamfAomBridge)
-endif()
 set(_mr_native_lines)
+if(MR_ADM_ENABLE_IAMF)
+    # Rust calls the bridge (mradm-ffi `iamf`, cfg(mradm_iamf) when the manifest names the feature).
+    list(APPEND _mr_codec_libraries MacinRender::IamfAomBridge)
+    string(APPEND _mr_native_lines "feature:iamf\n")
+endif()
 foreach(_mr_library IN LISTS MR_ADM_NATIVE_LIBRARIES)
     string(APPEND _mr_native_lines "file:$<TARGET_LINKER_FILE:${_mr_library}>\n")
 endforeach()

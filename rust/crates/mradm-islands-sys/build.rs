@@ -3,7 +3,8 @@
 //! `src/CMakeLists.txt` through the `cmake` crate. The manifest has one `kind:value` line per library,
 //! in link order. `file:`, `framework:` and `system:` identify paths and platform libraries.
 //! `link:` selects a codec target, and `target:Name=FILE;LINKS` records its evaluated CMake link
-//! interface and those of its dependencies. `msvc-runtime:` records the selected CRT.
+//! interface and those of its dependencies. `msvc-runtime:` records the selected CRT. `feature:` names
+//! an optional library the build linked (the IAMF bridge).
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -55,6 +56,9 @@ fn main() {
                 runtime.unwrap_or("a non-MSVC runtime")
             ),
             "target" => {}
+            // An optional library the build linked, for the dependents' build scripts
+            // (`DEP_MRADM_ISLANDS_FEATURE_<NAME>`; mradm-ffi sets `cfg(mradm_<name>)`).
+            "feature" => println!("cargo::metadata=feature_{value}=1"),
             _ => panic!("{}: unknown kind {kind}", manifest.display()),
         }
     }

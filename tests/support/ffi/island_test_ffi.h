@@ -1,5 +1,6 @@
 // The Rust services only the island tests call (MradmRustServices::tests): the routed scene import
-// (the Apple island and smoke tests) and the DirectSpeakers matrix parser (the Apple matrix test).
+// (the Apple island and smoke tests), the DirectSpeakers matrix parser (the Apple matrix test) and the
+// MP4 metadata writer (the APAC smoke test).
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -38,6 +39,15 @@ struct MradmRustTestServices {
                                          char* message,
                                          size_t* message_len);
     void (*scene_direct_matrix_destroy)(MradmDirectMatrix* handle);
+    // The ©too / ©day / ©cmt items of a .m4a / .mp4 (mradm-ffi mp4_metadata). Texts are UTF-8; returns the
+    // error code and writes the NUL-terminated message.
+    int32_t (*mp4_write_metadata)(MradmAdmText path,
+                                  MradmAdmText encoder,
+                                  MradmAdmText date_utc,
+                                  MradmAdmText renderer,
+                                  MradmAdmText output_layout,
+                                  uint8_t* message,
+                                  size_t capacity);
 };
 
 #ifdef __cplusplus

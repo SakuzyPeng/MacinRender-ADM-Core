@@ -133,42 +133,6 @@ class WriterHandle {
     std::variant<FloatWavWriter, FloatCafWriter> impl_;
 };
 
-bool iamf_encoding_available();
-
-// Encode a fully post-processed integer PCM WAV (src_path) to a standalone IAMF
-// raw OBU stream (iamf_path, .iamf extension) using the official AOM iamf-tools
-// bridge. The render pipeline converts its float staging WAV to 32-bit PCM
-// before calling this. Builds without MR_ADM_ENABLE_IAMF return ErrorCode::unsupported.
-// src_path must be 48000 Hz. bitrate_per_ch_kbps is an Opus VBR target hint.
-// loudness_lufs / peak_dbtp are post-gain values written into the Mix Presentation.
-// scalable_layers is optional; empty preserves the current single-layer output.
-Result<void> convert_to_iamf(const std::string& src_path,
-                             const std::string& iamf_path,
-                             const std::string& layout_id = {},
-                             uint32_t bitrate_per_ch_kbps = 0,
-                             std::optional<double> loudness_lufs = std::nullopt,
-                             std::optional<double> peak_dbtp = std::nullopt,
-                             const std::stop_token& cancel_token = {},
-                             const std::vector<std::string>& scalable_layers = {});
-
-// IAMF-to-MP4 packaging (ISOBMFF Annex A encapsulation).
-// Prefers mp4box (GPAC) over ffmpeg; the packager is selected once at
-// detection time and used as-is — no runtime fallback on failure.
-enum class IamfMp4PackagerKind : uint8_t { none, mp4box, ffmpeg };
-struct IamfMp4PackagerInfo {
-    IamfMp4PackagerKind kind{IamfMp4PackagerKind::none};
-    int ffmpeg_major{-1};   // populated only when kind == ffmpeg
-    std::string executable; // actual binary name found in PATH ("mp4box", "MP4Box", "ffmpeg")
-};
-// Detect the best available IAMF-to-MP4 packager in PATH (mp4box > ffmpeg).
-IamfMp4PackagerInfo detect_iamf_mp4_packager();
-bool iamf_mp4_packager_available();
-// Package a raw .iamf OBU stream into an ISOBMFF container (.mp4).
-// Returns unsupported if no suitable packager is found in PATH.
-Result<void> package_iamf_to_mp4(const std::string& iamf_path,
-                                 const std::string& mp4_path,
-                                 const std::stop_token& cancel_token = {});
-
 enum class ApacContainer {
     mpeg4,
     caf,
@@ -205,29 +169,5 @@ Result<void> convert_to_apac(const std::string& src_path,
                              const std::stop_token& cancel_token = {},
                              ProgressSink* progress = nullptr,
                              RenderOperation operation = RenderOperation::encode_apac);
-
-// Format-agnostic render output metadata.  Assembled by the engine layer and
-// passed to write_file_metadata(); format-specific encoding is handled there.
-struct MetadataFields {
-    std::string encoder;       // "MacinRender ADM Core Alpha"
-    std::string date_utc;      // ISO 8601, e.g. "2026-05-22T14:30:00Z"
-    std::string renderer;      // caps.backend_name — "ear" / "vbap-saf" / "hoa-encode"
-    std::string output_layout; // "0+2+0", "2+7+4", etc.
-    std::optional<double> lufs;
-    std::optional<double> peak_dbtp;
-};
-
-// Write rendering metadata into an existing output file.
-//   WAV  — appends a BWF v2 bext chunk (EBU Tech 3285) and updates RIFF/RF64/BW64
-//           container sizes. Fields: Originator, OriginationDate/Time, LoudnessValue,
-//           MaxTruePeakLevel (0x7FFF = not-indicated when value is absent).
-//   CAF  — appends an info chunk with encodingapplication / date / comments
-//           keys.  Comments encodes renderer, layout, loudness, peak.
-//   M4A/MP4 — inserts iTunes-style metadata atoms (©too, ©day, ©cmt). Layout
-//             semantics such as "binaural" are stored in comments because APAC
-//             does not reliably preserve non-stereo CoreAudio layout tags.
-//   Other extensions — silently ignored (not an error).
-// Failure is non-fatal; callers should log a warning and continue.
-Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta);
 
 } // namespace mradm::audio

@@ -48,6 +48,8 @@ FFI_HEADERS = [
     "src/adm_apple/apple_plan_ffi.h",
     "src/adm_core/rust_services_ffi.h",
     "tests/support/ffi/island_test_ffi.h",
+    # The official AOM IAMF bridge's interface, which mradm-ffi `iamf` calls (7.2 C3).
+    "tools/iamf_aom_bridge/mr_iamf_aom_bridge.h",
 ]
 
 # The records of the C++ island tables and the Rust services table the islands call (hand-written
@@ -78,6 +80,7 @@ ISLAND_RECORDS = {
     "MradmRoomScreenGeometry": "RoomScreenGeometry",
     "MradmRustServices": "RustServices",
     "MradmRustTestServices": "RustTestServices",
+    "MrIamfAomEncodeOptions": "IamfEncodeOptions",
 }
 
 # C++ functions the Rust side imports (declared next to the records they take), not Rust exports.

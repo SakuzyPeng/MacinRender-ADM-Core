@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <iterator>
 #include <numbers>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "adm/audio_io.h"
@@ -19,6 +21,7 @@
 #endif
 
 #include "../support/rust_services_test.h"
+#include "island_test_ffi.h"
 #include "test_portable.h"
 
 namespace {
@@ -390,11 +393,6 @@ bool verify_apac_binaural() {
     if (!write_test_wav(wav, 2, 48000, 48000)) {
         return false;
     }
-    mradm::audio::MetadataFields meta;
-    meta.encoder = "MacinRender Test";
-    meta.date_utc = "2026-05-23T03:42:00Z";
-    meta.renderer = "binaural-hrtf";
-    meta.output_layout = "binaural";
     auto res = mradm::audio::convert_to_apac(wav, m4a, "binaural");
     if (!check(res.has_value(), "convert_to_apac(binaural) failed")) {
         std::cerr << res.error().message << "\n";
@@ -406,9 +404,19 @@ bool verify_apac_binaural() {
     if (!check(std::filesystem::file_size(m4a) > 10000U, "binaural .m4a suspiciously small")) {
         return false;
     }
-    auto meta_res = mradm::audio::write_file_metadata(m4a, meta);
-    if (!check(meta_res.has_value(), "write_file_metadata(.m4a) failed")) {
-        std::cerr << meta_res.error().message << "\n";
+    const auto utf8 = [](std::string_view s) {
+        return MradmAdmText{reinterpret_cast<const uint8_t*>(s.data()), s.size()};
+    };
+    std::array<uint8_t, 512> message{};
+    const auto meta_code = mradm::rust().tests->mp4_write_metadata(utf8(m4a),
+                                                                   utf8("MacinRender Test"),
+                                                                   utf8("2026-05-23T03:42:00Z"),
+                                                                   utf8("binaural-hrtf"),
+                                                                   utf8("binaural"),
+                                                                   message.data(),
+                                                                   message.size());
+    if (!check(meta_code == 0, "MP4 metadata write (.m4a) failed")) {
+        std::cerr << reinterpret_cast<const char*>(message.data()) << "\n";
         return false;
     }
     if (!check(file_contains_bytes(m4a,

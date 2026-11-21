@@ -28,6 +28,7 @@ include = [
     "EngineRenderEvent",
     "EngineSceneDeviceProgress",
     "EngineSpatialLayout",
+    "IamfEncodeOptions",
     "IslandContext",
     "PlatformIslands",
     "RenderLiveOverride",

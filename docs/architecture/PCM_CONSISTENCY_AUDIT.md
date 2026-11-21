@@ -930,7 +930,26 @@ B 已完成（同日）：Opus MKA 改由 `mradm-ffi` `opus_mka` 实现：
 - `opus_mka_io.cpp` 与 `opus_mka_smoke_test.cpp` 删除；
 - 删除前后各对照一次，都是 134 条命令 0 差异；cluster 间隔与标签名两处注入都被抓到。
 
-生产 C/C++ 8,024 → 7,141 行。C、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+生产 C/C++ 8,024 → 7,141 行。A、B 经维护者在 macOS arm64 / Windows x64 复核（2026-11-20）。
+
+C1 已完成（2026-11-21）：MP4 元数据 atom 改由 `mradm-ffi` `mp4_metadata` 写出，经临时文件替换：
+- `metadata_io.cpp`、生产已不调用的 C++ WAV / CAF 元数据包装与函数表的两项（35 → 33）删除，C++ 岛不再接岛 9；
+- 3,000 个随机 atom 序列上与 C++ 逐字节、逐错误相同，两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。
+
+生产 C/C++ 7,141 → 6,720 行。
+
+C2 已完成（同日）：MP4 打包器（mp4box / ffmpeg）的探测与运行改由 `mradm-ffi` `mp4_packager` 经 `std::process` 实现，输出格式文档的打包器可用性也在 Rust 探测：
+- `iamf_io.cpp` 的进程辅助与打包器、平台表的 `iamf_mp4_packager` 删除，C++ 岛只剩 APAC 与 IAMF；
+- 17 个假打包器场景与 C++ 相同，ffmpeg 版本解析在 5,002 行上与 `sscanf` 相同（超出 `int` 的未定义情形除外），两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。
+
+生产 C/C++ 6,720 → 6,311 行。
+
+C3 已完成（同日）：IAMF bridge 由 `mradm-ffi` `iamf` 经手写 `extern` 调用，只在链接清单含 `feature:iamf` 时以 `cfg(mradm_iamf)` 编译，平台的 IAMF 可用性也在 Rust：
+- `iamf_io.cpp`、它的 bridge 头副本、平台表的 `iamf` 与 `iamf_smoke_test` 删除，C++ 音频岛只剩 APAC；
+- 与 C++ 同样链接一个 ABI 相同的桩 bridge，22 个用例的结果与传给 bridge 的选项全部相同，两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。真实 bridge 待维护者复核。
+
+生产 C/C++ 6,311 → 6,100 行。D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

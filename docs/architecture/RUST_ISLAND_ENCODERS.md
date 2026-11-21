@@ -1,6 +1,6 @@
 # 七期 7.2：编码器迁入 Rust
 
-> 状态：A、B 已完成（2026-11-19，本机 Linux x64）；C（IAMF 与 MP4）、D（APAC 编排）待做。
+> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 已完成（C1 MP4 元数据、C2 MP4 打包器、C3 IAMF bridge，2026-11-21，IAMF 与 Windows 部分待维护者复核）；D（APAC 编排）待做。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单与对照方法见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.2 把编码器的 C++ 封装迁入 Rust：
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | A | FLAC 写出与 Vorbis comment；删除 dr_flac 与没有生产调用者的 FLAC 读取链 | 已完成 |
 | B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装与 Tags | 已完成 |
-| C | IAMF bridge 调用、MP4 打包器的探测与运行、MP4 元数据 atom | 待做 |
+| C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | 已完成 |
 | D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 待做 |
 
 ## A：FLAC
@@ -182,6 +182,123 @@ Matroska 封装：
 
 - Opus MKA 的字节、错误与日志不变（track UID 本来就是随机的）。
 - Windows 上的改进：原 C++ 用窄字符 `fopen` / `fstream` 打开路径，当前代码页表示不了的字符会失败；现在经 UTF-8 路径打开宽字符路径，同时修正了 `.mka` 元数据的同一问题。
+
+## C：IAMF 与 MP4
+
+C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的探测与运行，C3 IAMF bridge 调用。
+
+### C1：MP4 元数据
+
+**迁入 Rust 的部分**：`mradm-ffi` `mp4_metadata`（原 `metadata_io.cpp` 的 `write_mp4_metadata`）。
+- 在顶层 `moov` 末尾追加 `udta/meta(hdlr mdir appl)/ilst`，文本项依次为 ©too（ENCODER）、©day（DATE）、©cmt（COMMENT，与 FLAC / MKA 共用 `metadata_comment`），值为空的项不写，全部为空时不读也不写文件；
+- `moov` 原地增长：它必须位于文件末尾，或紧跟一个足够大的 `free` atom 让出字节，所以 `stco` / `co64` 的偏移不变；
+- atom 规则照原实现：size 1 为 64 位长度，size 0 延伸到文件末尾；取最后一个顶层 `moov`；`moov` 的头是 16 字节或增长后超过 32 位时报 unsupported；
+- 错误码与文字照原实现（`cannot open MP4 for metadata read`、`malformed MP4 atom table`、`MP4 metadata: missing moov atom` 等），context 为 `path=<路径>`；
+- 原实现把整个文件读进内存后截断重写；现在只读 atom 头，经同目录的独占临时文件分块复制，成功后改名替换（与 7.2 A / B 的元数据相同），失败时保留原文件。
+- POSIX 上临时文件的模式至多为 `0600`，安装时恢复原文件模式。
+
+`Runner::run` 接下扩展名为 `.m4a` / `.mp4` 的 `Island::WriteMetadata`。WAV（bext / ambi）与 CAF（info）的元数据五期起就由 `mradm-engine` 直接写出（`write_own_metadata`），岛 9 实际只剩 FLAC、MKA 与 MP4，所以 C++ 岛对岛 9 返回 2。
+
+**删除**：
+- `metadata_io.cpp`（`compact_metadata_comment`、MP4 atom 写出与 `write_file_metadata` 分派）；
+- `wav_io.cpp` 的 `write_wav_metadata` / `write_caf_metadata` 与 `audio_io.h` 的 `MetadataFields`、`write_file_metadata`：生产没有调用者，只有 `core_smoke_test` 在用；
+- 函数表的 `caf_append_info` 与 `wav_append_bext`（Rust 与 `rust_services_ffi.h`，35 → 33 项）、`mradm-ffi` 的两个入口与 `wav_ffi.h` 的 `MradmWavBext`；
+- `island.cpp` 的岛 9。
+
+**测试的去向**：
+- `mradm-ffi` `mp4_metadata` 的 Rust 测试：`udta` 的逐字节布局（独立拼写的期望值）与空项；`moov` 在文件末尾；`free` 让出字节（文件长度不变）、恰好等于插入长度时缩到只剩头、不够时报错；无 `free`、缺 `moov`、atom 过短或截断、16 字节头的 `moov` / `free` 的错误码、文字、context，且原文件不变；64 位 `mdat`、多个 `moov`、size 0 的 `moov`；扩展名判断。这些测试加入 ctest `mr_adm_encoder_tests`；
+- `core_smoke_test` 的 bext 字段、HOA3 ambi 与超过 4 GiB 的稀疏 RF64 上追加 bext 三项检查移到 `mradm-render` `tests/wav_container.rs`（`metadata_fields_land_in_bext_and_hoa3_gets_ambi`、`bext_follows_more_than_four_gib_of_rf64_data`；Windows 同样需要 `MR_ADM_RUN_LARGE_FILE_TESTS`）。CAF info 由 `mradm-wav` `tests/caf.rs` 覆盖，bext 的字节由 WAVE 容器 golden 覆盖；
+- `apac_smoke_test`（macOS）仍检查真实 AudioToolbox `.m4a` 写入元数据后能解码，改经测试函数表新增的 `mp4_write_metadata` 调用 Rust（`tests/support/ffi/island_test_ffi.h`）。
+
+**对照与故障注入**：
+- Linux 的 CLI 不产生 MP4（APAC 只在 macOS，IAMF 需要 bridge），所以另做了 atom 级对照：随机生成 3,000 个顶层 atom 序列（`ftyp` / `mdat` / `moov` / `free` / `skip`，含 64 位长度、size 0、截断、尾部垃圾与损坏的长度字段，`free` 的长度覆盖插入长度的边界），分别交给仍在的 C++ `write_file_metadata` 与 Rust，结果码、文字、context 与输出字节全部相同（663 个成功，其中 108 个经 `free` 原地增长）；另一个种子的 600 个用例也相同；
+- 故障注入：`free` 长度判断由 `>=` 改为 `>`，20 个用例的结果与字节不同；改为取第一个 `moov`，340 个结果、264 个文件不同；
+- 删除 C++ 之后，CLI 记录与迁移前的构建对照，134 条命令 0 差异；
+- 新的 bext 字段测试经故障注入（originator reference 改写为 encoder）确认会失败；测试函数表字段的签名改错时 FFI 头校验报错。
+
+**其他检查**：ctest 25/25；Rust 质量检查、两个目标的交叉 clippy、FFI 头校验（57 个结构体）与 `check-changed.sh` 通过。`rust_services_ffi.h` 补登记了 cppcheck 的 `unusedStructMember` 抑制：函数表的字段由 Rust 填写，6.6 起漏登。
+
+**规模**：生产 C/C++ 7,141 → 6,720 行；岛接口 1,051 → 1,036 行；C++ 测试 8,788 → 8,379 行。
+
+**发布说明**：
+- MP4 元数据的字节、错误码与文字不变；写入改为经临时文件替换，失败时原文件不再可能被截断；
+- 维护者在 macOS 复核：`apac_smoke_test`，以及 CLI 记录中 `encode-apac-*` 的元数据与迁移前一致。
+
+### C2：MP4 打包器
+
+**迁入 Rust 的部分**：`mradm-ffi` `mp4_packager`（原 `iamf_io.cpp` 的进程辅助、`detect_iamf_mp4_packager` 与 `package_iamf_to_mp4`）。
+- **查找**。POSIX 按 `PATH` 各目录用 `access(X_OK)` 依次找 `mp4box`、`MP4Box`、`ffmpeg`，跳过空项。运行时按名字再次查找。Windows 直接启动 `SearchPathW` 找到的 `.exe` 完整路径。
+- **ffmpeg 版本**：运行 `ffmpeg -version`，退出码非 0 或没有输出时视为没有打包器；首行按 `sscanf("ffmpeg version %d.")` 的规则解析（格式中的空白匹配任意长度的空白、`%d` 跳过前导空白并接受正负号），主版本须大于 0；
+- **运行**。通过 `std::process` 直接启动。stdout 和 stderr 共用管道，最多保留 4096 字节，截断时追加一次 `...(truncated)`。主进程退出后读完已就绪的输出并关闭读取端。每 20 ms 检查一次取消。POSIX 向进程组发 SIGTERM，等待 500 ms 后仍在运行则发 SIGKILL。Windows 以 `CREATE_NO_WINDOW` 启动，取消时终止进程。信号退出返回 -1，启动失败返回 127。
+- **打包**：mp4box 为 `-add <iamf> -new <mp4>`，ffmpeg 为 `-y -i <iamf> -c copy <mp4>`；失败消息为 `mp4box packaging failed: ` / `ffmpeg packaging failed: ` 加去掉末尾换行的输出，context 为空；找不到打包器时为原来的 unsupported 消息；取消为 `render cancelled`，context 为 `path=<mp4>`。
+
+`Runner::run` 接下 `Island::ProbeMp4Packager` 与 `Island::PackageMp4`。输出格式文档的打包器可用性（只在 IAMF 构建中探测）也改由 Rust 探测，`MradmPlatformIslands` 删除 `iamf_mp4_packager` 字段，`platform_island.cpp` 删除对应函数。C++ 岛只剩 APAC（岛 6）与 IAMF（岛 7）。
+
+**删除**：`iamf_io.cpp` 的 POSIX / Windows 进程辅助（`run_process`、`find_in_path`、输出截断）与打包器的探测和运行；`audio_io.h` 的 `IamfMp4PackagerKind`、`IamfMp4PackagerInfo`、`detect_iamf_mp4_packager`、`iamf_mp4_packager_available` 与 `package_iamf_to_mp4`；`island.cpp` 的岛 1 与岛 8；平台表的 `iamf_mp4_packager`（C 头与 Rust）。
+
+**测试**：`mradm-ffi` `mp4_packager` 的 Rust 测试（Unix）在临时目录中放假的打包器脚本，`PATH` 只含这些目录与脚本用到的几个工具的链接，不受机器上安装的 ffmpeg / mp4box 影响：
+- 查找顺序（`mp4box` 在每个目录都先于 `MP4Box`）、空项与不可执行文件；
+- ffmpeg 版本的 `sscanf` 规则（13 种首行）、非 0 退出、无输出、版本只在 stderr；
+- 输出合并、截断（10,000 字节）、退出码、找不到程序（127）、被信号结束（-1）、开始前取消；
+- 取消时进程组先收到 SIGTERM、被忽略后 500 ms 收到 SIGKILL，留下的孙进程随进程组结束；
+- 两种打包器的参数（含空格的路径）、失败消息（`\r` 保留、末尾 `\n` 去掉）、unsupported 与两种取消。
+
+这些测试加入 ctest `mr_adm_encoder_tests`。`audio_island_test` 改为检查 C++ 岛不接岛 1 与岛 8。
+
+**对照与故障注入**：
+- 本机 CLI 不产生 IAMF，所以另做了对照：17 个假打包器场景（各种查找结果、版本行、失败输出、截断、信号、`\r\n`、空格路径）分别交给仍在的 C++ `detect_iamf_mp4_packager` / `package_iamf_to_mp4` 与 Rust，探测结果、错误码、消息与 context 全部相同；
+- ffmpeg 版本解析与 C `sscanf` 在 5,002 行随机首行上对照：824 行解析出版本，结果相同；只有 155 行的数字超出 `int`（C 的 `sscanf` 在此为未定义行为，glibc 截断成任意值），Rust 视为没有版本；
+- 故障注入：失败消息改为同时去掉 `\r`，1 个场景不同；ffmpeg 参数 `copy` 改为 `-copy`，2 个场景不同；
+- 删除 C++ 之后，CLI 记录与迁移前的构建对照，134 条命令 0 差异。
+
+**其他检查**：ctest 25/25；Rust 质量检查、两个目标的交叉 clippy（含 Windows 的 `SearchPathW` 与 `CommandExt`）、FFI 头校验与 `check-changed.sh` 通过。
+
+**规模**：生产 C/C++ 6,720 → 6,311 行；岛接口 1,036 → 1,014 行。
+
+**发布说明**：
+- 打包器的选择、参数、消息与取消行为不变。
+- ffmpeg 主版本超出 32 位整数时视为没有可用的 ffmpeg（原实现结果未定义）。
+- Windows 的输入输出参数保持 Unicode，封装器的探测和启动使用同一条完整路径。
+- 维护者复核：带 bridge 的构建在 macOS / Windows 上以 mp4box 与 ffmpeg ≥ 7 打包 IAMF MP4，含取消；Windows 的进程终止与输出捕获只在交叉 clippy 中编译过。
+
+### C3：IAMF bridge
+
+**迁入 Rust 的部分**：`mradm-ffi` `iamf`（原 `iamf_io.cpp` 的 `convert_to_iamf` 与 `iamf_encoding_available`）。
+- `mr_iamf_aom_bridge_abi_version` 与 `mr_iamf_aom_encode_wav_to_iamf` 经手写 `extern` 调用，`MrIamfAomEncodeOptions` 为 `#[repr(C)]` 的 `IamfEncodeOptions`，接口以 bridge 自己的头 `tools/iamf_aom_bridge/mr_iamf_aom_bridge.h` 为准（`src/adm_audio/iamf_aom_bridge.h` 是它的副本，随 C++ 删除）；
+- 检查顺序照原实现：取消（`render cancelled`，`path=<iamf>`）、9.1.6 / atmos916（unsupported）、读源文件（错误码与文字来自 WAVE 读取，`path=<wav>`）、48 kHz（invalid_argument）、bridge ABI 为 0 或大于 3（io_error）、ABI 低于 3 时不接受 scalable layers（unsupported）；
+- 选项照原实现填写：`abi_version` 取 bridge 的版本，profile 为 AUTO，响度与峰值带“有值”标记；ABI ≥ 2 时填 `struct_size` 与取消回调，ABI ≥ 3 且有层时填逗号分隔的层；
+- 取消回调可能在 bridge 自己的线程上调用：回调读取岛上下文的取消检查（原 C++ 的 `Cancel` 同样从监视线程读取），panic 视为未取消；
+- bridge 返回 `CANCELLED` 或调用方已取消时为 `render cancelled`；其他非 0 结果为 `AOM IAMF bridge encode failed: ` 加 bridge 的错误文字（为空时为 `unknown bridge error`），context 为 `path=<iamf>`；
+- POSIX 路径传 UTF-8。Windows 与 C API 共用 MSVC 文件系统代码页选择规则。线程的 C locale 为 UTF-8 时优先使用 UTF-8，否则按 Win32 文件 API 的 ANSI 或 OEM 设置转换。代码页表示不了的路径报 `render island failed`。
+
+**条件编译**：bridge 只在 `MR_ADM_ENABLE_IAMF=ON` 的构建中链接。岛的 CMake 工程此时在链接清单里写 `feature:iamf`，`mradm-islands-sys` 把它转成 `cargo::metadata=feature_iamf=1`，`mradm-ffi` 新增的 `build.rs` 据 `DEP_MRADM_ISLANDS_FEATURE_IAMF` 设置 `cfg(mradm_iamf)`。没有 bridge 时 `.iamf` 输出照旧报 unsupported（`IAMF encoding requires MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools bridge`），不回退到任何自写的 OBU writer。
+
+`Runner::run` 接下 `Island::EncodeIamf`；平台事实的 IAMF 可用性改为 Rust 的编译期常量，`MradmPlatformIslands` 删除 `iamf` 字段。C++ 音频岛只剩 APAC（岛 6）。
+
+**删除**：`iamf_io.cpp`、`src/adm_audio/iamf_aom_bridge.h`、`audio_io.h` 的 `convert_to_iamf` 与 `iamf_encoding_available`、`island.cpp` 的岛 7、`mr_adm_audio` 对 bridge 的链接与 `MR_ADM_ENABLE_IAMF` 定义、平台表的 `iamf`（C 头与 Rust）、`platform_island.cpp` 的对应函数；`iamf_smoke_test.cpp` 与 ctest `mr_adm_iamf_smoke_tests`。
+
+**测试**：`mradm-ffi` `iamf` 的 Rust 测试：
+- 没有 bridge 的构建：unsupported 的码、文字与空 context（即使已取消）；
+- 有 bridge 的构建（原 `iamf_smoke_test` 的检查）：开始前取消、9.1.6 / atmos916、源文件缺失、44.1 kHz 源；
+- 取消回调读取闭包、panic 与空指针时返回 0；
+- `IamfEncodeOptions` 在 64 位目标上的字段偏移与大小（104 字节）。
+
+`IamfEncodeOptions` 另由 FFI 头校验与 bridge 的头逐字段配对（`ISLAND_RECORDS`，头列入 `FFI_HEADERS`）。这些测试加入 ctest `mr_adm_encoder_tests`。
+
+**对照与故障注入**：本机没有 AOM SDK，所以写了一个与 bridge ABI 相同的桩库：记录收到的选项（各字段、回调与层），按环境变量返回成功、带文字或空文字的失败、非常规返回码、`CANCELLED`，或在自己的线程上轮询取消回调。
+- 用仍在的 C++ `convert_to_iamf` 与 Rust 分别链接桩库，跑 22 个用例：ABI 1 / 2 / 3 / 0 / 4，有无层与响度，各种失败与取消（含 30 ms 后由 bridge 线程轮询到的取消），9.1.6 / atmos916，源缺失、损坏、44.1 / 96 kHz，含空格与非 ASCII 的路径。结果码、文字、context 与桩库记录的选项全部相同；
+- 有 bridge 的 Rust 单元测试在桩库下通过；
+- 故障注入：ABI 1 时也填 `struct_size`，2 条选项记录不同；去掉对 `CANCELLED` 返回码的判断，1 个结果不同；
+- 删除 C++ 之后，CLI 记录与迁移前的构建对照，134 条命令 0 差异（没有 bridge 的构建在请求判定时就拒绝 `.iamf`，读的是 Rust 的 IAMF 可用性）；
+- 有无 `cfg(mradm_iamf)` 两种情形都在本机、Windows 与 macOS 目标上跑过 clippy；FFI 头校验对 bridge 选项结构的字段改动报错（故障注入）。
+
+**其他检查**：ctest 24/24（`mr_adm_iamf_smoke_tests` 删除）；Rust 质量检查、FFI 头校验（58 个结构体）与 `check-changed.sh` 通过。
+
+**规模**：生产 C/C++ 6,311 → 6,100 行；岛接口 1,014 → 988 行；C++ 测试 8,380 → 8,324 行。
+
+**发布说明**：
+- IAMF 的选项、结果与消息不变。
+- 需维护者用真实 bridge 复核：macOS / Windows 上带 `MR_ADM_ENABLE_IAMF=ON` 的构建（含 `cmake` crate 直接构建的路径）链接 bridge，`encode-iamf-*` 与 IAMF MP4 的 CLI 记录与迁移前一致，取消生效；Windows 的代码页转换与 DLL 导入库只在交叉 clippy 中编译过。
 
 ## 维护者实机复核
 

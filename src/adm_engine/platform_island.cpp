@@ -100,15 +100,6 @@ uint32_t apac() noexcept {
     return audio::apac_encoding_available() ? 1U : 0U;
 }
 
-uint32_t iamf() noexcept {
-    return audio::iamf_encoding_available() ? 1U : 0U;
-}
-
-// May spawn a short-lived MP4 packager probe (IAMF builds).
-uint32_t iamf_mp4_packager() noexcept {
-    return audio::iamf_mp4_packager_available() ? 1U : 0U;
-}
-
 #ifdef __APPLE__
 const BackendRecords& apple_records() {
     static const BackendRecords records{apple_capabilities()};
@@ -157,8 +148,6 @@ void system_spatial(const MradmEngineSpatialLayout** layouts, size_t* len) noexc
 }
 
 constexpr MradmPlatformIslands k_platform{&apac,
-                                          &iamf,
-                                          &iamf_mp4_packager,
 #ifdef __APPLE__
                                           &apple,
                                           &apple_lfe_routing_ok,

@@ -6,7 +6,7 @@ use crate::adm::{Text, View};
 use crate::render::{RenderLfeRouting, RenderOverride};
 use crate::render_apple::{RenderApplePlan, RenderApplePlanView, RenderAppleRequest};
 use crate::scene::{DirectMatrix, DirectMatrixView, LayoutEntry, SceneHandle, SceneImportInfo};
-use crate::wav::{Info, OutputHandle, ReadHandle, WavBext};
+use crate::wav::{Info, OutputHandle, ReadHandle};
 use crate::{meter, output_dsp, render, render_apple, scene, scene_math, wav};
 use mradm_dsp::{gain::GainBank, meter::Meter, scene_math::Rotation};
 
@@ -41,19 +41,6 @@ pub struct RustServices {
     output_writer_write:
         unsafe extern "C" fn(*mut OutputHandle, *const f32, usize, *mut u8, usize) -> i32,
     output_writer_finish: unsafe extern "C" fn(*mut OutputHandle, *mut u8, usize) -> i32,
-    caf_append_info: unsafe extern "C" fn(
-        *const u8,
-        usize,
-        *const u8,
-        usize,
-        *const u8,
-        usize,
-        *const u8,
-        usize,
-        *mut u8,
-        usize,
-    ) -> i32,
-    wav_append_bext: unsafe extern "C" fn(*const u8, usize, *const WavBext, *mut u8, usize) -> i32,
     dsp_gain_create:
         unsafe extern "C" fn(usize, u32, u32, *mut *mut GainBank, *mut u8, usize) -> i32,
     dsp_gain_destroy: unsafe extern "C" fn(*mut GainBank),
@@ -135,6 +122,7 @@ pub struct RustTestServices {
         *mut usize,
     ) -> i32,
     scene_direct_matrix_destroy: unsafe extern "C" fn(*mut DirectMatrix),
+    mp4_write_metadata: unsafe extern "C" fn(Text, Text, Text, Text, Text, *mut u8, usize) -> i32,
 }
 
 // SAFETY: the table holds only function pointers and a pointer to another immutable static.
@@ -144,6 +132,7 @@ static TEST_SERVICES: RustTestServices = RustTestServices {
     scene_import: scene::mradm_scene_import,
     scene_direct_matrix_parse: scene::mradm_scene_direct_matrix_parse,
     scene_direct_matrix_destroy: scene::mradm_scene_direct_matrix_destroy,
+    mp4_write_metadata: crate::mp4_metadata::mradm_mp4_write_metadata,
 };
 
 pub(crate) static SERVICES: RustServices = RustServices {
@@ -155,8 +144,6 @@ pub(crate) static SERVICES: RustServices = RustServices {
     output_writer_destroy: wav::mradm_output_writer_destroy,
     output_writer_write: wav::mradm_output_writer_write,
     output_writer_finish: wav::mradm_output_writer_finish,
-    caf_append_info: wav::mradm_caf_append_info,
-    wav_append_bext: wav::mradm_wav_append_bext,
     dsp_gain_create: output_dsp::mradm_dsp_gain_create,
     dsp_gain_destroy: output_dsp::mradm_dsp_gain_destroy,
     dsp_gain_reset: output_dsp::mradm_dsp_gain_reset,
