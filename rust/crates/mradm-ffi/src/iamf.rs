@@ -83,59 +83,12 @@ unsafe extern "C" fn should_cancel(user: *mut c_void) -> c_int {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c_int::from(cancelled()))).unwrap_or(0)
 }
 
-/// A path in the spelling the bridge opens: UTF-8 on POSIX; on Windows the active code page, as
-/// the C++ island's `std::filesystem::path::string()` gave it (a path that code page cannot spell
-/// fails as that conversion did).
-#[cfg(not(windows))]
+/// A path in the spelling the bridge opens: UTF-8 on POSIX and the filesystem code page on Windows.
 #[cfg_attr(not(mradm_iamf), allow(dead_code))]
 fn native_path(path: &str) -> Result<std::ffi::CString, Error> {
+    #[cfg(windows)]
+    let path = crate::windows_path::native_bytes(path).ok_or_else(internal)?;
     std::ffi::CString::new(path).map_err(|_| internal())
-}
-
-#[cfg(windows)]
-#[cfg_attr(not(mradm_iamf), allow(dead_code))]
-fn native_path(path: &str) -> Result<std::ffi::CString, Error> {
-    unsafe extern "system" {
-        fn WideCharToMultiByte(
-            code_page: u32,
-            flags: u32,
-            wide: *const u16,
-            wide_len: c_int,
-            narrow: *mut u8,
-            narrow_len: c_int,
-            default_char: *const u8,
-            used_default_char: *mut c_int,
-        ) -> c_int;
-    }
-    const CP_ACP: u32 = 0;
-    const WC_NO_BEST_FIT_CHARS: u32 = 0x400;
-    let wide: Vec<u16> = path.encode_utf16().collect();
-    if wide.is_empty() {
-        return Ok(std::ffi::CString::default());
-    }
-    let len = c_int::try_from(wide.len()).map_err(|_| internal())?;
-    let convert = |out: *mut u8, out_len: c_int, used: *mut c_int| unsafe {
-        WideCharToMultiByte(
-            CP_ACP,
-            WC_NO_BEST_FIT_CHARS,
-            wide.as_ptr(),
-            len,
-            out,
-            out_len,
-            std::ptr::null(),
-            used,
-        )
-    };
-    let size = convert(std::ptr::null_mut(), 0, std::ptr::null_mut());
-    if size <= 0 {
-        return Err(internal());
-    }
-    let mut narrow = vec![0u8; size as usize];
-    let mut used_default = 0;
-    if convert(narrow.as_mut_ptr(), size, &mut used_default) != size || used_default != 0 {
-        return Err(internal());
-    }
-    std::ffi::CString::new(narrow).map_err(|_| internal())
 }
 
 /// The C++ island's answer to an exception.
@@ -338,6 +291,25 @@ mod tests {
         user = &panics;
         assert_eq!(unsafe { should_cancel((&raw mut user).cast()) }, 0);
         assert_eq!(unsafe { should_cancel(std::ptr::null_mut()) }, 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bridge_paths_follow_the_calling_threads_utf8_locale() {
+        unsafe extern "C" {
+            fn _configthreadlocale(mode: c_int) -> c_int;
+            fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
+        }
+        const ENABLE_PER_THREAD_LOCALE: c_int = 1;
+        const LC_ALL: c_int = 0;
+        std::thread::spawn(|| {
+            assert_ne!(unsafe { _configthreadlocale(ENABLE_PER_THREAD_LOCALE) }, -1);
+            assert!(!unsafe { setlocale(LC_ALL, c".UTF8".as_ptr()) }.is_null());
+            let path = "测试 🎵.iamf";
+            assert_eq!(native_path(path).unwrap().as_bytes(), path.as_bytes());
+        })
+        .join()
+        .unwrap();
     }
 
     #[test]

@@ -375,6 +375,23 @@ mod tests {
         assert!(leftovers(&dir).is_empty());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn tagging_preserves_the_output_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = scratch("mode");
+        let path = write(&dir, "restricted.mp4", &raw(b"moov", &[]));
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        write_metadata(&path, &fields()).unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(leftovers(&dir).is_empty());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn a_following_free_atom_gives_up_its_bytes() {
         let dir = scratch("free");

@@ -195,6 +195,7 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 - atom 规则照原实现：size 1 为 64 位长度，size 0 延伸到文件末尾；取最后一个顶层 `moov`；`moov` 的头是 16 字节或增长后超过 32 位时报 unsupported；
 - 错误码与文字照原实现（`cannot open MP4 for metadata read`、`malformed MP4 atom table`、`MP4 metadata: missing moov atom` 等），context 为 `path=<路径>`；
 - 原实现把整个文件读进内存后截断重写；现在只读 atom 头，经同目录的独占临时文件分块复制，成功后改名替换（与 7.2 A / B 的元数据相同），失败时保留原文件。
+- POSIX 上临时文件的模式至多为 `0600`，安装时恢复原文件模式。
 
 `Runner::run` 接下扩展名为 `.m4a` / `.mp4` 的 `Island::WriteMetadata`。WAV（bext / ambi）与 CAF（info）的元数据五期起就由 `mradm-engine` 直接写出（`write_own_metadata`），岛 9 实际只剩 FLAC、MKA 与 MP4，所以 C++ 岛对岛 9 返回 2。
 
@@ -226,9 +227,9 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 ### C2：MP4 打包器
 
 **迁入 Rust 的部分**：`mradm-ffi` `mp4_packager`（原 `iamf_io.cpp` 的进程辅助、`detect_iamf_mp4_packager` 与 `package_iamf_to_mp4`）。
-- **查找**：POSIX 按 `PATH` 各目录（跳过空项）用 `access(X_OK)` 依次找 `mp4box`、`MP4Box`，再找 `ffmpeg`，返回名字本身，运行时再经 `PATH` 解析，与 `execvp` 相同；Windows 照原实现调用 `SearchPathW`（`.exe` 扩展名）；
+- **查找**。POSIX 按 `PATH` 各目录用 `access(X_OK)` 依次找 `mp4box`、`MP4Box`、`ffmpeg`，跳过空项。运行时按名字再次查找。Windows 直接启动 `SearchPathW` 找到的 `.exe` 完整路径。
 - **ffmpeg 版本**：运行 `ffmpeg -version`，退出码非 0 或没有输出时视为没有打包器；首行按 `sscanf("ffmpeg version %d.")` 的规则解析（格式中的空白匹配任意长度的空白、`%d` 跳过前导空白并接受正负号），主版本须大于 0；
-- **运行**：经 `std::process` 直接运行，不走 shell；stdout 与 stderr 共用一个管道，最多保留 4096 字节，截断时只追加一次 `...(truncated)`；取消每 20 ms 检查一次。POSIX 上打包器在自己的进程组中运行，取消时向进程组发 SIGTERM，500 ms 后发 SIGKILL；Windows 上终止进程，`CREATE_NO_WINDOW`。被信号结束时退出码为 -1；无法启动时与原实现的 `execvp` 失败一样视为退出码 127、没有输出；
+- **运行**。通过 `std::process` 直接启动。stdout 和 stderr 共用管道，最多保留 4096 字节，截断时追加一次 `...(truncated)`。主进程退出后读完已就绪的输出并关闭读取端。每 20 ms 检查一次取消。POSIX 向进程组发 SIGTERM，等待 500 ms 后仍在运行则发 SIGKILL。Windows 以 `CREATE_NO_WINDOW` 启动，取消时终止进程。信号退出返回 -1，启动失败返回 127。
 - **打包**：mp4box 为 `-add <iamf> -new <mp4>`，ffmpeg 为 `-y -i <iamf> -c copy <mp4>`；失败消息为 `mp4box packaging failed: ` / `ffmpeg packaging failed: ` 加去掉末尾换行的输出，context 为空；找不到打包器时为原来的 unsupported 消息；取消为 `render cancelled`，context 为 `path=<mp4>`。
 
 `Runner::run` 接下 `Island::ProbeMp4Packager` 与 `Island::PackageMp4`。输出格式文档的打包器可用性（只在 IAMF 构建中探测）也改由 Rust 探测，`MradmPlatformIslands` 删除 `iamf_mp4_packager` 字段，`platform_island.cpp` 删除对应函数。C++ 岛只剩 APAC（岛 6）与 IAMF（岛 7）。
@@ -257,7 +258,7 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 **发布说明**：
 - 打包器的选择、参数、消息与取消行为不变。
 - ffmpeg 主版本超出 32 位整数时视为没有可用的 ffmpeg（原实现结果未定义）。
-- Windows：原实现把原生窄路径当作 UTF-8 转宽字符，非 ASCII 路径会被破坏；现在路径经 UTF-8 正确传递。程序解析改用 Rust 标准库：在 `PATH` 与系统目录中查找，不再查找当前目录（`SearchPathW` 的探测不变）。
+- Windows 的输入输出参数保持 Unicode，封装器的探测和启动使用同一条完整路径。
 - 维护者复核：带 bridge 的构建在 macOS / Windows 上以 mp4box 与 ffmpeg ≥ 7 打包 IAMF MP4，含取消；Windows 的进程终止与输出捕获只在交叉 clippy 中编译过。
 
 ### C3：IAMF bridge
@@ -268,7 +269,7 @@ C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的�
 - 选项照原实现填写：`abi_version` 取 bridge 的版本，profile 为 AUTO，响度与峰值带“有值”标记；ABI ≥ 2 时填 `struct_size` 与取消回调，ABI ≥ 3 且有层时填逗号分隔的层；
 - 取消回调可能在 bridge 自己的线程上调用：回调读取岛上下文的取消检查（原 C++ 的 `Cancel` 同样从监视线程读取），panic 视为未取消；
 - bridge 返回 `CANCELLED` 或调用方已取消时为 `render cancelled`；其他非 0 结果为 `AOM IAMF bridge encode failed: ` 加 bridge 的错误文字（为空时为 `unknown bridge error`），context 为 `path=<iamf>`；
-- 路径：POSIX 传 UTF-8；Windows 照原实现的 `std::filesystem::path::string()` 转为当前代码页（`WideCharToMultiByte`，`CP_ACP`），代码页表示不了的路径报 internal（原实现在此抛异常，岛报 `render island failed`）。
+- POSIX 路径传 UTF-8。Windows 与 C API 共用 MSVC 文件系统代码页选择规则。线程的 C locale 为 UTF-8 时优先使用 UTF-8，否则按 Win32 文件 API 的 ANSI 或 OEM 设置转换。代码页表示不了的路径报 `render island failed`。
 
 **条件编译**：bridge 只在 `MR_ADM_ENABLE_IAMF=ON` 的构建中链接。岛的 CMake 工程此时在链接清单里写 `feature:iamf`，`mradm-islands-sys` 把它转成 `cargo::metadata=feature_iamf=1`，`mradm-ffi` 新增的 `build.rs` 据 `DEP_MRADM_ISLANDS_FEATURE_IAMF` 设置 `cfg(mradm_iamf)`。没有 bridge 时 `.iamf` 输出照旧报 unsupported（`IAMF encoding requires MR_ADM_ENABLE_IAMF=ON and the official AOM iamf-tools bridge`），不回退到任何自写的 OBU writer。
 

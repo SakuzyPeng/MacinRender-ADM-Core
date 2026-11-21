@@ -69,3 +69,9 @@ pub mod hptf {
 pub mod osc {
     pub use crate::osc::receiver;
 }
+
+/// The Windows file API and C runtime's shared path encoding for the C ABI and IAMF bridge.
+#[cfg(windows)]
+pub mod windows_paths {
+    pub use crate::windows_path::{code_page, native_bytes};
+}

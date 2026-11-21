@@ -43,6 +43,8 @@ mod spatial;
 #[cfg(test)]
 mod test_alloc;
 mod wav;
+#[cfg(windows)]
+mod windows_path;
 
 /// Error codes follow the project's public ErrorCode values. Messages belong to
 /// the caller, making error reporting reentrant without thread-local allocation.

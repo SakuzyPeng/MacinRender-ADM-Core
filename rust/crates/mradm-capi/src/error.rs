@@ -182,7 +182,6 @@ pub(crate) fn utf8_path(native: &[u8]) -> Option<Vec<u8>> {
         return concat(&[native]).ok();
     }
     unsafe extern "system" {
-        fn AreFileApisANSI() -> i32;
         fn MultiByteToWideChar(
             code_page: u32,
             flags: u32,
@@ -192,26 +191,11 @@ pub(crate) fn utf8_path(native: &[u8]) -> Option<Vec<u8>> {
             wide_len: i32,
         ) -> i32;
     }
-    unsafe extern "C" {
-        fn ___lc_codepage_func() -> u32;
-    }
-    const CP_ACP: u32 = 0;
-    const CP_OEMCP: u32 = 1;
-    const CP_UTF8: u32 = 65001;
     const MB_ERR_INVALID_CHARS: u32 = 8;
     if native.is_empty() {
         return Some(Vec::new());
     }
-    // The MSVC STL's __std_fs_code_page: the C locale's UTF-8, else the file APIs' code page.
-    let code_page = unsafe {
-        if ___lc_codepage_func() == CP_UTF8 {
-            CP_UTF8
-        } else if AreFileApisANSI() == 0 {
-            CP_OEMCP
-        } else {
-            CP_ACP
-        }
-    };
+    let code_page = mradm_ffi::api::windows_paths::code_page();
     let len = i32::try_from(native.len()).ok()?;
     let wide_len = unsafe {
         MultiByteToWideChar(

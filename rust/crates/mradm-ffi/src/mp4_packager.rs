@@ -7,10 +7,9 @@
 //! process group, which gets SIGTERM and, 500 ms later, SIGKILL; on Windows the process is
 //! terminated.
 use mradm_engine::request::{Error, Packager};
-use std::ffi::OsStr;
-use std::io::Read;
+use std::ffi::{OsStr, OsString};
+use std::io::{self, PipeReader, Read};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 const UNSUPPORTED: i32 = 2;
@@ -21,16 +20,13 @@ const MAX_OUTPUT: usize = 4096;
 const TRUNCATED: &str = "...(truncated)";
 const POLL: Duration = Duration::from_millis(20);
 const TERMINATE_GRACE: Duration = Duration::from_millis(500);
-/// How long the output is still read once the packager has exited: a process it left behind can
-/// hold the pipe open, and the C++ island read only what was already there.
-const FINAL_READ: Duration = Duration::from_millis(500);
 
 /// The packager found in `PATH` and, for ffmpeg, its major version (-1 otherwise).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Found {
     pub kind: Packager,
     pub ffmpeg_major: i32,
-    executable: String,
+    executable: OsString,
 }
 
 impl Found {
@@ -38,7 +34,7 @@ impl Found {
         Self {
             kind: Packager::None,
             ffmpeg_major: -1,
-            executable: String::new(),
+            executable: OsString::new(),
         }
     }
 }
@@ -73,13 +69,9 @@ fn append(output: &mut Vec<u8>, data: &[u8]) {
 /// The first of `candidates` with an executable file in a directory of `path` (`PATH` when
 /// `None`); the name itself is returned, and the run looks it up again as `execvp` did.
 #[cfg(unix)]
-fn find_in(path: Option<&OsStr>, candidates: &[&str]) -> Option<String> {
-    use std::ffi::{CString, c_char, c_int};
+fn find_in(path: Option<&OsStr>, candidates: &[&str]) -> Option<OsString> {
+    use std::ffi::CString;
     use std::os::unix::ffi::OsStrExt;
-    unsafe extern "C" {
-        fn access(path: *const c_char, mode: c_int) -> c_int;
-    }
-    const X_OK: c_int = 1;
     let path = match path {
         Some(p) => p.to_owned(),
         None => std::env::var_os("PATH")?,
@@ -95,8 +87,8 @@ fn find_in(path: Option<&OsStr>, candidates: &[&str]) -> Option<String> {
             let Ok(candidate) = CString::new(candidate) else {
                 continue;
             };
-            if unsafe { access(candidate.as_ptr(), X_OK) } == 0 {
-                return Some((*name).to_owned());
+            if unsafe { libc::access(candidate.as_ptr(), libc::X_OK) } == 0 {
+                return Some(OsString::from(name));
             }
         }
     }
@@ -104,9 +96,12 @@ fn find_in(path: Option<&OsStr>, candidates: &[&str]) -> Option<String> {
 }
 
 /// `SearchPathW` with the default search order and the `.exe` extension; `path` is only used by
-/// the Unix tests.
+/// tests. Keep the resolved path so the launcher uses the same executable.
 #[cfg(windows)]
-fn find_in(_path: Option<&OsStr>, candidates: &[&str]) -> Option<String> {
+fn find_in(path: Option<&OsStr>, candidates: &[&str]) -> Option<OsString> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use std::ptr;
+
     unsafe extern "system" {
         fn SearchPathW(
             path: *const u16,
@@ -117,24 +112,32 @@ fn find_in(_path: Option<&OsStr>, candidates: &[&str]) -> Option<String> {
             file_part: *mut *mut u16,
         ) -> u32;
     }
-    const MAX_PATH: usize = 260;
-    let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
-    let extension = wide(".exe");
+    let wide = |s: &OsStr| s.encode_wide().chain([0]).collect::<Vec<_>>();
+    let path = path.map(wide);
+    let path = path.as_ref().map_or(ptr::null(), |s| s.as_ptr());
+    let extension = wide(OsStr::new(".exe"));
+    let mut found = vec![0u16; 260];
     for name in candidates {
-        let file = wide(name);
-        let mut found = [0u16; MAX_PATH];
-        let n = unsafe {
-            SearchPathW(
-                std::ptr::null(),
-                file.as_ptr(),
-                extension.as_ptr(),
-                MAX_PATH as u32,
-                found.as_mut_ptr(),
-                std::ptr::null_mut(),
-            )
-        };
-        if n > 0 {
-            return Some((*name).to_owned());
+        let file = wide(OsStr::new(name));
+        loop {
+            let n = unsafe {
+                SearchPathW(
+                    path,
+                    file.as_ptr(),
+                    extension.as_ptr(),
+                    found.len() as u32,
+                    found.as_mut_ptr(),
+                    ptr::null_mut(),
+                )
+            } as usize;
+            if n == 0 {
+                break;
+            }
+            if n < found.len() {
+                return Some(OsString::from_wide(&found[..n]));
+            }
+            // SearchPathW includes the terminator in the required capacity when the buffer is small.
+            found.resize(n, 0);
         }
     }
     None
@@ -218,15 +221,10 @@ fn configure(command: &mut Command) {
 /// period (`kill` falls back to the process when the group is gone); Windows terminates it.
 #[cfg(unix)]
 fn signal(child: &mut std::process::Child, kill: bool) {
-    use std::ffi::c_int;
-    unsafe extern "C" {
-        #[link_name = "kill"]
-        fn kill_process(pid: c_int, signal: c_int) -> c_int;
-    }
-    let signal = if kill { 9 } else { 15 };
-    let pid = child.id() as c_int;
-    if unsafe { kill_process(-pid, signal) } != 0 {
-        unsafe { kill_process(pid, signal) };
+    let signal = if kill { libc::SIGKILL } else { libc::SIGTERM };
+    let pid = child.id() as libc::pid_t;
+    if unsafe { libc::kill(-pid, signal) } != 0 {
+        unsafe { libc::kill(pid, signal) };
     }
 }
 
@@ -237,10 +235,78 @@ fn signal(child: &mut std::process::Child, kill: bool) {
     }
 }
 
-/// `run_process`: runs `program` with `args`, the child's `PATH` replaced by `path` when given.
+#[cfg(unix)]
+fn set_nonblocking(reader: &PipeReader) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+
+    let fd = reader.as_raw_fd();
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags == -1 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn read_ready(reader: &mut PipeReader, buffer: &mut [u8]) -> io::Result<usize> {
+    reader.read(buffer)
+}
+
+#[cfg(windows)]
+fn read_ready(reader: &mut PipeReader, buffer: &mut [u8]) -> io::Result<usize> {
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle;
+    use std::ptr;
+
+    unsafe extern "system" {
+        fn PeekNamedPipe(
+            pipe: *mut c_void,
+            buffer: *mut c_void,
+            buffer_size: u32,
+            read: *mut u32,
+            available: *mut u32,
+            message_remaining: *mut u32,
+        ) -> i32;
+    }
+    let mut available = 0;
+    let ok = unsafe {
+        PeekNamedPipe(
+            reader.as_raw_handle(),
+            ptr::null_mut(),
+            0,
+            ptr::null_mut(),
+            &mut available,
+            ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if available == 0 {
+        return Ok(0);
+    }
+    // This is the only reader, so the observed bytes are still available.
+    let count = buffer.len().min(available as usize);
+    reader.read(&mut buffer[..count])
+}
+
+fn drain_output(reader: &mut PipeReader, output: &mut Vec<u8>) {
+    let mut buffer = [0u8; 8192];
+    // Bound each drain so a continuously writing packager cannot delay cancellation checks.
+    for _ in 0..8 {
+        match read_ready(reader, &mut buffer) {
+            Ok(0) => break,
+            Ok(n) => append(output, &buffer[..n]),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(_) => break,
+        }
+    }
+}
+
+/// Runs the packager with the child's PATH replaced by the test search path when given.
 fn run_in(
     path: Option<&OsStr>,
-    program: &str,
+    program: impl AsRef<OsStr>,
     args: &[&OsStr],
     cancelled: &dyn Fn() -> bool,
 ) -> Run {
@@ -256,9 +322,13 @@ fn run_in(
             cancelled: true,
         };
     }
-    let Ok((mut reader, writer)) = std::io::pipe() else {
+    let Ok((mut reader, writer)) = io::pipe() else {
         return failed("pipe() failed");
     };
+    #[cfg(unix)]
+    if set_nonblocking(&reader).is_err() {
+        return failed("cannot make the packager pipe nonblocking");
+    }
     let Ok(error_writer) = writer.try_clone() else {
         return failed("pipe() failed");
     };
@@ -285,29 +355,12 @@ fn run_in(
     // `command` holds the parent's copies of the write end: drop them so the read reaches EOF.
     drop(command);
 
-    let output = Arc::new(Mutex::new(Vec::new()));
-    let (done, finished) = mpsc::channel();
-    let sink = Arc::clone(&output);
-    std::thread::spawn(move || {
-        let mut buffer = [0u8; 512];
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => break,
-                Ok(n) => append(
-                    &mut sink.lock().unwrap_or_else(|e| e.into_inner()),
-                    &buffer[..n],
-                ),
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(_) => break,
-            }
-        }
-        let _ = done.send(());
-    });
-
+    let mut output = Vec::new();
     let mut is_cancelled = false;
     let mut killed = false;
     let mut deadline = None;
     let code = loop {
+        drain_output(&mut reader, &mut output);
         match child.try_wait() {
             Ok(Some(status)) => break status.code().unwrap_or(-1),
             Ok(None) => {}
@@ -323,11 +376,11 @@ fn run_in(
         }
         std::thread::sleep(POLL);
     };
-    let _ = finished.recv_timeout(FINAL_READ);
-    let bytes = output.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    // A descendant may still hold a writer. Read the remaining ready bytes and close our end.
+    drain_output(&mut reader, &mut output);
     Run {
         code,
-        output: String::from_utf8_lossy(&bytes).into_owned(),
+        output: String::from_utf8_lossy(&output).into_owned(),
         cancelled: is_cancelled,
     }
 }
@@ -391,7 +444,6 @@ pub(crate) fn package(src: &str, dst: &str, cancelled: &dyn Fn() -> bool) -> Res
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::ffi::OsString;
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
@@ -489,17 +541,20 @@ mod tests {
 
         let found = detect_in(Some(&path_of(&[&ffmpeg, &mp4box])));
         assert_eq!(
-            (found.kind, found.ffmpeg_major, found.executable.as_str()),
-            (Packager::Mp4box, -1, "mp4box")
+            (found.kind, found.ffmpeg_major, found.executable.as_os_str()),
+            (Packager::Mp4box, -1, OsStr::new("mp4box"))
         );
         // "mp4box" is looked up in every directory before "MP4Box".
         let found = detect_in(Some(&path_of(&[&upper, &mp4box])));
         assert_eq!(found.executable, "mp4box");
         let found = detect_in(Some(&path_of(&[&upper])));
-        assert_eq!(
-            (found.kind, found.executable.as_str()),
-            (Packager::Mp4box, "MP4Box")
-        );
+        assert_eq!(found.kind, Packager::Mp4box);
+        let expected = if upper.join("mp4box").exists() {
+            "mp4box"
+        } else {
+            "MP4Box"
+        };
+        assert_eq!(found.executable, expected);
         let found = detect_in(Some(&path_of(&[&plain, &ffmpeg])));
         assert_eq!((found.kind, found.ffmpeg_major), (Packager::Ffmpeg, 7));
         // Empty entries are skipped; files that are not executable do not count.
@@ -556,6 +611,57 @@ mod tests {
     }
 
     #[test]
+    fn closes_the_read_end_when_a_descendant_keeps_writing() {
+        let dir = scratch("inherited-pipe");
+        let probe = dir.join("probe");
+        let result = dir.join("result");
+        tool(
+            &dir,
+            "background",
+            r#"
+                (
+                    trap '' PIPE
+                    attempts=0
+                    while [ ! -f "$1" ] && [ "$attempts" -lt 100 ]; do
+                        sleep 0.05
+                        attempts=$((attempts + 1))
+                    done
+                    state=closed
+                    if (printf 'late output\n'); then
+                        state=open
+                    fi
+                    printf '%s\n' "$state" > "$2"
+                ) 2>/dev/null &
+                printf 'parent output\n'
+            "#,
+            true,
+        );
+        let run = run_in(
+            Some(&path_of(&[&dir])),
+            "background",
+            &[probe.as_os_str(), result.as_os_str()],
+            &|| false,
+        );
+        assert_eq!((run.code, run.output.as_str()), (0, "parent output\n"));
+        fs::write(&probe, "").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let status = loop {
+            if let Ok(status) = fs::read_to_string(&result)
+                && !status.is_empty()
+            {
+                break status;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "background writer did not report"
+            );
+            std::thread::sleep(POLL);
+        };
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(status.trim(), "closed");
+    }
+
+    #[test]
     fn cancellation_stops_the_process_group() {
         let dir = scratch("cancel");
         let marker = dir.join("grandchild-alive");
@@ -563,10 +669,7 @@ mod tests {
         tool(
             &dir,
             "stubborn",
-            &format!(
-                "trap '' TERM; (sleep 3; touch {}) & sleep 30",
-                marker.display()
-            ),
+            r#"trap '' TERM; (sleep 3; touch "$1") & sleep 30"#,
             true,
         );
         let start = Instant::now();
@@ -575,7 +678,12 @@ mod tests {
             polls.set(polls.get() + 1);
             polls.get() > 5
         };
-        let run = run_in(Some(&path_of(&[&dir])), "stubborn", &[], &cancelled);
+        let run = run_in(
+            Some(&path_of(&[&dir])),
+            "stubborn",
+            &[marker.as_os_str()],
+            &cancelled,
+        );
         let elapsed = start.elapsed();
         assert!(run.cancelled);
         assert_eq!(run.code, -1, "killed by a signal");
@@ -593,12 +701,12 @@ mod tests {
 
     #[test]
     fn packaging_runs_the_found_tool_with_its_arguments() {
-        let mp4box = scratch("pack-mp4box");
+        let mp4box = scratch("pack mp4box");
         let log = mp4box.join("args");
         tool(
             &mp4box,
             "mp4box",
-            &format!("printf '%s|' \"$@\" > {}", log.display()),
+            r#"printf '%s|' "$@" > "${0%/*}/args""#,
             true,
         );
         package_in(
@@ -613,15 +721,15 @@ mod tests {
             "-add|in put.iamf|-new|out.mp4|"
         );
 
-        let ffmpeg = scratch("pack-ffmpeg");
+        let ffmpeg = scratch("pack ffmpeg");
         let log = ffmpeg.join("args");
         tool(
             &ffmpeg,
             "ffmpeg",
-            &format!(
-                "if [ \"$1\" = -version ]; then echo 'ffmpeg version 7.0'; exit 0; fi; printf '%s|' \"$@\" > {}",
-                log.display()
-            ),
+            r#"
+                if [ "$1" = -version ]; then echo 'ffmpeg version 7.0'; exit 0; fi
+                printf '%s|' "$@" > "${0%/*}/args"
+            "#,
             true,
         );
         package_in(Some(&path_of(&[&ffmpeg])), "a.iamf", "b.mp4", &|| false).unwrap();
@@ -667,5 +775,28 @@ mod tests {
         };
         let e = package_in(Some(&path_of(&[&dir])), "a.iamf", "b.mp4", &cancelled).unwrap_err();
         assert_eq!((e.code, e.context.as_str()), (CANCELLED, "path=b.mp4"));
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn runs_the_full_path_found_by_search_path() {
+        let dir = std::env::temp_dir().join(format!("mradm 封装器 {}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let test_tool = dir.join("mradm-test-packager.exe");
+        fs::copy(std::env::current_exe().unwrap(), &test_tool).unwrap();
+        let found = find_in(Some(dir.as_os_str()), &["mradm-test-packager"]).unwrap();
+        let run = run_in(None, &found, &[OsStr::new("--list")], &|| false);
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(std::path::Path::new(&found), test_tool);
+        assert_eq!(run.code, 0, "{:?}", run.output);
+        assert!(
+            run.output
+                .contains("runs_the_full_path_found_by_search_path")
+        );
     }
 }

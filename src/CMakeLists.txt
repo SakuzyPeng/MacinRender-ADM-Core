@@ -247,7 +247,7 @@ endif()
 list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_render_common mr_adm_audio mr_adm_rust_services)
 set(_mr_codec_libraries Opus::opus FLAC::FLAC)
 set(_mr_native_lines)
-if(TARGET MacinRender::IamfAomBridge)
+if(MR_ADM_ENABLE_IAMF)
     # Rust calls the bridge (mradm-ffi `iamf`, cfg(mradm_iamf) when the manifest names the feature).
     list(APPEND _mr_codec_libraries MacinRender::IamfAomBridge)
     string(APPEND _mr_native_lines "feature:iamf\n")
