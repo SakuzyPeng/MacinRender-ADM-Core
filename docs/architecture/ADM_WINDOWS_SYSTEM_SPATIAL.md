@@ -4,7 +4,7 @@
 
 ## 1. 定位与范围
 
-文件流式渲染监听和 Scene 流式渲染均可将 EAR 或 VBAP 等后端输出的多声道床交给 Windows 空间化器，由操作系统做 HRTF。文件监听通过 `monitor_system_spatial` 选择设备，Scene 输出通过 `ADM_SCENE_OUTPUT_SYSTEM_SPATIAL` 选择。
+文件流式渲染监听通过 `monitor_system_spatial` 将 EAR、VBAP 等后端输出的多声道床送入 Windows 空间化器。Scene 流式渲染通过 `ADM_SCENE_OUTPUT_SYSTEM_SPATIAL` 提交 SAF VBAP 或 Triple Balance 输出的多声道床。两条路径都由操作系统做 HRTF 渲染。
 
 支持的监听布局：`22.2`（`9+10+3`）、`9.1.6`、`7.1.4`（`4+7+0`）、`5.1.4`（`4+5+0`）、`5.1`（`0+5+0`）。
 

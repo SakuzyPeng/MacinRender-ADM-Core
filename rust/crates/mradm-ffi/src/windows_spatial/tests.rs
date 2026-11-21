@@ -84,6 +84,29 @@ fn public_layouts_match_the_object_routing_plans() {
 }
 
 #[test]
+fn dynamic_22_2_objects_use_the_selected_height_geometry() {
+    // B+045 is at azimuth +45° and elevation −30° (standard) or −15° (Apple).
+    for (geometry, bottom_left) in [
+        (Geometry::Standard, [-0.612_372_4, -0.5, -0.612_372_4]),
+        (Geometry::Apple, [-0.683_012_7, -0.258_819_04, -0.683_012_7]),
+    ] {
+        let bed = Bed::new("9+10+3", 24, geometry).unwrap();
+        for (speaker, slot, expected) in
+            [("T+000", 14, [0.0, 1.0, 0.0]), ("B+045", 21, bottom_left)]
+        {
+            let position = bed.routes[slot].position.expect("dynamic speaker");
+            assert!(
+                position
+                    .into_iter()
+                    .zip(expected)
+                    .all(|(a, b)| (a - b).abs() < 1e-5),
+                "{geometry:?} {speaker}: expected {expected:?}, got {position:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn dual_lfe_and_deinterleaving_use_only_the_frames_written() {
     let bed = Bed::new("9+10+3", 24, Geometry::Standard).unwrap();
     let mut pcm = [0.0; 24 * 3];
@@ -215,38 +238,69 @@ fn default_endpoint_submits_all_layouts_without_rust_allocations() {
 #[test]
 #[ignore = "requires a Windows default output endpoint with spatial sound enabled"]
 fn failed_start_can_retry_and_stop_joins_the_last_pull() {
-    use std::sync::atomic::AtomicUsize;
-    unsafe extern "C" fn count(user: *mut c_void, _: *mut f32, _: usize, _: usize) -> usize {
-        unsafe { &*user.cast::<AtomicUsize>() }.fetch_add(1, Ordering::Relaxed);
+    const TIMEOUT: Duration = Duration::from_secs(2);
+    #[derive(Debug, PartialEq, Eq)]
+    enum Event {
+        PullEntered,
+        PullExited,
+        StopStarted,
+        StopReturned,
+    }
+    struct PullGate {
+        gate: Mutex<()>,
+        events: mpsc::Sender<Event>,
+    }
+    unsafe extern "C" fn blocked_pull(user: *mut c_void, _: *mut f32, _: usize, _: usize) -> usize {
+        let pull = unsafe { &*user.cast::<PullGate>() };
+        let events = pull.events.clone();
+        let _ = events.send(Event::PullEntered);
+        drop(pull.gate.lock().unwrap_or_else(|e| e.into_inner()));
+        let _ = events.send(Event::PullExited);
         0
     }
-    let calls = AtomicUsize::new(0);
-    let user = std::ptr::from_ref(&calls).cast_mut().cast();
+    let (events, observed) = mpsc::channel();
+    let pull = PullGate {
+        gate: Mutex::new(()),
+        events,
+    };
+    let user = std::ptr::from_ref(&pull).cast_mut().cast();
     let table = open("4+7+0".into(), 0);
     let device = unsafe { crate::render::device_island::Device::adopt(&table) };
-    let bad = device.start(12, 0, user, count).unwrap_err();
+    let bad = device.start(12, 0, user, blocked_pull).unwrap_err();
     assert_eq!(bad.code, code::UNSUPPORTED);
     assert!(
         bad.context
             .starts_with(b"system-spatial sample_rate=0Hz hr=0x")
     );
-    assert_eq!(calls.load(Ordering::Relaxed), 0);
+    assert_eq!(observed.try_recv(), Err(mpsc::TryRecvError::Empty));
     for _ in 0..2 {
-        let previous = calls.load(Ordering::Relaxed);
-        device.start(12, 48000, user, count).unwrap();
+        let hold = pull.gate.lock().unwrap();
+        device.start(12, 48000, user, blocked_pull).unwrap();
+        assert_eq!(observed.recv_timeout(TIMEOUT), Ok(Event::PullEntered));
         assert_eq!(
-            device.start(12, 48000, user, count).unwrap_err().code,
+            device
+                .start(12, 48000, user, blocked_pull)
+                .unwrap_err()
+                .code,
             code::INVALID_ARGUMENT
         );
-        let deadline = std::time::Instant::now() + Duration::from_secs(2);
-        while calls.load(Ordering::Relaxed) == previous && std::time::Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(5));
-        }
-        device.stop();
-        let stopped = calls.load(Ordering::Relaxed);
-        assert!(stopped > previous);
-        thread::sleep(Duration::from_millis(30));
-        assert_eq!(calls.load(Ordering::Relaxed), stopped);
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                pull.events.send(Event::StopStarted).unwrap();
+                device.stop();
+                pull.events.send(Event::StopReturned).unwrap();
+            });
+            assert_eq!(observed.recv_timeout(TIMEOUT), Ok(Event::StopStarted));
+            let while_held = observed.recv_timeout(Duration::from_millis(50));
+            drop(hold);
+            assert_eq!(observed.recv_timeout(TIMEOUT), Ok(Event::PullExited));
+            assert_eq!(while_held, Err(mpsc::RecvTimeoutError::Timeout));
+            assert_eq!(observed.recv_timeout(TIMEOUT), Ok(Event::StopReturned));
+        });
+        assert_eq!(
+            observed.recv_timeout(Duration::from_millis(30)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        );
         assert!(!device.progress().recovering);
     }
 }
