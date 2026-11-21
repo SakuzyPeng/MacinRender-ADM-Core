@@ -1,9 +1,7 @@
-//! Private render-scene boundary with the semantic policy, the DirectSpeakers matrix and the
-//! screen configuration. An imported scene is owned by its handle and its views are borrowed until
-//! the next call that changes it (`mradm_engine_apply_policy`, `mradm_scene_template`) or until
-//! `mradm_scene_destroy`.
+//! Render scenes and the private C boundary for scene import and DirectSpeakers matrices.
+//! C++ passes the opaque scene handle back to Rust and releases it with `mradm_scene_destroy`.
 use crate::adm::Text;
-use mradm_scene::{Context, ImportOptions, RenderScene, direct_matrix, policy::UserLevel};
+use mradm_scene::{Context, ImportOptions, RenderScene, direct_matrix};
 use std::{
     borrow::Cow,
     panic::{AssertUnwindSafe, catch_unwind},
@@ -11,50 +9,21 @@ use std::{
 };
 
 pub struct SceneHandle {
-    pub(crate) scene: RenderScene,
-    objects: Vec<SceneObjectState>,
-    direct_blocks: Vec<SceneDirectState>,
-}
-
-/// `user_mute`: 0 unset, 1 false, 2 true.
-#[repr(C)]
-pub struct SceneObjectState {
-    user_gain: f32,
-    user_mute: u32,
-    mute: u32,
-}
-
-#[repr(C)]
-pub struct SceneDirectState {
-    user_gain: f32,
-    user_mute: u32,
-    position_override: u32,
-    has_position: u32,
-}
-
-fn user_mute(user: UserLevel) -> u32 {
-    match user.mute {
-        None => 0,
-        Some(false) => 1,
-        Some(true) => 2,
-    }
+    scene: RenderScene,
 }
 
 impl SceneHandle {
     pub fn scene(&self) -> &RenderScene {
         &self.scene
     }
-    /// A render request's semantic policy applied to the scene (`mradm_engine_apply_policy`): the
-    /// in-memory JSON preferred over the file, with the warnings as log lines.
+    /// Applies the render request's semantic policy. In-memory JSON takes precedence over the file.
     pub fn apply_policy(
         &mut self,
         json: Option<&[u8]>,
         path: Option<&mradm_engine::render::PathText>,
         display: &str,
     ) -> mradm_engine::request::Outcome<()> {
-        let outcome = mradm_engine::render::apply_policy(&mut self.scene, json, path, display);
-        self.refresh();
-        outcome
+        mradm_engine::render::apply_policy(&mut self.scene, json, path, display)
     }
 
     /// The import `mradm_scene_import` makes: `routed` false imports ADM BW64 only; true routes to
@@ -80,37 +49,7 @@ impl SceneHandle {
     }
 
     pub(crate) fn new(scene: RenderScene) -> Self {
-        let mut handle = Self {
-            scene,
-            objects: Vec::new(),
-            direct_blocks: Vec::new(),
-        };
-        handle.refresh();
-        handle
-    }
-
-    /// Rebuilds the C records of the overlay after the scene changed.
-    pub(crate) fn refresh(&mut self) {
-        let overlay = &self.scene.overlay;
-        self.objects = overlay
-            .objects
-            .iter()
-            .map(|o| SceneObjectState {
-                user_gain: o.user.gain_multiplier,
-                user_mute: user_mute(o.user),
-                mute: u32::from(o.mute),
-            })
-            .collect();
-        self.direct_blocks = overlay
-            .direct_blocks
-            .iter()
-            .map(|b| SceneDirectState {
-                user_gain: b.user.gain_multiplier,
-                user_mute: user_mute(b.user),
-                position_override: u32::from(b.position_override),
-                has_position: u32::from(b.has_position),
-            })
-            .collect();
+        Self { scene }
     }
 }
 

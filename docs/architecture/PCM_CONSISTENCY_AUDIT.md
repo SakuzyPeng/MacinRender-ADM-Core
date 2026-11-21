@@ -899,7 +899,7 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 | 7.3 | 输出设备 | miniaudio 保留为 C 库，由 Rust 经窄 C 接口直接驱动；C++ 设备岛、`miniaudio_device.cpp` 与 `audio_output_device.h` 删除，Apple / Windows sink 直接提供设备表。合并时已在 macOS arm64 与 Windows x64 复核设备生命周期、原生输出和 C ABI，见 [7.3 记录](RUST_ISLAND_DEVICES.md)。 |
 | 7.4 | Apple 岛 | 已用 objc2 将 APAC 的 AudioToolbox 编码迁入 Rust。AUSpatialMixer 后端与 AVSampleBufferAudioRenderer sink 保留原生窄接口。两平台 Release 验证及听音待确认项见 [7.4 记录](RUST_ISLAND_APPLE.md)。 |
 | 7.5 | Windows 岛 | ISpatialAudioClient 静态床、混合对象床与房间工作线程 MMCSS 已接入 Rust。五种布局的设备更新及文件流式渲染、Scene 流式渲染验证见 [7.5 记录](RUST_ISLAND_WINDOWS.md)。 |
-| 7.6 | 收尾 | 岛共用的 C++ 头与私有 FFI 记录随调用方删除，C++ 岛测试与顶层 CMake 测试树随岛收缩。评估进度回调跳板和 Windows 打包路径的去留。保留 C++ 回调异常转为 `ADM_ERROR_INTERNAL` 的行为。A 批（没有生产调用者的共用代码）Linux x64 完成，跳板与 Windows 打包路径评估为保留，见 [7.6 记录](RUST_ISLAND_CLEANUP.md)。 |
+| 7.6 | 收尾 | 岛共用的 C++ 头与私有 FFI 记录随调用方删除，C++ 岛测试与顶层 CMake 测试树随岛收缩。评估进度回调跳板和 Windows 打包路径的去留。保留 C++ 回调异常转为 `ADM_ERROR_INTERNAL` 的行为。A 批已完成，跳板与 Windows 打包路径评估为保留。macOS arm64 的 Apple 岛复核见 [7.6 记录](RUST_ISLAND_CLEANUP.md)。 |
 | 7.7 | 三平台验收与结项 | Consistency、CI、Quality 与 Release Build，两个 GUI 包的 P/Invoke smoke 与维护者实机检查，记录规模变化。验收后删除 CLI 记录工具。 |
 
 用户决定（2026-11-19）：
@@ -961,8 +961,8 @@ D 已完成。Rust 接管 APAC worker、心跳、取消与超时清理，Apple �
 
 **7.4 已完成代码迁移与原生验证。** APAC worker 直接调用 AudioToolbox，删除 142 行岛接口。AUSpatialMixer 与系统空间输出继续由现有岛表驱动。实测系统空间监听的播放、暂停与 seek，AirPods 头追踪听感待确认。[7.4 评估与验收](RUST_ISLAND_APPLE.md)
 
-**7.6 状态**：A 批在 Linux x64 完成（2026-11-21），macOS 的 Apple 岛构建与测试待维护者复核。删除没有生产调用者的共用代码：
-- C++ 布局表与 `scene_layouts` 服务、`scene_view` 服务与 ADM 视图记录、`room_ffi.h`；
+**7.6 状态**：A 批于 2026-11-21 完成，已在 macOS arm64 复核 Apple 岛。删除没有生产调用者的共用代码：
+- C++ 布局表与 `scene_layouts` 服务、`scene_view` 服务与 ADM 视图记录、`SceneHandle` 中无人读取的策略状态副本、`room_ffi.h`；
 - `mix_lfe_pair`、`RenderPlan` 的 9 个无人读取的字段、`RenderOptions` 等 7 个选项类型与 `room.h` / `screen.h`、两个 Null sink；
 - 系统空间 sink 模板的可选方法判断。
 

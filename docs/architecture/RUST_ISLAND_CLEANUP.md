@@ -1,6 +1,6 @@
 # 七期 7.6：收尾
 
-> 状态：A 批在 Linux x64 完成（2026-11-21），macOS arm64 的 Apple 岛构建与测试待维护者复核，见末节。
+> A 批于 2026-11-21 完成，macOS arm64 的 Apple 岛复核见末节。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，7.5 之前的清单见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.3–7.5 之后，生产 C/C++ 只剩 Apple 岛与它的共用头，以及几个窄接口：
@@ -19,7 +19,8 @@
 | 删除 | 原调用方 | 现在的覆盖 |
 | --- | --- | --- |
 | `speaker_layouts.{h,cpp}`、`layout_ffi.h`、服务表的 `scene_layouts` 与 Rust `mradm_scene_layouts` / `LayoutEntry` | Windows sink（7.5 迁入 Rust） | `mradm-scene` `tests/layouts.rs` 以 `layouts-v1.txt` 逐位锁定两套布局表 |
-| `scene_handle.h` 的 `scene_info`、服务表的 `scene_view`、`adm_ffi.h` 的 ADM 视图记录（17 个结构）、`scene_ffi.h` 的 `MradmSceneImportInfo`，以及 Rust 的 `View`、`SceneImportInfo` 与 `SceneHandle` 里只为视图保留的文本 | 无（`scene_info` 没有调用者） | — |
+| `scene_handle.h` 的 `scene_info`、服务表的 `scene_view`、`adm_ffi.h` 中除 `MradmAdmText` 外的 16 个结构体、`scene_ffi.h` 的 `MradmSceneImportInfo`，以及 Rust 的 `View`、`SceneImportInfo` 与 `SceneHandle` 的视图文本缓存 | 无（`scene_info` 没有调用者） | — |
+| Rust `SceneHandle` 为对象和 DirectSpeakers 块维护的两组 C 记录及其重建逻辑 | `mradm_scene_overlay`（R3 G3 已删除） | 语义策略直接更新 Rust `RenderScene`，由预览和渲染测试覆盖 |
 | `room_ffi.h`（`MradmRoomScreenGeometry`） | 无 | 记录只由 `check-ffi-headers.py` 核对，不在任何签名中 |
 | `render_common.h` 的 `mix_lfe_pair` / `k_lfe_split_power_gain` | Windows sink | `mradm-ffi` `windows_spatial` 的 LFE 对重组与测试 |
 | `RenderPlan` 的 `sofa_path`、`default_interp_ms`、`object_smoothing_frames`、`speaker_geometry`、`triple_balance_mode`、`meter_window`（及 `MeterWindow`）、`renderer_semantics_sink`、`room`、`screens` | 无（Apple 岛只读其余字段） | — |
@@ -31,7 +32,7 @@
 
 ### 测试的去向
 
-- `speaker_layouts_test` 改名为 `live_override_test`（ctest `mr_adm_live_override_tests`），只保留 Apple 岛仍在用的实时增益、head-lock 解析与去拉链斜坡三项。布局表两项随 C++ 布局表删除，由 Rust 的 golden 覆盖。
+- `speaker_layouts_test` 改名为 `live_override_test`（ctest `mr_adm_live_override_tests`），保留 Apple 岛使用的实时增益、head-lock 解析与去拉链斜坡测试。布局表断言由 Rust 的逐位基准覆盖。
 - `lfe_routing_test` 去掉 Windows LFE 对一项后只剩 Apple 后端，目标改为只在 macOS 构建，文件内的 `__APPLE__` 守卫随之去掉。这个文件不依赖 Apple 框架头，在 Linux 上也能做语法检查。
 
 ### 保留的待办
@@ -76,14 +77,14 @@ Windows 的 CLI 发布与 GUI 打包仍经顶层 CMake 树，DLL 与 exe 本身�
 | 岛（`adm_apple`） | 2,311 | 2,311 |
 | 岛接口 | 1,029 | 1,007 |
 | 测试 C/C++ | 8,289 | 8,128 |
-| Rust（自有） | 150,165 | 149,940 |
+| Rust（自有） | 150,165 | 149,879 |
 
 ## 发布说明
 
 无公开行为变化：C ABI、CLI 与渲染结果不变；删除的都是内部头、记录与服务表项。
 
-## 维护者复核（macOS arm64）
+## 合并复核（macOS arm64）
 
-1. Release 与 Debug 构建，确认 Apple 岛在新的 `options.h` / `render.h` 下编译通过。
-2. CTest，重点是 `mr_adm_apple_smoke_tests`、`mr_adm_lfe_routing_tests`、`mr_adm_live_override_tests`、`mr_adm_direct_speakers_matrix_render_tests`、`mr_adm_apac_smoke_tests`。
-3. 系统空间监听的打开、播放、暂停、seek 与音量各一次（sink 模板改为直接接上全部控制）。
+- Debug 和 Release 均编译 Apple 岛及相关目标。Apple 渲染、长文件窗口、22.2 LFE、实时覆盖、DirectSpeakers 矩阵、APAC 和 C ABI 的 7 项 Release CTest 全部通过，动态库导出 164 个 `adm_*`。
+- 相对主线 `b7c17394`，Release 的四组 Apple 离线渲染 PCM 逐字节相同。用例覆盖 7.1.4 点声源及其语义增益策略、22.2 LFE 直通与等功率拆分。语义报告一致。C ABI 预览分别检查连续两次带静音策略和无策略的窗口渲染，并确认拒绝错误 JSON。
+- 系统空间监听通过文件流式渲染的打开、播放、暂停、定位和恢复检查。Scene 流式渲染通过默认设备的系统空间输出、短尾声、定位和音量检查。
