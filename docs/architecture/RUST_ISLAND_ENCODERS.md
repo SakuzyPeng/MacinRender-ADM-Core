@@ -1,6 +1,6 @@
 # 七期 7.2：编码器迁入 Rust
 
-> 状态：A、B 已完成（2026-11-19，本机 Linux x64）；C（IAMF 与 MP4）、D（APAC 编排）待做。
+> 状态：A、B 已完成（2026-11-19，本机 Linux x64），维护者已在 macOS / Windows 复核（2026-11-20）；C 进行中（C1 MP4 元数据已完成，2026-11-21）；D（APAC 编排）待做。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单与对照方法见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.2 把编码器的 C++ 封装迁入 Rust：
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | A | FLAC 写出与 Vorbis comment；删除 dr_flac 与没有生产调用者的 FLAC 读取链 | 已完成 |
 | B | Opus MKA：libopus multistream 编码与 Rust 写出的 Matroska 封装与 Tags | 已完成 |
-| C | IAMF bridge 调用、MP4 打包器的探测与运行、MP4 元数据 atom | 待做 |
+| C | C1 MP4 元数据 atom；C2 MP4 打包器的探测与运行；C3 IAMF bridge 调用 | C1 已完成 |
 | D | APAC：worker 子进程与心跳协议迁入 Rust，AudioToolbox 编码移入 Apple 岛；删除 `mradm_audio_island` | 待做 |
 
 ## A：FLAC
@@ -182,6 +182,46 @@ Matroska 封装：
 
 - Opus MKA 的字节、错误与日志不变（track UID 本来就是随机的）。
 - Windows 上的改进：原 C++ 用窄字符 `fopen` / `fstream` 打开路径，当前代码页表示不了的字符会失败；现在经 UTF-8 路径打开宽字符路径，同时修正了 `.mka` 元数据的同一问题。
+
+## C：IAMF 与 MP4
+
+C 分三个子批：C1 MP4 元数据，C2 MP4 打包器（mp4box / ffmpeg）的探测与运行，C3 IAMF bridge 调用。
+
+### C1：MP4 元数据
+
+**迁入 Rust 的部分**：`mradm-ffi` `mp4_metadata`（原 `metadata_io.cpp` 的 `write_mp4_metadata`）。
+- 在顶层 `moov` 末尾追加 `udta/meta(hdlr mdir appl)/ilst`，文本项依次为 ©too（ENCODER）、©day（DATE）、©cmt（COMMENT，与 FLAC / MKA 共用 `metadata_comment`），值为空的项不写，全部为空时不读也不写文件；
+- `moov` 原地增长：它必须位于文件末尾，或紧跟一个足够大的 `free` atom 让出字节，所以 `stco` / `co64` 的偏移不变；
+- atom 规则照原实现：size 1 为 64 位长度，size 0 延伸到文件末尾；取最后一个顶层 `moov`；`moov` 的头是 16 字节或增长后超过 32 位时报 unsupported；
+- 错误码与文字照原实现（`cannot open MP4 for metadata read`、`malformed MP4 atom table`、`MP4 metadata: missing moov atom` 等），context 为 `path=<路径>`；
+- 原实现把整个文件读进内存后截断重写；现在只读 atom 头，经同目录的独占临时文件分块复制，成功后改名替换（与 7.2 A / B 的元数据相同），失败时保留原文件。
+
+`Runner::run` 接下扩展名为 `.m4a` / `.mp4` 的 `Island::WriteMetadata`。WAV（bext / ambi）与 CAF（info）的元数据五期起就由 `mradm-engine` 直接写出（`write_own_metadata`），岛 9 实际只剩 FLAC、MKA 与 MP4，所以 C++ 岛对岛 9 返回 2。
+
+**删除**：
+- `metadata_io.cpp`（`compact_metadata_comment`、MP4 atom 写出与 `write_file_metadata` 分派）；
+- `wav_io.cpp` 的 `write_wav_metadata` / `write_caf_metadata` 与 `audio_io.h` 的 `MetadataFields`、`write_file_metadata`：生产没有调用者，只有 `core_smoke_test` 在用；
+- 函数表的 `caf_append_info` 与 `wav_append_bext`（Rust 与 `rust_services_ffi.h`，35 → 33 项）、`mradm-ffi` 的两个入口与 `wav_ffi.h` 的 `MradmWavBext`；
+- `island.cpp` 的岛 9。
+
+**测试的去向**：
+- `mradm-ffi` `mp4_metadata` 的 Rust 测试：`udta` 的逐字节布局（独立拼写的期望值）与空项；`moov` 在文件末尾；`free` 让出字节（文件长度不变）、恰好等于插入长度时缩到只剩头、不够时报错；无 `free`、缺 `moov`、atom 过短或截断、16 字节头的 `moov` / `free` 的错误码、文字、context，且原文件不变；64 位 `mdat`、多个 `moov`、size 0 的 `moov`；扩展名判断。这些测试加入 ctest `mr_adm_encoder_tests`；
+- `core_smoke_test` 的 bext 字段、HOA3 ambi 与超过 4 GiB 的稀疏 RF64 上追加 bext 三项检查移到 `mradm-render` `tests/wav_container.rs`（`metadata_fields_land_in_bext_and_hoa3_gets_ambi`、`bext_follows_more_than_four_gib_of_rf64_data`；Windows 同样需要 `MR_ADM_RUN_LARGE_FILE_TESTS`）。CAF info 由 `mradm-wav` `tests/caf.rs` 覆盖，bext 的字节由 WAVE 容器 golden 覆盖；
+- `apac_smoke_test`（macOS）仍检查真实 AudioToolbox `.m4a` 写入元数据后能解码，改经测试函数表新增的 `mp4_write_metadata` 调用 Rust（`tests/support/ffi/island_test_ffi.h`）。
+
+**对照与故障注入**：
+- Linux 的 CLI 不产生 MP4（APAC 只在 macOS，IAMF 需要 bridge），所以另做了 atom 级对照：随机生成 3,000 个顶层 atom 序列（`ftyp` / `mdat` / `moov` / `free` / `skip`，含 64 位长度、size 0、截断、尾部垃圾与损坏的长度字段，`free` 的长度覆盖插入长度的边界），分别交给仍在的 C++ `write_file_metadata` 与 Rust，结果码、文字、context 与输出字节全部相同（663 个成功，其中 108 个经 `free` 原地增长）；另一个种子的 600 个用例也相同；
+- 故障注入：`free` 长度判断由 `>=` 改为 `>`，20 个用例的结果与字节不同；改为取第一个 `moov`，340 个结果、264 个文件不同；
+- 删除 C++ 之后，CLI 记录与迁移前的构建对照，134 条命令 0 差异；
+- 新的 bext 字段测试经故障注入（originator reference 改写为 encoder）确认会失败；测试函数表字段的签名改错时 FFI 头校验报错。
+
+**其他检查**：ctest 25/25；Rust 质量检查、两个目标的交叉 clippy、FFI 头校验（57 个结构体）与 `check-changed.sh` 通过。`rust_services_ffi.h` 补登记了 cppcheck 的 `unusedStructMember` 抑制：函数表的字段由 Rust 填写，6.6 起漏登。
+
+**规模**：生产 C/C++ 7,141 → 6,720 行；岛接口 1,051 → 1,036 行；C++ 测试 8,788 → 8,379 行。
+
+**发布说明**：
+- MP4 元数据的字节、错误码与文字不变；写入改为经临时文件替换，失败时原文件不再可能被截断；
+- 维护者在 macOS 复核：`apac_smoke_test`，以及 CLI 记录中 `encode-apac-*` 的元数据与迁移前一致。
 
 ## 维护者实机复核
 

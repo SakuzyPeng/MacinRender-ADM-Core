@@ -930,7 +930,14 @@ B 已完成（同日）：Opus MKA 改由 `mradm-ffi` `opus_mka` 实现：
 - `opus_mka_io.cpp` 与 `opus_mka_smoke_test.cpp` 删除；
 - 删除前后各对照一次，都是 134 条命令 0 差异；cluster 间隔与标签名两处注入都被抓到。
 
-生产 C/C++ 8,024 → 7,141 行。C、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+生产 C/C++ 8,024 → 7,141 行。A、B 经维护者在 macOS arm64 / Windows x64 复核（2026-11-20）。
+
+C1 已完成（2026-11-21）：MP4 元数据 atom 改由 `mradm-ffi` `mp4_metadata` 写出，经临时文件替换：
+- `metadata_io.cpp`、生产已不调用的 C++ WAV / CAF 元数据包装与函数表的两项（35 → 33）删除，C++ 岛不再接岛 9；
+- 3,000 个随机 atom 序列上与 C++ 逐字节、逐错误相同，两处故障注入都被抓到；CLI 记录 134 条命令 0 差异。
+
+生产 C/C++ 7,141 → 6,720 行。C2、C3、D 待做。见 [7.2 记录](RUST_ISLAND_ENCODERS.md)。
+
 ## 每个迁移切片的验证
 
 一个切片同时承担实现迁移与一致性收敛，提交中分别说明结构变化和有意的数值变化：

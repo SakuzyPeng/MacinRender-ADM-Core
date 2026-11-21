@@ -600,8 +600,8 @@ impl render::Islands for Runner<'_> {
     }
 }
 
-/// The islands implemented in Rust (PCM consistency 7.2): FLAC and Opus MKA encoding and their
-/// metadata.
+/// The islands implemented in Rust (PCM consistency 7.2): FLAC and Opus MKA encoding and the
+/// FLAC, Matroska and MP4 metadata.
 /// Their progress and cancellation go through the same bridge as the C++ islands'.
 fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
     let user: *mut c_void = ptr::from_ref(bridge).cast_mut().cast();
@@ -625,6 +625,9 @@ fn own_island(island: &Island, bridge: &Bridge<'_>) -> Option<Reply> {
         }
         Island::WriteMetadata { path, fields } if crate::opus_mka::is_mka(&path.utf8) => {
             crate::opus_mka::write_metadata(&path.utf8, fields)
+        }
+        Island::WriteMetadata { path, fields } if crate::mp4_metadata::is_mp4(&path.utf8) => {
+            crate::mp4_metadata::write_metadata(&path.utf8, fields)
         }
         _ => return None,
     };

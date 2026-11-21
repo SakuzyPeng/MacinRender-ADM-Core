@@ -1,7 +1,7 @@
 //! Private file I/O boundary. Owners and their allocations never cross allocators.
-use mradm_wav::{AMBI_HOA3, BextFields, Error, Reader, Result, append_bext, bext_payload};
+use mradm_wav::{Error, Reader, Result};
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::BufReader,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr, slice, str,
@@ -162,60 +162,6 @@ unsafe fn borrowed<'a, T>(data: *const T, len: usize) -> Result<&'a [T]> {
         unsafe { slice::from_raw_parts(data, len) }
     })
 }
-#[repr(C)]
-pub struct WavBext {
-    description: *const u8,
-    description_len: usize,
-    originator: *const u8,
-    originator_len: usize,
-    originator_reference: *const u8,
-    originator_reference_len: usize,
-    /// ISO 8601 UTC text.
-    date_utc: *const u8,
-    date_utc_len: usize,
-    loudness: f64,
-    true_peak: f64,
-    has_loudness: u8,
-    has_true_peak: u8,
-    /// Also write the third-order AmbiX `ambi` marker.
-    hoa3_ambi: u8,
-}
-
-pub(crate) unsafe extern "C" fn mradm_wav_append_bext(
-    name: *const u8,
-    length: usize,
-    fields: *const WavBext,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        valid(fields, 1)?;
-        let fields = unsafe { &*fields };
-        let payload = unsafe {
-            bext_payload(&BextFields {
-                description: borrowed(fields.description, fields.description_len)?,
-                originator: borrowed(fields.originator, fields.originator_len)?,
-                originator_reference: borrowed(
-                    fields.originator_reference,
-                    fields.originator_reference_len,
-                )?,
-                date_utc: borrowed(fields.date_utc, fields.date_utc_len)?,
-                loudness: (fields.has_loudness != 0).then_some(fields.loudness),
-                true_peak: (fields.has_true_peak != 0).then_some(fields.true_peak),
-            })
-        };
-        let mut file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(unsafe { path(name, length)? })?;
-        append_bext(
-            &mut file,
-            &payload,
-            (fields.hoa3_ambi != 0).then_some(&AMBI_HOA3),
-        )
-    })
-}
-
 // ── Final float PCM writers and CAF ─────────────────────
 
 pub struct OutputHandle {
@@ -283,31 +229,6 @@ pub(crate) unsafe extern "C" fn mradm_output_writer_finish(
     boundary(message, capacity, || {
         valid(handle, 1)?;
         unsafe { &mut *handle }.writer.finish()
-    })
-}
-/// Appends an `info` chunk with the non-empty encoder, date and comments values.
-pub(crate) unsafe extern "C" fn mradm_caf_append_info(
-    name: *const u8,
-    length: usize,
-    encoder: *const u8,
-    encoder_len: usize,
-    date: *const u8,
-    date_len: usize,
-    comments: *const u8,
-    comments_len: usize,
-    message: *mut u8,
-    capacity: usize,
-) -> i32 {
-    boundary(message, capacity, || {
-        let name = unsafe { path(name, length)? };
-        let (encoder, date, comments) = unsafe {
-            (
-                borrowed(encoder, encoder_len)?,
-                borrowed(date, date_len)?,
-                borrowed(comments, comments_len)?,
-            )
-        };
-        mradm_wav::caf::append_info(name.as_ref(), encoder, date, comments)
     })
 }
 
@@ -509,71 +430,5 @@ mod tests {
             mradm_output_writer_destroy(ptr::null_mut());
         }
         std::fs::remove_file(name).ok();
-    }
-
-    /// bext append keeps the file readable and rejects missing fields.
-    #[test]
-    fn bext_append_keeps_the_file_readable() {
-        let path = std::env::temp_dir().join(format!("mradm-bext-{}.wav", std::process::id()));
-        let text = path.to_str().unwrap().as_bytes();
-        let mut writer = mradm_wav::create_file_writer(&path, 2, 48000, 16, false, false).unwrap();
-        writer
-            .write_frames(&[0.5, -0.5, 0.25, -0.25, 0.125, -0.125])
-            .unwrap();
-        writer.finish().unwrap();
-        let mut message = [0u8; 128];
-        unsafe {
-            let fields = WavBext {
-                description: ptr::null(),
-                description_len: 0,
-                originator: b"enc".as_ptr(),
-                originator_len: 3,
-                originator_reference: ptr::null(),
-                originator_reference_len: 0,
-                date_utc: ptr::null(),
-                date_utc_len: 0,
-                loudness: -23.0,
-                true_peak: 0.0,
-                has_loudness: 1,
-                has_true_peak: 0,
-                hoa3_ambi: 0,
-            };
-            assert_eq!(
-                mradm_wav_append_bext(
-                    text.as_ptr(),
-                    text.len(),
-                    &fields,
-                    message.as_mut_ptr(),
-                    128
-                ),
-                0
-            );
-            let mut reader = ptr::null_mut();
-            let mut info = Info::default();
-            assert_eq!(
-                mradm_wav_reader_open(
-                    text.as_ptr(),
-                    text.len(),
-                    &mut reader,
-                    &mut info,
-                    message.as_mut_ptr(),
-                    128
-                ),
-                0
-            );
-            assert_eq!(info.frames, 3);
-            mradm_wav_reader_destroy(reader);
-            assert_eq!(
-                mradm_wav_append_bext(
-                    text.as_ptr(),
-                    text.len(),
-                    ptr::null(),
-                    message.as_mut_ptr(),
-                    128
-                ),
-                1
-            );
-        }
-        std::fs::remove_file(path).ok();
     }
 }

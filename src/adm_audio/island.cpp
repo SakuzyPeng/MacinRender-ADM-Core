@@ -36,14 +36,14 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
         return 1;
     }
     const auto& e = *request;
-    if (e.island < 1U || e.island > 9U || (e.island >= 2U && e.island <= 5U)) {
-        return 2; // Not a C++ audio island (the Apple backend has its own; FLAC and Opus are in Rust).
+    if (e.island < 1U || e.island > 8U || (e.island >= 2U && e.island <= 5U)) {
+        return 2; // Not a C++ audio island (the Apple backend has its own; FLAC, Opus and metadata are in Rust).
     }
     try {
         *reply = {};
         reply->ffmpeg_major = -1;
-        std::optional<Cancel> cancel; // The probe and the metadata take no stop token.
-        if (e.island >= 6U && e.island <= 8U) {
+        std::optional<Cancel> cancel; // The probe takes no stop token.
+        if (e.island >= 6U) {
             cancel.emplace(*context);
         }
         const auto token = cancel ? cancel->token() : std::stop_token{};
@@ -85,24 +85,9 @@ extern "C" int32_t mradm_audio_island(const MradmEngineRenderEvent* request,
                                  layers));
             break;
         }
-        case 8:
+        default: // 8
             done(*reply, package_iamf_to_mp4(src, dst, token));
             break;
-        default: {
-            MetadataFields fields;
-            fields.encoder = text(e.encoder);
-            fields.date_utc = text(e.date_utc);
-            fields.renderer = text(e.renderer);
-            fields.output_layout = layout;
-            if (e.has_lufs != 0U) {
-                fields.lufs = e.lufs;
-            }
-            if (e.has_peak != 0U) {
-                fields.peak_dbtp = e.peak_dbtp;
-            }
-            done(*reply, write_file_metadata(dst, fields));
-            break;
-        }
         }
     } catch (...) {
         fail(*reply, {ErrorCode::internal_error, "render island failed", {}});

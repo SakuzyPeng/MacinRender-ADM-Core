@@ -46,7 +46,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
     mr_adm_core_apply_static_analysis(mr_adm_wav_io_tests)
     add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests)
 
-    # The audio island's WAVE / CAF metadata and writer wrappers (R3 C4 removed its SDK checks).
+    # The audio island's WAVE / CAF writer wrappers (R3 C4 removed its SDK checks; 7.2 C its metadata checks).
     add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
     target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
@@ -340,7 +340,7 @@ if(MR_ADM_CORE_BUILD_TESTS)
         DEPENDS mr_adm_rust
         USES_TERMINAL VERBATIM)
     add_test(NAME mr_adm_encoder_tests
-        COMMAND ${_mr_encoder_test_command} -- flac::tests:: opus_mka::tests:: flac_outputs_are_encoded_and_tagged)
+        COMMAND ${_mr_encoder_test_command} -- flac::tests:: opus_mka::tests:: mp4_metadata::tests:: flac_outputs_are_encoded_and_tagged)
     set_tests_properties(mr_adm_encoder_tests PROPERTIES TIMEOUT 300 RESOURCE_LOCK mr_adm_rust_cargo)
 
     add_executable(mr_adm_meter_tests tests/unit/meter_test.cpp)

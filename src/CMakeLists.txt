@@ -100,7 +100,6 @@ target_sources(
         adm_audio/audio_handles.cpp
         adm_audio/iamf_io.cpp
         adm_audio/island.cpp
-        adm_audio/metadata_io.cpp
         adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS

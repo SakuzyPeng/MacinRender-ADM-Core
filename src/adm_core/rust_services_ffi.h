@@ -12,7 +12,7 @@ extern "C" {
 typedef struct MradmRustTestServices MradmRustTestServices;
 // clang-format off
 typedef struct MradmRustServices {
-    // WAVE input, float output and container edits (wav_ffi.h). Paths are UTF-8.
+    // WAVE input and float output (wav_ffi.h). Paths are UTF-8.
     int32_t (*wav_reader_open)(const uint8_t*, size_t, MradmWavReader**, MradmWavInfo*, uint8_t*, size_t);
     void (*wav_reader_destroy)(MradmWavReader*);
     int32_t (*wav_reader_read)(MradmWavReader*, float*, size_t, uint64_t*, uint8_t*, size_t);
@@ -22,9 +22,6 @@ typedef struct MradmRustServices {
     void (*output_writer_destroy)(MradmOutputWriter*);
     int32_t (*output_writer_write)(MradmOutputWriter*, const float*, size_t, uint8_t*, size_t);
     int32_t (*output_writer_finish)(MradmOutputWriter*, uint8_t*, size_t);
-    int32_t (*caf_append_info)(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*,
-                               size_t, uint8_t*, size_t);
-    int32_t (*wav_append_bext)(const uint8_t*, size_t, const MradmWavBext*, uint8_t*, size_t);
     // Live gain banks and stereo device protection (gain.h). Lengths count floats; process mode 0 fills gain
     // envelopes, mode 1 multiplies PCM in place.
     int32_t (*dsp_gain_create)(size_t, uint32_t, uint32_t, void**, char*, size_t);

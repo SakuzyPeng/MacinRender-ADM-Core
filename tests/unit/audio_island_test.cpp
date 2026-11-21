@@ -1,6 +1,6 @@
 // The audio library's render-island entry (mradm_audio_island) as the engine calls it: the islands it
-// declines are left to the caller (the Apple backend's, FLAC and Opus MKA, which are in Rust since PCM
-// consistency 7.2 A / B, and unknown ones), and a NULL request is rejected. The encoders' cancellation
+// declines are left to the caller (the Apple backend's, FLAC, Opus MKA and the metadata, which are in Rust
+// since PCM consistency 7.2 A / B / C, and unknown ones), and a NULL request is rejected. The encoders' cancellation
 // and progress are tested next to their Rust implementations (mradm-ffi `flac` / `opus_mka`).
 #include <cstdint>
 #include <iostream>
@@ -30,9 +30,10 @@ int main() {
         e.island = island;
         ok &= check(mradm_audio_island(&e, &none, &reply) == 2, "the Apple islands are left to the caller");
     }
-    for (const uint32_t island : {4U, 5U}) {
+    for (const uint32_t island : {4U, 5U, 9U}) {
         e.island = island;
-        ok &= check(mradm_audio_island(&e, &none, &reply) == 2, "FLAC and Opus MKA are left to the caller (Rust)");
+        ok &= check(mradm_audio_island(&e, &none, &reply) == 2,
+                    "FLAC, Opus MKA and metadata are left to the caller (Rust)");
     }
     for (const uint32_t island : {0U, 10U}) {
         e.island = island;

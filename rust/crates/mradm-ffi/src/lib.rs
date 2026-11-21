@@ -23,6 +23,7 @@ mod flac;
 mod hptf;
 mod metadata_temp;
 mod meter;
+mod mp4_metadata;
 mod opus_mka;
 mod osc;
 mod output_dsp;

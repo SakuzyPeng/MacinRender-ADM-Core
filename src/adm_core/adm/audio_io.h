@@ -206,28 +206,4 @@ Result<void> convert_to_apac(const std::string& src_path,
                              ProgressSink* progress = nullptr,
                              RenderOperation operation = RenderOperation::encode_apac);
 
-// Format-agnostic render output metadata.  Assembled by the engine layer and
-// passed to write_file_metadata(); format-specific encoding is handled there.
-struct MetadataFields {
-    std::string encoder;       // "MacinRender ADM Core Alpha"
-    std::string date_utc;      // ISO 8601, e.g. "2026-05-22T14:30:00Z"
-    std::string renderer;      // caps.backend_name — "ear" / "vbap-saf" / "hoa-encode"
-    std::string output_layout; // "0+2+0", "2+7+4", etc.
-    std::optional<double> lufs;
-    std::optional<double> peak_dbtp;
-};
-
-// Write rendering metadata into an existing output file.
-//   WAV  — appends a BWF v2 bext chunk (EBU Tech 3285) and updates RIFF/RF64/BW64
-//           container sizes. Fields: Originator, OriginationDate/Time, LoudnessValue,
-//           MaxTruePeakLevel (0x7FFF = not-indicated when value is absent).
-//   CAF  — appends an info chunk with encodingapplication / date / comments
-//           keys.  Comments encodes renderer, layout, loudness, peak.
-//   M4A/MP4 — inserts iTunes-style metadata atoms (©too, ©day, ©cmt). Layout
-//             semantics such as "binaural" are stored in comments because APAC
-//             does not reliably preserve non-stereo CoreAudio layout tags.
-//   Other extensions — silently ignored (not an error).
-// Failure is non-fatal; callers should log a warning and continue.
-Result<void> write_file_metadata(const std::string& path, const MetadataFields& meta);
-
 } // namespace mradm::audio
