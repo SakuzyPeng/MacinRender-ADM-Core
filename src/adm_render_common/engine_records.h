@@ -2,19 +2,14 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <string_view>
 #include <vector>
 
 #include "adm/direct_speakers_matrix.h"
-#include "adm/options.h"
-#include "adm/render.h"
 
-#include "engine_ffi.h"
 #include "routing_ffi.h"
 
-// The records production C++ hands to the Rust engine: text views, DirectSpeakers matrices, screens
-// and a Rust backend preparation.
+// Text views and DirectSpeakers matrix records passed to the Rust Apple bus planner.
 namespace mradm::render_common {
 
 [[nodiscard]] inline MradmAdmText text(std::string_view value) noexcept {

@@ -1,19 +1,6 @@
 #pragma once
 
 // The render settings the Apple island reads (RenderPlan in render.h); the engine's options are in Rust.
-// The standard headers stay as before for the islands that rely on them transitively.
-#include <array>
-#include <cstdint>
-#include <filesystem>
-#include <memory>
-#include <optional>
-#include <stop_token>
-#include <string>
-#include <string_view>
-#include <vector>
-
-#include "adm/errors.h"
-
 namespace mradm {
 
 enum class SpeakerSpreadMode {

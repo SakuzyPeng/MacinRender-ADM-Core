@@ -91,7 +91,6 @@ target_sources(
     mr_adm_audio
     PRIVATE
         adm_audio/audio_handles.cpp
-        adm_audio/wav_io.cpp
     PUBLIC
         FILE_SET HEADERS
         BASE_DIRS adm_core

@@ -1,15 +1,15 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
-#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
-#include <limits>
+#include <span>
+#include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
 
 #ifndef _WIN32
@@ -34,7 +34,7 @@ std::vector<char> load(const std::filesystem::path& path) {
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 void write_float(const std::filesystem::path& path, uint32_t rate, const std::vector<float>& samples) {
-    auto writer = mradm::audio::FloatWavWriter::open(path.string(), 1, rate);
+    auto writer = mradm::audio::WriterHandle::open(path.string(), 1, rate);
     require(writer.has_value(), "float fixture open failed");
     require(writer->write(samples.data(), samples.size()) == samples.size(), "float fixture write failed");
 }
@@ -84,11 +84,9 @@ void verify_native_path_round_trip(const std::filesystem::path& directory) {
     write_float(path, 48000, {0.0F, 0.5F, -0.5F});
     require(std::filesystem::is_regular_file(path), "native-path fixture was not created");
     save(path, integer_wave(48000, 24, {0, 4194303, -4194303}));
-    auto probe = mradm::audio::FloatWavReader::open(path.string());
-    require(probe && probe->is_linear_pcm() && probe->bits_per_sample() == 24,
-            "native-path integer file was not replaced");
     auto reader = mradm::audio::RenderInputReader::open(path.string());
-    require(reader.has_value(), "native-path Rust reader open failed");
+    require(reader && (*reader)->info().format == 1 && (*reader)->info().bits == 24,
+            "native-path integer file was not replaced");
     std::array<float, 3> output{};
     const auto got = (*reader)->read(output.data(), output.size());
     require(got && *got == output.size(), "native-path integer read failed");
@@ -127,7 +125,7 @@ void verify_float_writer_and_formats(const std::filesystem::path& directory) {
     save(path, {'s', 't', 'a', 'l', 'e'});
     const std::vector<float> input{0.25F, -1.5F, 2.0F};
     {
-        auto writer = mradm::audio::FloatWavWriter::open(path.string(), 1, 48000);
+        auto writer = mradm::audio::WriterHandle::open(path.string(), 1, 48000);
         require(writer.has_value(), "float writer must replace an existing file");
         require(writer->write(input.data(), input.size()) == input.size(), "float write failed");
         require(writer->finish().has_value() && writer->finish().has_value(), "float finish failed");
@@ -140,19 +138,67 @@ void verify_float_writer_and_formats(const std::filesystem::path& directory) {
     const auto bw64 = directory / "float-bw64.wav";
     std::copy_n("BW64", 4, bytes.begin());
     save(bw64, bytes);
-    auto reader = mradm::audio::FloatWavReader::open(bw64.string());
-    require(reader && reader->is_ieee_float() && reader->bits_per_sample() == 32 && reader->frame_count() == 3,
+    auto reader = mradm::audio::RenderInputReader::open(bw64.string());
+    require(reader && (*reader)->info().format == 3 && (*reader)->info().bits == 32 && (*reader)->info().frames == 3,
             "BW64 float fmt mismatch");
     std::vector<float> output(input.size());
-    require(reader->read(output.data(), output.size()) == output.size() && output == input, "BW64 float samples");
+    require((*reader)->read(output.data(), output.size()) == output.size() && output == input, "BW64 float samples");
 
-    for (const auto& [tag, bits] : {std::pair<uint16_t, uint16_t>{1, 8}, {6, 8}, {3, 64}}) {
+    constexpr std::array<std::array<uint16_t, 2>, 3> unsupported_formats{{{1, 8}, {6, 8}, {3, 64}}};
+    for (const auto& [tag, bits] : unsupported_formats) {
         const auto legacy = directory / ("legacy-" + std::to_string(tag) + "-" + std::to_string(bits) + ".wav");
         save(legacy, legacy_format_wave(tag, bits));
-        auto rejected = mradm::audio::FloatWavReader::open(legacy.string());
+        auto rejected = mradm::audio::RenderInputReader::open(legacy.string());
         require(!rejected && rejected.error().code == mradm::ErrorCode::unsupported,
                 "8-bit, A-law and float64 WAVE must be reported as unsupported");
     }
+}
+
+// Replay the interleaved PCM from caf-v1 and compare the whole writer output up to the end of the data chunk.
+// info-319 also has metadata appended after the nine stereo frames in a separate operation.
+void verify_caf_outputs(const std::filesystem::path& directory, const std::filesystem::path& references) {
+    struct Case {
+        const char* layout;
+        uint32_t channels;
+        uint32_t frames;
+        const char* reference;
+    };
+    constexpr std::array cases{Case{"0+2+0", 2, 9, "info-319.caf"},
+                               Case{"binaural", 2, 1, "write-40.caf"},
+                               Case{"wav71", 8, 1, "write-104.caf"},
+                               Case{"hoa3", 16, 1, "write-136.caf"}};
+    const auto path = directory / "output.CaF";
+    // The zero-frame file contains the same fixed-size desc, chan and data headers.
+    const auto header_size = std::filesystem::file_size(references / "write-0.caf");
+    for (const auto& test : cases) {
+        auto expected = load(references / test.reference);
+        std::vector<float> samples(static_cast<std::size_t>(test.channels) * test.frames);
+        const auto pcm_bytes = samples.size() * sizeof(float);
+        require(header_size <= expected.size() && pcm_bytes <= expected.size() - header_size,
+                "missing or incomplete CAF reference");
+        expected.resize(static_cast<std::size_t>(header_size) + pcm_bytes);
+        auto pcm = std::span{expected}.last(pcm_bytes);
+        for (float& sample : samples) {
+            std::array<char, sizeof(float)> word{};
+            std::ranges::copy(pcm.first(word.size()), word.begin());
+            if constexpr (std::endian::native == std::endian::big) {
+                std::ranges::reverse(word);
+            }
+            sample = std::bit_cast<float>(word);
+            pcm = pcm.subspan(word.size());
+        }
+        {
+            auto writer = mradm::audio::WriterHandle::open(path.string(), test.channels, 48000, test.layout);
+            require(writer && writer->write(samples.data(), test.frames) == test.frames, "CAF frame write failed");
+        }
+        if (load(path) != expected) {
+            throw std::runtime_error(std::string{"CAF bytes differ from "} + test.reference);
+        }
+    }
+    auto mismatch = mradm::audio::WriterHandle::open(path.string(), 6, 48000, "0+2+0");
+    require(!mismatch && mismatch.error().code == mradm::ErrorCode::invalid_argument, "CAF channel count mismatch");
+    auto unknown = mradm::audio::WriterHandle::open(path.string(), 8, 48000, "0+7+0");
+    require(!unknown && unknown.error().code == mradm::ErrorCode::unsupported, "unknown CAF layout");
 }
 
 #ifndef _WIN32
@@ -188,7 +234,7 @@ class FileSizeLimitGuard {
 
 void verify_failed_finish_is_sticky(const std::filesystem::path& directory) {
     const auto path = directory / "failed-finish.wav";
-    auto writer = mradm::audio::FloatWavWriter::open(path.string(), 1, 48000);
+    auto writer = mradm::audio::WriterHandle::open(path.string(), 1, 48000);
     require(writer.has_value(), "finish failure fixture open failed");
     const float sample = 0.25F;
     require(writer->write(&sample, 1) == 1, "finish failure fixture write failed");
@@ -203,13 +249,17 @@ void verify_failed_finish_is_sticky(const std::filesystem::path& directory) {
                 second.error().context == first.error().context,
             "repeated finish must preserve the original failure");
     require(writer->write(&sample, 1) == 0, "write after failed finish must fail");
-    require(!mradm::audio::FloatWavReader::open(path.string()), "failed finish must leave an incomplete file");
+    require(!mradm::audio::RenderInputReader::open(path.string()), "failed finish must leave an incomplete file");
 }
 #endif
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        std::cerr << "expected the caf-v1 samples directory\n";
+        return 1;
+    }
     mradm_test::bind_rust_services();
     const auto directory =
         std::filesystem::temp_directory_path() /
@@ -222,11 +272,9 @@ int main() {
                 const int64_t top = (int64_t{1} << (bits - 1U)) - 1;
                 const std::vector<int64_t> input{-top - 1, -top, -top / 2, 0, top / 2, top, top};
                 save(path, integer_wave(rate, bits, input));
-                auto probe = mradm::audio::FloatWavReader::open(path.string());
-                require(probe && probe->sample_rate() == rate && probe->bits_per_sample() == bits,
-                        "integer fmt mismatch");
                 auto reader = mradm::audio::RenderInputReader::open(path.string());
-                require(reader.has_value(), "Rust-backed reader open failed");
+                require(reader && (*reader)->info().rate == rate && (*reader)->info().bits == bits,
+                        "integer fmt mismatch");
                 std::vector<float> output(input.size());
                 const auto got = (*reader)->read(output.data(), output.size());
                 require(got && *got == output.size(), "integer read failed");
@@ -238,6 +286,7 @@ int main() {
         }
         verify_native_path_round_trip(directory);
         verify_float_writer_and_formats(directory);
+        verify_caf_outputs(directory, argv[1]);
 #ifndef _WIN32
         verify_failed_finish_is_sticky(directory);
 #endif
@@ -254,7 +303,7 @@ int main() {
         require(!(*reader)->read(&value, 1), "truncated file was treated as normal EOF");
         reader->reset();
         std::filesystem::remove_all(directory);
-        std::cout << "Rust WAVE integration, float RF64/BW64, high rates and truncation passed\n";
+        std::cout << "WAVE and CAF island I/O passed\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

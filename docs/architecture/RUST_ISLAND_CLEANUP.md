@@ -1,6 +1,6 @@
 # 七期 7.6：收尾
 
-> A 批于 2026-11-21 完成，macOS arm64 的 Apple 岛复核见末节。
+> 7.6 于 2026-11-22 完成。A 批清理岛的共用代码，B 批合并 Apple 岛的 WAVE / CAF 包装并在 macOS arm64 和 Windows x64 验证。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，7.5 之前的清单见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 
 7.3–7.5 之后，生产 C/C++ 只剩 Apple 岛与它的共用头，以及几个窄接口：
@@ -28,16 +28,20 @@
 | `NullLogSink`、`NullProgressSink`，以及没有定义的 `parse_direct_speakers_matrix` 声明 | 无 | — |
 | `system_spatial_island.h` 里可选方法的判断 | 7.5 之后只剩方法齐全的 AVSampleBufferAudioRenderer sink | 模板直接接上全部控制 |
 
-`options.h` 只保留 Apple 岛读取的六个类型（`SpeakerSpreadMode`、`DirectSpeakersRoutingMode`、`BinauralSpreadMode`、`LfeRoutingMode`、`AppleSpatialPreset`、`ListenerOrientation`）。原先经它间接带进来的标准头全部保留，因为 Apple 源码依赖这些间接包含，而这里编译不了 Apple 岛。
+`options.h` 只保留 Apple 岛读取的六个类型（`SpeakerSpreadMode`、`DirectSpeakersRoutingMode`、`BinauralSpreadMode`、`LfeRoutingMode`、`AppleSpatialPreset`、`ListenerOrientation`）。A 批将间接包含的清理留到 macOS 原生构建时验证。
 
 ### 测试的去向
 
 - `speaker_layouts_test` 改名为 `live_override_test`（ctest `mr_adm_live_override_tests`），保留 Apple 岛使用的实时增益、head-lock 解析与去拉链斜坡测试。布局表断言由 Rust 的逐位基准覆盖。
 - `lfe_routing_test` 去掉 Windows LFE 对一项后只剩 Apple 后端，目标改为只在 macOS 构建，文件内的 `__APPLE__` 守卫随之去掉。这个文件不依赖 Apple 框架头，在 Linux 上也能做语法检查。
 
-### 保留的待办
+## B 批合并 WAVE / CAF 包装
 
-`FloatWavReader` 已没有生产调用者，只有 `wav_io_test` 与 Apple 测试驱动 `apple_island_driver.h` 用它读渲染结果。要删它，得先给 Apple 测试换一个读取方式，而 Apple 测试在这台机器上跑不了，所以留给能跑 macOS 测试的批次。
+Apple 离线渲染、文件流式渲染和测试驱动现在共用 `RenderInputReader`。它直接持有 Rust WAVE 句柄，在同一次打开中提供格式、声道数和帧数，读取失败和正常 EOF 可分别判定。删除只供测试使用的 `FloatWavReader` 和内部转发层 `WavFileReader`。
+
+`WriterHandle` 直接持有 Rust 输出句柄，按扩展名选择 RF64 或 CAF。原来的 `FloatWavWriter`、`FloatCafWriter` 和 `PcmOutputWriter` 随之删除。APAC 和 LFE 测试也用这个入口写输入文件。`options.h`、`engine_records.h` 清理了多余的间接包含。
+
+原 `mr_adm_core_unit_tests` 的 CAF 检查并入 `mr_adm_wav_io_tests`。测试用 `.CaF` 扩展名写出立体声、双耳、WAVE 7.1 和 HOA3，对照 `caf-v1` 从文件头到 PCM 末尾的全部字节，也检查未知布局和声道数不匹配的错误码。WAVE 用例继续覆盖原生路径、RF64 / BW64、64 位定位、截断读取以及重复收尾时的错误。
 
 ## 进度回调跳板：保留
 
@@ -57,7 +61,7 @@ Windows 的 CLI 发布与 GUI 打包仍经顶层 CMake 树，DLL 与 exe 本身�
 
 改动发布工作流只能在 tag 或手动触发的 Windows 发布作业上验证，本批不改，结论记在这里。
 
-## 验证（Linux x64）
+## A 批验证（Linux x64）
 
 - **测试**：CTest 21 项全部通过（`mr_adm_lfe_routing_tests` 不再在 Linux 构建，`mr_adm_speaker_layouts_tests` 改名为 `mr_adm_live_override_tests`），Rust 单元测试包含在内。
 - **FFI 与导出**：`check-ffi-headers.py` 通过（37 个结构体），`check-capi-exports.py` 确认仍恰好导出 164 个 `adm_*`。
@@ -71,20 +75,28 @@ Windows 的 CLI 发布与 GUI 打包仍经顶层 CMake 树，DLL 与 exe 本身�
 
 ## 规模
 
-| 区域 | 7.6 之前 | A 之后 |
-| --- | ---: | ---: |
-| 生产 C/C++ | 4,882 | 4,147 |
-| 岛（`adm_apple`） | 2,311 | 2,311 |
-| 岛接口 | 1,029 | 1,007 |
-| 测试 C/C++ | 8,289 | 8,128 |
-| Rust（自有） | 150,165 | 149,879 |
+| 区域 | 7.6 之前 | A 之后 | B 之后 |
+| --- | ---: | ---: | ---: |
+| 生产 C/C++ | 4,882 | 4,147 | 3,838 |
+| 岛（`adm_apple`） | 2,311 | 2,311 | 2,311 |
+| 岛接口 | 1,029 | 1,007 | 1,007 |
+| 测试 C/C++ | 8,289 | 8,128 | 7,922 |
+| Rust（自有） | 150,165 | 149,879 | 149,879 |
 
 ## 发布说明
 
-无公开行为变化：C ABI、CLI 与渲染结果不变；删除的都是内部头、记录与服务表项。
+本次清理涉及私有头、岛服务表、C++ 读写包装和测试目标。C++ 调用方的进度回调抛出异常时，渲染仍返回 `ADM_ERROR_INTERNAL`。
 
-## 合并复核（macOS arm64）
+## A 批合并复核（macOS arm64）
 
 - Debug 和 Release 均编译 Apple 岛及相关目标。Apple 渲染、长文件窗口、22.2 LFE、实时覆盖、DirectSpeakers 矩阵、APAC 和 C ABI 的 7 项 Release CTest 全部通过，动态库导出 164 个 `adm_*`。
 - 相对主线 `b7c17394`，Release 的四组 Apple 离线渲染 PCM 逐字节相同。用例覆盖 7.1.4 点声源及其语义增益策略、22.2 LFE 直通与等功率拆分。语义报告一致。C ABI 预览分别检查连续两次带静音策略和无策略的窗口渲染，并确认拒绝错误 JSON。
 - 系统空间监听通过文件流式渲染的打开、播放、暂停、定位和恢复检查。Scene 流式渲染通过默认设备的系统空间输出、短尾声、定位和音量检查。
+
+## B 批原生验证（2026-11-22）
+
+- macOS arm64 通过 6 项 Debug 和 9 项 Release 定向 CTest。Release 覆盖 WAVE / CAF、Apple 岛表、AUSpatialMixer、跨 2³¹ 帧裁剪、DirectSpeakers 矩阵、22.2 LFE、实时覆盖、APAC 和 C ABI 消费者。
+- 与 `9cf51298` 的 macOS Release 对照，两个版本均用 `--renderer apple --output-bit-depth f32 --no-peak-limit`。
+  `objects-point` 的 7.1.4 RF64 WAVE 和 CAF（各 48,000 帧）、同一输入的 `--start 0.02 --end 0.08` WAVE 窗口（2,880 帧），以及 `directspeakers-lfe` 的 22.2 等功率拆分 WAVE（48,000 帧）均得到逐字节相同的 PCM。CAF 的格式描述和声道布局块也相同。
+- Windows x64 在规范 MSVC/Ninja Release 构建中通过 WAVE / CAF、实时覆盖、C ABI 消费者和 CLI 冒烟 4 项 CTest。APAC 编码用例在 macOS 运行，Windows 目标按平台跳过。两个平台的共享库均恰好导出 164 个 `adm_*` 函数。
+- 分别改动临时 CAF 参考文件中的 WAVE 7.1 布局标签和立体声数据块长度，两个用例均按预期报错。FFI 头核对、变更文件的 clang-format、clang-tidy、cppcheck 和 C/C++ 规模棘轮通过。

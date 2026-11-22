@@ -80,8 +80,7 @@ std::vector<float> make_input_samples(const std::vector<SignalSpec>& signals) {
 }
 
 bool write_input(const std::filesystem::path& path, const std::vector<SignalSpec>& signals) {
-    auto writer =
-        mradm::audio::FloatWavWriter::open(path.string(), static_cast<uint32_t>(signals.size()), k_sample_rate);
+    auto writer = mradm::audio::WriterHandle::open(path.string(), static_cast<uint32_t>(signals.size()), k_sample_rate);
     if (!writer) {
         return false;
     }

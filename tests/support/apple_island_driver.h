@@ -165,13 +165,17 @@ struct Audio {
 };
 
 inline std::optional<Audio> read_wav(const std::filesystem::path& path) {
-    auto reader = mradm::audio::FloatWavReader::open(path.string());
+    auto reader = mradm::audio::RenderInputReader::open(path.string());
     if (!reader) {
         return std::nullopt;
     }
-    Audio audio{reader->channels(), reader->frame_count(), {}};
-    audio.samples.resize(static_cast<std::size_t>(audio.channels) * audio.frames);
-    if (reader->read(audio.samples.data(), audio.frames) != audio.frames) {
+    const auto& info = (*reader)->info();
+    Audio audio{info.channels, info.frames, {}};
+    if (audio.frames > audio.samples.max_size() / audio.channels) {
+        return std::nullopt;
+    }
+    audio.samples.resize(static_cast<std::size_t>(audio.frames) * audio.channels);
+    if ((*reader)->read(audio.samples.data(), audio.frames) != audio.frames) {
         return std::nullopt;
     }
     return audio;

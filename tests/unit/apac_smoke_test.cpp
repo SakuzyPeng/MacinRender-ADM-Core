@@ -118,8 +118,8 @@ bool write_test_wav_with_amps(const std::string& path,
                               uint32_t channels,
                               const std::vector<float>& amps,
                               uint32_t frames = 48000U) {
-    auto wr = mradm::audio::FloatWavWriter::open(path, channels, 48000U);
-    if (!check(wr.has_value(), "FloatWavWriter::open failed")) {
+    auto wr = mradm::audio::WriterHandle::open(path, channels, 48000U);
+    if (!check(wr.has_value(), "WriterHandle::open failed")) {
         return false;
     }
     std::vector<float> buf(static_cast<std::size_t>(channels) * frames, 0.0F);
@@ -135,8 +135,8 @@ bool write_test_wav_with_amps(const std::string& path,
 }
 
 bool write_test_wav(const std::string& path, uint32_t channels, uint32_t sample_rate, uint32_t frames) {
-    auto wr = mradm::audio::FloatWavWriter::open(path, channels, sample_rate);
-    if (!check(wr.has_value(), "FloatWavWriter::open failed")) {
+    auto wr = mradm::audio::WriterHandle::open(path, channels, sample_rate);
+    if (!check(wr.has_value(), "WriterHandle::open failed")) {
         return false;
     }
     std::vector<float> buf(static_cast<std::size_t>(channels) * frames);

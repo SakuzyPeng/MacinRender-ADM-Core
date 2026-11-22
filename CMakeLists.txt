@@ -44,14 +44,8 @@ if(MR_ADM_CORE_BUILD_TESTS)
     target_link_libraries(mr_adm_wav_io_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
     mr_adm_core_apply_warnings(mr_adm_wav_io_tests)
     mr_adm_core_apply_static_analysis(mr_adm_wav_io_tests)
-    add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests)
-
-    # The audio island's WAVE / CAF writer wrappers (R3 C4 removed its SDK checks; 7.2 C its metadata checks).
-    add_executable(mr_adm_core_unit_tests tests/unit/core_smoke_test.cpp)
-    target_link_libraries(mr_adm_core_unit_tests PRIVATE MacinRender::ADMAudio MacinRender::ADMCAPI)
-    mr_adm_core_apply_warnings(mr_adm_core_unit_tests)
-    mr_adm_core_apply_static_analysis(mr_adm_core_unit_tests)
-    add_test(NAME mr_adm_core_unit_tests COMMAND mr_adm_core_unit_tests)
+    add_test(NAME mr_adm_wav_io_tests COMMAND mr_adm_wav_io_tests
+        "${CMAKE_CURRENT_SOURCE_DIR}/rust/crates/mradm-wav/tests/caf-v1/samples")
 
     # Exercise the public header and shared library as a downstream C++ consumer, including the
     # import library on Windows. Island tests that need private symbols use the static library.

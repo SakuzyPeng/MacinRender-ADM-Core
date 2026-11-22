@@ -2,8 +2,8 @@
   "schema": "mradm.language-surface.v1",
   "areas": {
     "production": {
-      "files": 33,
-      "lines": 4147
+      "files": 31,
+      "lines": 3838
     },
     "islands": {
       "files": 4,
@@ -18,8 +18,8 @@
       "lines": 1007
     },
     "tests": {
-      "files": 21,
-      "lines": 8128
+      "files": 20,
+      "lines": 7922
     },
     "rust": {
       "files": 402,
@@ -58,9 +58,9 @@
     "src/adm_apple/apple_island.cpp": 165,
     "src/adm_apple/apple_island.h": 14,
     "src/adm_apple/island_driver.h": 113,
-    "src/adm_audio": 367,
+    "src/adm_audio": 164,
     "src/adm_c_api": 27,
-    "src/adm_core": 808,
+    "src/adm_core": 707,
     "src/adm_dsp": 231,
     "src/adm_engine/platform_island.cpp": 136,
     "src/adm_engine/platform_island.h": 14,
@@ -70,11 +70,11 @@
     "src/adm_realtime/miniaudio_island.h": 46,
     "src/adm_realtime/system_spatial_island.cpp": 30,
     "src/adm_realtime/system_spatial_island.h": 134,
-    "src/adm_render_common": 622,
+    "src/adm_render_common": 617,
     "src/adm_render_room/cuda": 512,
     "tests/manual": 817,
-    "tests/support": 1379,
-    "tests/unit": 5932
+    "tests/support": 1383,
+    "tests/unit": 5722
   },
   "island_interfaces": {
     "src/adm_apple/apple_backend.h": 218,
