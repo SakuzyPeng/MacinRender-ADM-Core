@@ -11,11 +11,12 @@
 | libear-derived-rust-ear | 2db69f8f-subset | Apache-2.0 | `LICENSE`, `NOTICE.txt` |
 | libFLAC | 1.5.0 | BSD-3-Clause | `COPYING.Xiph` |
 | libopus | v1.5.2 | BSD-3-Clause | `COPYING`, `LICENSE_PLEASE_READ.txt` |
-| miniaudio | 0.11.21 | Unlicense OR MIT-0 | `LICENSE` |
 | musl-derived-rust-math | musl-1.2.5-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann-derived-rust-json | nlohmann-3.12.0-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann_json | v3.12.0 | MIT | `LICENSE.MIT` |
 | rust-adler2-2.0.1 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-alsa-0.11.0 | 0.11.0 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-alsa-sys-0.4.0 | 0.4.0 | MIT | `LICENSE` |
 | rust-anstyle-1.0.11 | 1.0.11 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |
 | rust-arrayvec-0.7.8 | 0.7.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -27,13 +28,19 @@
 | rust-bitflags-1.3.2 | 1.3.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bitflags-2.13.2 | 2.13.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-block-buffer-0.10.4 | 0.10.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-block2-0.6.2 | 0.6.2 | MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-bumpalo-3.20.4 | 3.20.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-bytemuck-1.25.2 | 1.25.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
+| rust-bytes-1.12.2 | 1.12.2 | MIT | `LICENSE` |
 | rust-cc-1.11.2 | 1.11.2 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-cfg-if-1.0.5 | 1.0.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-clap-4.5.41 | 4.5.41 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-clap_builder-4.5.41 | 4.5.41 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-clap_lex-0.7.5 | 0.7.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-cmake-0.1.58 | 0.1.58 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-combine-4.6.9 | 4.6.9 | MIT | `LICENSE` |
+| rust-coreaudio-rs-0.14.2 | 0.14.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-cpal-0.18.2 | 0.18.2 | Apache-2.0 | `LICENSE` |
 | rust-cpufeatures-0.2.17 | 0.2.17 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-crossbeam-deque-0.8.8 | 0.8.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-crossbeam-epoch-0.9.21 | 0.9.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -45,33 +52,57 @@
 | rust-dispatch2-0.3.1 | 0.3.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-ebur128-0.1.10 | 0.1.10 | MIT | `LICENSE` |
 | rust-either-1.19.0 | 1.19.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-equivalent-1.0.3 | 1.0.3 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-find-msvc-tools-0.1.15 | 0.1.15 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-futures-core-0.3.34 | 0.3.34 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-futures-task-0.3.34 | 0.3.34 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-futures-util-0.3.34 | 0.3.34 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-generic-array-0.14.7 | 0.14.7 | MIT | `LICENSE` |
 | rust-glam-0.30.10 | 0.30.10 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.31.1 | 0.31.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.32.1 | 0.32.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-glam-0.33.12 | 0.33.12 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-hashbrown-0.17.2 | 0.17.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-indexmap-2.14.2 | 2.14.2 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-itoa-1.0.18 | 1.0.18 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-jni-0.22.4 | 0.22.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE.txt` |
+| rust-jni-macros-0.22.4 | 0.22.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE.txt` |
+| rust-jni-sys-0.3.1 | 0.3.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-jni-sys-0.4.1 | 0.4.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-jni-sys-macros-0.4.1 | 0.4.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE.txt` |
+| rust-js-sys-0.3.107 | 0.3.107 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-libc-0.2.190 | 0.2.190 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-libm-0.2.16 | 0.2.16 | MIT | `LICENSE.txt` |
 | rust-log-0.4.34 | 0.4.34 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-mach2-0.6.0 | 0.6.0 | BSD-2-Clause OR MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-BSD`, `LICENSE-MIT` |
 | rust-matrixmultiply-0.3.11 | 0.3.11 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-memchr-2.8.3 | 2.8.3 | Unlicense OR MIT | `COPYING`, `LICENSE-MIT` |
 | rust-miniz_oxide-0.8.9 | 0.8.9 | MIT OR Zlib OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE.md`, `LICENSE-MIT.md`, `LICENSE-ZLIB.md` |
 | rust-nalgebra-0.35.0 | 0.35.0 | Apache-2.0 | `LICENSE` |
+| rust-ndk-0.9.0 | 0.9.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE.txt` |
+| rust-ndk-context-0.1.1 | 0.1.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE.txt` |
+| rust-ndk-sys-0.6.0+11769913 | 0.6.0+11769913 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE.txt` |
 | rust-num-bigint-0.4.8 | 0.4.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-num-complex-0.4.6 | 0.4.6 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-num-derive-0.4.2 | 0.4.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-num-integer-0.1.47 | 0.1.47 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-num-rational-0.4.2 | 0.4.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-num-traits-0.2.19 | 0.2.19 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-num_enum-0.7.6 | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-BSD`, `LICENSE-MIT` |
+| rust-num_enum_derive-0.7.6 | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-BSD`, `LICENSE-MIT` |
 | rust-objc2-0.6.5 | 0.6.5 | MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-objc2-audio-toolbox-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-avf-audio-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
+| rust-objc2-core-audio-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-objc2-core-audio-types-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-objc2-core-foundation-0.3.2 | 0.3.2 | Zlib OR Apache-2.0 OR MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-objc2-encode-4.1.0 | 4.1.0 | MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-objc2-foundation-0.3.2 | 0.3.2 | MIT | `LICENSE.md`, `NOTICE.txt` |
 | rust-paste-1.0.15 | 1.0.15 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-pin-project-lite-0.2.18 | 0.2.18 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-pkg-config-0.3.34 | 0.3.34 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-primal-check-0.3.4 | 0.3.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-proc-macro-crate-3.5.0 | 3.5.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-proc-macro2-1.0.107 | 1.0.107 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-pulp-0.22.3 | 0.22.3 | MIT | `LICENSE` |
 | rust-pulp-wasm-simd-flag-0.1.1 | 0.1.1 | MIT | `Cargo.toml`, `LICENSE`, `NOTICE.txt` |
@@ -84,9 +115,13 @@
 | rust-realfft-3.5.0 | 3.5.0 | MIT | `README.md`, `NOTICE.txt` |
 | rust-reborrow-0.5.5 | 0.5.5 | MIT | `LICENSE` |
 | rust-rubato-5.0.1 | 5.0.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE.txt` |
+| rust-rustc_version-0.4.1 | 0.4.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-rustfft-6.4.1 | 6.4.1 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-rustversion-1.0.23 | 1.0.23 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-ryu-1.0.23 | 1.0.23 | Apache-2.0 OR BSL-1.0 | `LICENSE-APACHE`, `LICENSE-BOOST` |
 | rust-safe_arch-1.2.0 | 1.2.0 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.md`, `LICENSE-MIT.md`, `LICENSE-ZLIB.md` |
+| rust-same-file-1.0.6 | 1.0.6 | Unlicense OR MIT | `COPYING`, `LICENSE-MIT`, `UNLICENSE` |
+| rust-semver-1.0.28 | 1.0.28 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-serde-1.0.229 | 1.0.229 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-serde_core-1.0.229 | 1.0.229 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-serde_derive-1.0.229 | 1.0.229 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
@@ -94,19 +129,34 @@
 | rust-sha2-0.10.9 | 0.10.9 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-shlex-2.0.1 | 2.0.1 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-simba-0.10.2 | 0.10.2 | Apache-2.0 | `LICENSE` |
+| rust-simd_cesu8-1.2.0 | 1.2.0 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-simdutf8-0.1.5 | 0.1.5 | MIT OR Apache-2.0 | `LICENSE-Apache`, `LICENSE-MIT` |
+| rust-slab-0.4.12 | 0.4.12 | MIT | `LICENSE` |
 | rust-smallvec-1.16.2 | 1.16.2 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-sofar-0.3.0 | 0.3.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE` |
 | rust-strength_reduce-0.2.4 | 0.2.4 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-syn-2.0.119 | 2.0.119 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-syn-3.0.6 | 3.0.6 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-thiserror-1.0.69 | 1.0.69 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-thiserror-2.0.21 | 2.0.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-thiserror-impl-1.0.69 | 1.0.69 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-thiserror-impl-2.0.21 | 2.0.21 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-toml_datetime-1.1.3+spec-1.1.0 | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-toml_edit-0.25.20+spec-1.1.0 | 0.25.20+spec-1.1.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-toml_parser-1.1.6+spec-1.1.0 | 1.1.6+spec-1.1.0 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-transpose-0.2.3 | 0.2.3 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-typenum-1.20.1 | 1.20.1 | MIT OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-unicode-ident-1.0.26 | 1.0.26 | (MIT OR Apache-2.0) AND Unicode-3.0 | `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-UNICODE` |
 | rust-version_check-0.9.5 | 0.9.5 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-visibility-0.1.1 | 0.1.1 | Zlib OR MIT OR Apache-2.0 | `LICENSE`, `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-ZLIB` |
+| rust-walkdir-2.5.1 | 2.5.1 | Unlicense OR MIT | `COPYING`, `LICENSE-MIT`, `UNLICENSE` |
+| rust-wasm-bindgen-0.2.130 | 0.2.130 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-wasm-bindgen-macro-0.2.130 | 0.2.130 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-wasm-bindgen-macro-support-0.2.130 | 0.2.130 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-wasm-bindgen-shared-0.2.130 | 0.2.130 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-web-sys-0.3.107 | 0.3.107 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-wide-1.7.1 | 1.7.1 | Zlib OR Apache-2.0 OR MIT | `LICENSE-APACHE.txt`, `LICENSE-MIT.txt`, `LICENSE-ZLIB.txt` |
+| rust-winapi-util-0.1.11 | 0.1.11 | Unlicense OR MIT | `COPYING`, `LICENSE-MIT`, `UNLICENSE` |
 | rust-windows-0.62.2 | 0.62.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-windows-collections-0.3.2 | 0.3.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-windows-core-0.62.2 | 0.62.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
@@ -117,6 +167,8 @@
 | rust-windows-numerics-0.3.1 | 0.3.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-windows-result-0.4.1 | 0.4.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-windows-strings-0.5.1 | 0.5.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
+| rust-windows-sys-0.61.2 | 0.61.2 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-windows-threading-0.2.1 | 0.2.1 | MIT OR Apache-2.0 | `license-apache-2.0`, `license-mit` |
 | rust-winnow-0.7.15 | 0.7.15 | MIT | `LICENSE-MIT` |
+| rust-winnow-1.0.5 | 1.0.5 | MIT | `LICENSE-MIT` |
 | saf-derived-rust-dsp | v1.3.4-subset | ISC AND MIT | `NOTICE.txt` |

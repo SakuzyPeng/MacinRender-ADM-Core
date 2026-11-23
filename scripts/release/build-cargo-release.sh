@@ -34,6 +34,10 @@ mkdir -p "$target_dir"
 target_dir="$(cd "$target_dir" && pwd)"
 
 cmake_args="MR_ADM_CORE_USE_INSTALLED_DEPS=OFF"
+if [[ "$(uname -s)" == Darwin ]]; then
+    export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
+    cmake_args+=";CMAKE_OSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
+fi
 if [[ -n "${FC_CACHE_DIR:-}" ]]; then
     # A cache of its own: FetchContent also keeps each dependency's build tree in its base directory.
     mkdir -p "$FC_CACHE_DIR/cargo"

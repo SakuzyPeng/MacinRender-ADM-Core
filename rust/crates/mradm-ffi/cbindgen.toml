@@ -26,8 +26,6 @@ include = [
     "EngineSpatialLayout",
     "IamfEncodeOptions",
     "IslandContext",
-    "MiniaudioFormats",
-    "MiniaudioIsland",
     "PlatformIslands",
     "RenderLiveOverride",
     "RustServices",

@@ -1,6 +1,6 @@
 //! The Scene output session (formerly the C++ `SceneOutputSession`)
 //! without its device: the device callback's pull, the stereo headphone feed's prefetch, HpTF and
-//! sample-peak guard, the volume, the epoch reset and the status. The device itself (miniaudio,
+//! sample-peak guard, the volume, the epoch reset and the status. The device itself (CPAL,
 //! the system spatial sinks, test captures) stays a C++ island, so every step that touches it is
 //! split out: the shell parks the callback here, pauses and flushes the device, then resets.
 //!
@@ -455,7 +455,7 @@ impl Session {
             underruns: if device.media_clock {
                 device.underruns
             } else {
-                stream.underruns
+                stream.underruns.saturating_add(device.underruns)
             },
             media_clock: device.media_clock,
             recovering: device.recovering,

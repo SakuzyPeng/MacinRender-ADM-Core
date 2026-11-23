@@ -1,0 +1,7 @@
+ndk-context 0.1.1
+MIT OR Apache-2.0
+
+Upstream source and license files
+https://github.com/rust-mobile/ndk/tree/10f2ba388fca20f7349996ebae26ccda7a6fda5c/ndk-context
+https://raw.githubusercontent.com/rust-mobile/ndk/10f2ba388fca20f7349996ebae26ccda7a6fda5c/LICENSE-APACHE
+https://raw.githubusercontent.com/rust-mobile/ndk/10f2ba388fca20f7349996ebae26ccda7a6fda5c/LICENSE-MIT

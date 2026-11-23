@@ -22,11 +22,22 @@ SPEC.loader.exec_module(setup)
 class UbuntuBuildTests(unittest.TestCase):
     def test_preinstalled_tools_need_no_download(self):
         with patch.object(setup.shutil, 'which', return_value='/usr/bin/tool') as which:
-            with patch.object(setup.subprocess, 'run') as run:
+            with patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
                 with patch('sys.argv', ['setup-ubuntu-build.py']):
                     setup.main()
         self.assertEqual([call.args[0] for call in which.call_args_list], list(setup.REQUIRED_TOOLS))
-        run.assert_not_called()
+        run.assert_called_once_with(['pkg-config', '--exists', 'alsa'])
+
+    def test_missing_alsa_development_files_are_installed(self):
+        with patch.object(setup.shutil, 'which', return_value='/usr/bin/tool'), \
+                patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1)) as run, \
+                patch('sys.argv', ['setup-ubuntu-build.py']):
+            setup.main()
+        self.assertEqual([call.args[0] for call in run.call_args_list], [
+            ['pkg-config', '--exists', 'alsa'],
+            ['sudo', 'apt-get', 'update'],
+            ['sudo', 'apt-get', 'install', '-y', 'libasound2-dev'],
+        ])
 
     def test_missing_build_tool_fails_before_download(self):
         with patch.object(setup.shutil, 'which', return_value=None):

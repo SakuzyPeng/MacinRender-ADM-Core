@@ -155,7 +155,7 @@ clang-tidy 依赖 `compile_commands.json`，必须先 `cmake --preset debug`。m
 
 依赖通过 `cmake/MRDependencies.cmake` 的 `mr_adm_core_find_or_fetch()` 统一接入（`find_package(CONFIG)` 优先，FetchContent 兜底）。新增 C/C++ 依赖**必须**走该函数，不要在 `CMakeLists.txt` 散落 `FetchContent_Declare`（ADR 0004）；新增 Rust 依赖写进 `rust/Cargo.toml` 的 `[workspace.dependencies]`（精确版本 `=x.y.z`）并更新 `Cargo.lock` 与许可证清单。
 
-当前生产 C/C++ 第三方依赖：libFLAC 与 libopus（7.2 A / B 起由 Rust 直接调用）、miniaudio，可选 IAMF AOM bridge（7.2 C3 起由 Rust 直接调用；6.5 C 起 nlohmann_json 只在构建测试时获取，R3 G 起只供 Apple 冒烟测试，fmt 随测试 SDK 移出构建；tl-expected 移出构建）。Rust 依赖：realfft/rustfft（`rust/vendor/rustfft` 保持位模式的列优化补丁；两者的 twiddle 均改用 `libm`，`rust/vendor/realfft` 只有这一处补丁）、nalgebra（`libm-force`，ADR 0017）、libm、ebur128（`rust/vendor/ebur128` 本地补丁：True Peak 插值系数改用 `libm`，二期 2.1；K-weighting、门控系数与 LUFS 换算改用 `libm`，去掉 x86 FTZ，二期 2.2；极小状态在 100 ms 块网格上清零，二期 2.4）、rubato（`rust/vendor/rubato` 本地补丁，ADR 0016）、sofar（`rust/vendor/sofar` 本地补丁）、共享的 `macin-adm` / `macin-bwf`（Git 依赖，提交由各 `Cargo.toml` 与 `Cargo.lock` 固定，见 `SHARED_ADM_FORMAT.md`）、quick-xml、serde_json（开启 `std` / `float_roundtrip`、无类型 `Value`，PoseBridge 遥测）、cmake（及其 cc / find-msvc-tools / shlex，只供 `mradm-islands-sys` 的构建脚本构建岛的 CMake 工程，6.6）。项目内 crate `mradm-json`（MIT，移植 nlohmann 的接受规则与 Grisu2，`NOTICE.txt` / `PROVENANCE.json` 登记）不是外部依赖。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），`mradm-math` 是移植自 musl 的可移植 sin/cos（MIT，同样登记 `NOTICE.txt` / `PROVENANCE.json`），都不是外部依赖。生产构建不需要 Boost / vcpkg。
+当前生产 C/C++ 第三方依赖：libFLAC 与 libopus（7.2 A / B 起由 Rust 直接调用），可选 IAMF AOM bridge（7.2 C3 起由 Rust 直接调用；6.5 C 起 nlohmann_json 只在构建测试时获取，R3 G 起只供 Apple 冒烟测试，fmt 随测试 SDK 移出构建；tl-expected 移出构建）。Rust 依赖：CPAL（普通 PCM 监听与设备采集）、realfft/rustfft（`rust/vendor/rustfft` 保持位模式的列优化补丁；两者的 twiddle 均改用 `libm`，`rust/vendor/realfft` 只有这一处补丁）、nalgebra（`libm-force`，ADR 0017）、libm、ebur128（`rust/vendor/ebur128` 本地补丁：True Peak 插值系数改用 `libm`，二期 2.1；K-weighting、门控系数与 LUFS 换算改用 `libm`，去掉 x86 FTZ，二期 2.2；极小状态在 100 ms 块网格上清零，二期 2.4）、rubato（`rust/vendor/rubato` 本地补丁，ADR 0016）、sofar（`rust/vendor/sofar` 本地补丁）、共享的 `macin-adm` / `macin-bwf`（Git 依赖，提交由各 `Cargo.toml` 与 `Cargo.lock` 固定，见 `SHARED_ADM_FORMAT.md`）、quick-xml、serde_json（开启 `std` / `float_roundtrip`、无类型 `Value`，PoseBridge 遥测）、cmake（及其 cc / find-msvc-tools / shlex，只供 `mradm-islands-sys` 的构建脚本构建岛的 CMake 工程，6.6）。项目内 crate `mradm-json`（MIT，移植 nlohmann 的接受规则与 Grisu2，`NOTICE.txt` / `PROVENANCE.json` 登记）不是外部依赖。`mradm-ear` 是移植自 libear 的项目内 crate（Apache-2.0，来源与数据登记在 crate 的 `LICENSE` / `NOTICE.txt` / `PROVENANCE.json`），`mradm-math` 是移植自 musl 的可移植 sin/cos（MIT，同样登记 `NOTICE.txt` / `PROVENANCE.json`），都不是外部依赖。生产构建不需要 Boost / vcpkg。
 
 关键开关：
 
@@ -193,7 +193,7 @@ ADMAudio            PRIVATE: mradm-ffi（mradm-wav：全部 WAVE / CAF 样本读
 ADMIslands          6.5 A 起：平台事实岛（platform_island），macOS 的系统空间 sink 表（system_spatial_island），Rust 按名调用
                     （R3 G 起房间设备探针的 Rust example 也静态链入它们）；
                     PRIVATE: ADMAudio + ADMDsp + ADMRenderCommon（+ Apple 岛）
-mr_adm_miniaudio    7.3 起：miniaudio 实现与 Rust 调用的窄 C 接口（miniaudio_island.c，C 编译）；PRIVATE: miniaudio
+pcm_device          mradm-ffi 的 CPAL 输出设备与 Rust 定时 null 后端
 ADMCAPI             顶层树的 INTERFACE：c_api.h + Cargo 构建的 mradm-capi staticlib（IMPORTED mradm_capi）及其后的岛（mr_adm_native）；
                     实现在 Rust mradm-capi（6.3），C++ 只剩进度回调跳板（mr_adm_capi_progress）
 mradm_exe (CLI)     顶层树的 IMPORTED：mradm-capi 的 bin `mradm`（6.6；CLI 在 mradm-cli，6.4）

@@ -1,10 +1,10 @@
 //! The output devices, opened and driven from Rust for the monitor session and the Scene output:
-//! miniaudio and its null backend over `src/adm_realtime/miniaudio_island.h`, and the platform's
+//! CPAL hardware output, the timer-driven null device, and the platform's
 //! system-spatial sink (AVSampleBufferAudioRenderer on macOS, ISpatialAudioClient on Windows), each a
 //! [`DeviceTable`] (7.3; before it, one C++ device island opened all three).
 use super::engine_monitor::{Buffers, EngineIslandError};
 use super::engine_scene_output::EngineSceneDeviceProgress;
-use super::miniaudio;
+use super::pcm_device;
 use crate::adm::Text;
 use mradm_engine::scene::output::DeviceProgress;
 use mradm_render::routing::Error;
@@ -104,7 +104,7 @@ unsafe extern "C" fn open_device(
     };
     if kind != SYSTEM_SPATIAL {
         let id = unsafe { super::bytes(&device_id) }.unwrap_or_default();
-        *output = miniaudio::open(kind == NULL_BACKEND, id);
+        *output = pcm_device::open(kind == NULL_BACKEND, id);
         return 0;
     }
     #[cfg(windows)]
@@ -149,7 +149,7 @@ unsafe extern "C" fn enumerate_devices(devices: *const DeviceEnumeration) {
     else {
         return;
     };
-    miniaudio::enumerate(&mut |id, name, is_default| unsafe {
+    pcm_device::enumerate(|id, name, is_default| unsafe {
         each(
             *user,
             Text::bytes(id),

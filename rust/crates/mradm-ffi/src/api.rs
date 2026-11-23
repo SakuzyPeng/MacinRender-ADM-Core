@@ -17,7 +17,7 @@ pub mod islands {
     };
     pub use crate::services::RustServices;
 
-    /// This build's output devices: miniaudio (hardware and the null backend) and, on macOS and
+    /// This build's output devices: CPAL hardware, the null clock and, on macOS and
     /// Windows, the system-spatial sink.
     pub fn devices() -> *const DeviceIslands {
         &raw const crate::render::device_island::DEVICES

@@ -2,7 +2,7 @@
 //! log buffer, the stream opening of the C++ `RealtimeStreamFactory` (the rules are
 //! [`stream::open_monitor`]), the last-used and pending backend options, the edits, orientation
 //! and HpTF profile that survive a rebuild, and the backend-switch and output-device transactions
-//! with their fallbacks. The device (miniaudio, the Apple and Windows system-spatial sinks) and the
+//! with their fallbacks. The device (CPAL, the Apple and Windows system-spatial sinks) and the
 //! Apple stream stay with the caller behind [`SessionHost`]. Rules, order and texts follow the C++
 //! session.
 use super::{
@@ -41,6 +41,9 @@ pub struct Choice {
 pub trait Device: Send + Sync {
     /// `pull_is_realtime_playback`.
     fn realtime(&self) -> bool;
+    fn progress(&self) -> crate::scene::output::DeviceProgress {
+        Default::default()
+    }
     /// Starts pulling `monitor`. The session stops the device before the monitor drops.
     fn start(&self, channels: usize, sample_rate: u32, monitor: &Monitor) -> Result<(), Error>;
     fn stop(&self);
@@ -581,7 +584,9 @@ impl Session {
         let Some(m) = &inner.monitor else {
             return Err(error(code::INTERNAL_ERROR, INVALID_SESSION));
         };
-        if device_id == inner.device_id.as_slice() {
+        if device_id == inner.device_id.as_slice()
+            && !inner.device.as_ref().is_some_and(|d| d.progress().failed)
+        {
             return Ok(());
         }
         let status = m.status();
@@ -629,7 +634,17 @@ impl Session {
     pub fn status(&self) -> Option<Status> {
         let mut inner = self.lock();
         inner.refresh();
-        inner.monitor.as_ref().map(|m| m.status())
+        let mut status = inner.monitor.as_ref()?.status();
+        if let Some(device) = &inner.device {
+            let progress = device.progress();
+            status.underruns = status.underruns.saturating_add(progress.underruns);
+            if progress.failed {
+                status.failed = true;
+                status.ended = false;
+                status.state = State::Stopped;
+            }
+        }
+        Some(status)
     }
 
     /// None for an invalidated session (silent levels).

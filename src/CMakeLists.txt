@@ -1,4 +1,4 @@
-# The C/C++ islands and the third-party C libraries (libFLAC, libopus, miniaudio and the
+# The C/C++ islands and the third-party C libraries (libFLAC, libopus and the
 # optional IAMF bridge) that the Rust library links (6.6). Built standalone by the mradm-islands-sys
 # build script (through the cmake crate), or as a subdirectory of the top-level test tree. Either way
 # it writes mradm_native_link-<config>.txt: the archives in link order, then the platform libraries,
@@ -167,14 +167,6 @@ endif()
 mr_adm_core_apply_warnings(mr_adm_islands)
 mr_adm_core_apply_static_analysis(mr_adm_islands)
 
-# ── miniaudio ─────────────────────────────────────────────────────────────────
-# The miniaudio implementation and the narrow C interface through which Rust drives the output
-# devices (mradm_miniaudio_island, mradm-ffi `miniaudio`, 7.3). miniaudio's types stay in
-# miniaudio_island.c (ADR 0003). It is C, so the C++ warning set does not apply.
-
-add_library(mr_adm_miniaudio STATIC adm_realtime/miniaudio_island.c)
-target_link_libraries(mr_adm_miniaudio PRIVATE Threads::Threads miniaudio)
-
 if(MR_ADM_CONSISTENCY_DIAGNOSTICS)
     foreach(_mr_trace_target IN ITEMS mr_adm_audio mr_adm_render_common)
         target_compile_definitions(${_mr_trace_target} PRIVATE MR_ADM_CONSISTENCY_DIAGNOSTICS=1)
@@ -190,16 +182,11 @@ target_link_libraries(mr_adm_capi_progress PRIVATE MacinRender::ADMCore)
 mr_adm_core_apply_warnings(mr_adm_capi_progress)
 mr_adm_core_apply_static_analysis(mr_adm_capi_progress)
 
-# The capture or loopback input of the manual room device probe (mradm-ffi example
-# room_scene_benchmark), over the miniaudio implementation of mr_adm_miniaudio. Only the probe references it.
-add_library(mr_adm_probe_capture STATIC "${CMAKE_CURRENT_SOURCE_DIR}/../tests/manual/capture_tap.c")
-target_link_libraries(mr_adm_probe_capture PRIVATE miniaudio)
-
 # ── Link manifest ─────────────────────────────────────────────────────────────
 # Every archive after the archives that call it (single-pass linkers), the platform libraries last.
 # mr_adm_native carries the same order for the C++ tests of the top-level tree.
 
-set(MR_ADM_NATIVE_LIBRARIES mr_adm_capi_progress mr_adm_probe_capture mr_adm_miniaudio mr_adm_islands)
+set(MR_ADM_NATIVE_LIBRARIES mr_adm_capi_progress mr_adm_islands)
 if(APPLE)
     list(APPEND MR_ADM_NATIVE_LIBRARIES mr_adm_apple)
 endif()

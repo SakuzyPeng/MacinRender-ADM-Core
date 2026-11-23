@@ -9,6 +9,7 @@ license.workspace = true
 crate-type = ["rlib"]
 
 [dependencies]
+cpal.workspace = true
 mradm-ear = { path = "../mradm-ear" }
 mradm-wav = { path = "../mradm-wav" }
 mradm-adm = { package = "macin-adm", git = "https://github.com/SakuzyPeng/MacinFormat-ADM-Core", rev = "158b1760e22ca87dc5a8a6b4a56d511581d4c86f" }

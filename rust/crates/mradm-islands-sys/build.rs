@@ -179,7 +179,7 @@ fn build(runtime: Option<&str>) -> PathBuf {
     // A shared Cargo target directory can reuse the compiled build script in another checkout.
     let manifest_dir =
         PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    for input in ["src", "include", "cmake", "tests/manual/capture_tap.c"] {
+    for input in ["src", "include", "cmake"] {
         println!("cargo::rerun-if-changed=../../../{input}");
     }
     let root = manifest_dir.join("../../../src");

@@ -175,7 +175,7 @@ struct LiveOverrides {
 引擎侧（建议新模块 `ADMRealtime`，PRIVATE 依赖各 renderer + 设备层；CLI/GUI 经 C ABI 接入）：
 
 - **MonitorEngine**：持有当前 `IRenderStream`、ring buffer、播放时钟、loop region、`LiveOverrides` 的最新快照；worker 线程 `process()` 填 ring，并把目标快照交给 stream。各 stream 管理增益斜坡和拓扑状态过渡。
-- **设备层**：音频输出回调抽 ring。后端默认 **miniaudio**（跨平台单头、MIT-0 / public-domain 双授权；经 `mr_adm_core_find_or_fetch` 接入，ADR 0004）。**但设备层必须有自有抽象接口**（`IAudioOutputDevice` / `AudioDeviceSink`）——miniaudio 类型不出模块边界（ADR 0003 风格）。逃生口：日后若 Linux 低延迟 / JACK 多声道路由需要更强能力，再加 RtAudio backend，不伤核心。设备层还负责 §8 的输出格式校验、系统双耳化路由与 §11 的输出边界重采样。
+- **设备层**通过 CPAL 的输出回调消费 ring。`mradm-ffi` 的设备表负责设备选择、原生声道宽度校验和设备状态。macOS 在 AudioUnit 客户端配置渲染采样率。两个系统空间音频设备仍由各平台提供。
 - **热切换**：见 §7。
 
 C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_create_monitor` / `adm_monitor_play` / `adm_monitor_pause` / `adm_monitor_seek` / `adm_monitor_set_loop` / `adm_monitor_set_overrides`（JSON 或 C POD 数组，内部转 `LiveOverrides`；不能暴露 `std::vector` / `std::string`）/ `adm_monitor_switch_backend` / `adm_monitor_get_status`（轮询取播放状态、playhead、ring fill、underrun、override revision 等）/ `adm_monitor_get_levels`（轮询取 peak/rms 原子快照，见 §11 决策 3）/ `adm_destroy_monitor`。
@@ -193,7 +193,7 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 **2026-10-16 收紧：双声道输出只支持双耳。** 原有普通立体声下混不再用于公开监听链路。
 
 - 双声道监听会话只能在双耳后端之间切换；扬声器与 HOA 后端不能通过热切换被下混为左右声道。
-- 多声道原始输出需要多声道设备；设备报告为单声道或立体声时拒绝启动，不交给 miniaudio 或系统做普通立体声折叠。
+- 多声道原始输出需要能容纳请求声道数的端点。双声道设备可使用双耳输出或系统空间监听。
 - 耳机可选择 SAF / Apple / Room 双耳后端，或通过 `monitor_system_spatial` 将受支持的多声道床交给系统 HRTF。
 - 设备重开继续校验输出声道数；失败时按既有规则尝试恢复原设备和后端。系统空间音频路由保持独立。
 
@@ -221,14 +221,14 @@ C ABI（ADR 0007，additive，新 minor）：`adm_monitor_t` opaque + `adm_creat
 - **source graph 更新成本**：diffuse/extent/divergence 复用 HRTF/VBAP 表；拖动快照合并与 10 Hz 上限控制重建频率。状态过渡块会同时渲染新旧图，Release 性能测试需覆盖复杂对象场景及 underrun 计数。
 - **ADR 0003 / 0007**：`IRenderStream` 接口零第三方类型；C ABI 仅 additive、新 minor、`SOVERSION 1` 不变。
 - **Apple-only**：Apple stream `if(APPLE)` 门控，跨平台 ctest 跳过，与现有 `mr_adm_apple_smoke_tests` 一致。
-- **平台覆盖**：实时引擎与设备层须跨平台（macOS + Linux）；设备后端选型（miniaudio vs 原生）影响 §8 与依赖管理（ADR 0004，走 `mr_adm_core_find_or_fetch`）。
+- **平台覆盖**包括 macOS CoreAudio、Windows WASAPI 和 Linux ALSA。
 
 ## 11. 已定决策
 
 四项（2026-06-16 敲定）：
 
 1. **监听输出模型**：双声道只走双耳；多声道匹配设备或使用系统空间音频，热切换保持声道数（见 §8）。
-2. **设备后端**：默认 **miniaudio**（跨平台单头、MIT-0 / public-domain 双授权，经 `mr_adm_core_find_or_fetch` 接入）。**设备层自有抽象接口** `IAudioOutputDevice` / `AudioDeviceSink`，miniaudio 类型不出模块边界（ADR 0003 风格）；逃生口：日后 Linux 低延迟 / JACK 多声道需要时加 RtAudio backend。
+2. **设备后端**使用 CPAL。文件流式渲染和 Scene 流式渲染共用设备表，详见[当前实现](RUST_ISLAND_DEVICES.md#当前实现)。
 3. **level meter / 播放头反馈**：**轻量轮询**——引擎在 worker 侧把播放状态、last-frame/playhead、ring fill、underrun、peak/rms 写进原子快照，GUI 定时（如 30/60 Hz）经 `adm_monitor_get_status` + `adm_monitor_get_levels` 拉取。无跨线程回调进托管代码、AOT/P-Invoke 友好、无重入风险。两个查询结构体都带 `struct_size` 字段，后续 minor 可追加字段。
 4. **采样率不匹配**：monitor 优先把物理设备开成当前 stream/sample 的采样率；涉及 binaural 时优先 48 kHz（当前 binaural 后端要求 48 kHz）。若设备锁定到不同采样率，才在**输出边界**做一次重采样（设备层职责）；切片 1 可先只支持 48 kHz，非 48 kHz 明确返回 unsupported，后续补重采样。
 

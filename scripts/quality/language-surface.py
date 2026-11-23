@@ -36,8 +36,6 @@ ISLAND_INTERFACES = (
     "src/adm_apple/island_driver.h",
     "src/adm_engine/platform_island.cpp",
     "src/adm_engine/platform_island.h",
-    "src/adm_realtime/miniaudio_island.c",
-    "src/adm_realtime/miniaudio_island.h",
     "src/adm_realtime/system_spatial_island.cpp",
     "src/adm_realtime/system_spatial_island.h",
 )

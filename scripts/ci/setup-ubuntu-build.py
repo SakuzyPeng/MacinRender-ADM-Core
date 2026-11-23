@@ -47,6 +47,9 @@ def main():
         if location is None:
             parser.error(f'hosted runner is missing {tool}')
         print(f'{tool}: {location}', flush=True)
+    if subprocess.run(['pkg-config', '--exists', 'alsa']).returncode:
+        subprocess.run(['sudo', 'apt-get', 'update'], check=True)
+        subprocess.run(['sudo', 'apt-get', 'install', '-y', 'libasound2-dev'], check=True)
     if args.ccache:
         install_ccache()
         subprocess.run(['ccache', '--version'], check=True)

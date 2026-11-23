@@ -136,8 +136,6 @@ if(MR_ADM_CORE_BUILD_TESTS)
     if(CMAKE_CONFIGURATION_TYPES)
         string(APPEND _mr_probe_output_dir "/$<CONFIG>")
     endif()
-    # The room device probes link the islands like every mradm-ffi target (mradm-islands-sys); only
-    # they reference the capture shim (tests/manual/capture_tap.c, in the islands' link manifest).
     foreach(_mr_probe IN ITEMS osc_head_tracking_probe triple_balance_scene_benchmark
             triple_balance_monitor_benchmark room_scene_benchmark room_file_device_probe)
         set(_mr_probe_depends mradm_native)

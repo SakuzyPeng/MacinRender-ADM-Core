@@ -1,15 +1,16 @@
 //! The C++ islands of the room device probes (linked through mradm-islands-sys): the island tables, the output
-//! devices, a measuring proxy over the device table, the capture shim (`tests/manual/capture_tap.c`)
+//! devices, a measuring proxy over the device table, CPAL capture
 //! and the recordings, histograms and distributions of their reports.
 //!
 //! The measuring proxy uses the same device table as the Scene output.
 #![allow(dead_code)]
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use mradm_ffi::api::islands::{
     AppleIslands, DeviceEnumeration, DeviceIslands, DevicePull, DeviceTable, EngineIslandError,
     EngineSceneDeviceProgress, PlatformIslands, RustServices, Text, services,
 };
 use mradm_json::{Map, Value};
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::c_void;
 use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -483,57 +484,14 @@ pub fn measured_devices(trace: Arc<Mutex<OutputTrace>>) -> *const DeviceIslands 
     })
 }
 
-// ── The capture shim ─────────────────────────────────────────────────────────────
-
-#[repr(C)]
-struct CaptureHandle {
-    _private: [u8; 0],
-}
-
-type CaptureFn = unsafe extern "C" fn(*mut c_void, *const f32, u32);
-
-unsafe extern "C" {
-    fn mr_probe_capture_open(
-        name: *const c_char,
-        loopback_token: *const c_char,
-        rate: u32,
-        callback: CaptureFn,
-        user: *mut c_void,
-        out: *mut *mut CaptureHandle,
-        device_name: *mut c_char,
-        device_name_len: usize,
-    ) -> i32;
-    fn mr_probe_capture_close(handle: *mut CaptureHandle);
-    fn mr_probe_capture_inputs(
-        each: unsafe extern "C" fn(*mut c_void, *const c_char, i32),
-        user: *mut c_void,
-    ) -> i32;
-}
-
-/// The selected capture (or loopback) input, recording into one-second windows.
 pub struct Capture {
-    handle: *mut CaptureHandle,
-    recording: Box<Mutex<Recording>>,
+    stream: Option<cpal::Stream>,
+    recording: Arc<Mutex<Recording>>,
+    error: Arc<Mutex<Option<String>>>,
     name: String,
 }
 
-unsafe extern "C" fn captured(user: *mut c_void, input: *const f32, frames: u32) {
-    let recording = unsafe { &*user.cast::<Mutex<Recording>>() };
-    let samples = unsafe { std::slice::from_raw_parts(input, frames as usize * 2) };
-    recording.lock().unwrap_or_else(|e| e.into_inner()).capture(
-        samples,
-        frames as usize,
-        Instant::now(),
-    );
-}
-
-fn c_string(text: &str) -> Result<std::ffi::CString, String> {
-    std::ffi::CString::new(text).map_err(|_| "capture name contains NUL".to_owned())
-}
-
 impl Capture {
-    /// The capture device named `name`, or with a non-empty `loopback_output` the loopback of
-    /// that output device id.
     pub fn open(
         origin: Instant,
         seconds: u32,
@@ -541,55 +499,81 @@ impl Capture {
         loopback_output: &str,
         rate: u32,
     ) -> Result<Self, String> {
-        let recording = Box::new(Mutex::new(Recording::new(origin, seconds, true, rate)));
-        let (name, token) = (c_string(name)?, c_string(loopback_output)?);
-        let mut handle = std::ptr::null_mut();
-        let mut device_name = [0 as c_char; 256];
-        let status = unsafe {
-            mr_probe_capture_open(
-                name.as_ptr(),
-                token.as_ptr(),
-                rate,
-                captured,
-                std::ptr::from_ref::<Mutex<Recording>>(&recording)
-                    .cast_mut()
-                    .cast(),
-                &mut handle,
-                device_name.as_mut_ptr(),
-                device_name.len(),
+        let host = cpal::default_host();
+        let device = if loopback_output.is_empty() {
+            let mut matches = host
+                .input_devices()
+                .map_err(|error| error.to_string())?
+                .filter(|device| device.description().is_ok_and(|desc| desc.name() == name));
+            let device = matches
+                .next()
+                .ok_or("Capture selection must match exactly one device")?;
+            if matches.next().is_some() {
+                return Err("Capture selection must match exactly one device".into());
+            }
+            device
+        } else {
+            let id = loopback_output
+                .parse::<cpal::DeviceId>()
+                .map_err(|error| error.to_string())?;
+            host.device_by_id(&id)
+                .ok_or("Loopback output is unavailable")?
+        };
+        let name = device
+            .description()
+            .map_err(|error| error.to_string())?
+            .name()
+            .to_owned();
+        let recording = Arc::new(Mutex::new(Recording::new(origin, seconds, true, rate)));
+        let error = Arc::new(Mutex::new(None));
+        let data = Arc::clone(&recording);
+        let failure = Arc::clone(&error);
+        let config = cpal::StreamConfig {
+            channels: 2,
+            sample_rate: rate,
+            buffer_size: cpal::BufferSize::Default,
+        };
+        let stream = device
+            .build_input_stream(
+                config,
+                move |input: &[f32], _| {
+                    data.lock().unwrap_or_else(|e| e.into_inner()).capture(
+                        input,
+                        input.len() / 2,
+                        Instant::now(),
+                    );
+                },
+                move |e| {
+                    if !matches!(
+                        e.kind(),
+                        cpal::ErrorKind::Xrun
+                            | cpal::ErrorKind::DeviceChanged
+                            | cpal::ErrorKind::RealtimeDenied
+                    ) {
+                        *failure.lock().unwrap_or_else(|error| error.into_inner()) =
+                            Some(e.to_string());
+                    }
+                },
+                Some(std::time::Duration::from_secs(2)),
             )
-        };
-        let message = match status {
-            0 => None,
-            1 => Some("Capture context initialization failed"),
-            2 => Some("Capture device enumeration failed"),
-            3 => Some("Capture selection must match exactly one device"),
-            4 => Some("Selected capture/loopback device could not be opened"),
-            5 => Some("Capture start failed"),
-            _ => Some("Capture allocation failed"),
-        };
-        if let Some(message) = message {
-            return Err(message.to_owned());
-        }
-        let name = unsafe { CStr::from_ptr(device_name.as_ptr()) }
-            .to_string_lossy()
-            .into_owned();
+            .map_err(|error| error.to_string())?;
+        stream.play().map_err(|error| error.to_string())?;
         Ok(Self {
-            handle,
+            stream: Some(stream),
             recording,
+            error,
             name,
         })
     }
 
-    /// Stops the input; its callback has returned afterwards.
     pub fn stop(&mut self) {
-        if !self.handle.is_null() {
-            unsafe { mr_probe_capture_close(self.handle) };
-            self.handle = std::ptr::null_mut();
-        }
+        drop(self.stream.take());
     }
 
     pub fn save(&self, root: &Path) -> Result<Value, String> {
+        if let Some(error) = self.error.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+            return Err(error);
+        }
         let mut result = self
             .recording
             .lock()
@@ -601,29 +585,21 @@ impl Capture {
         Ok(result)
     }
 
-    /// The capture devices: name and whether each is the default.
     pub fn inputs() -> Result<Value, String> {
-        unsafe extern "C" fn each(user: *mut c_void, name: *const c_char, default: i32) {
-            let list = unsafe { &mut *user.cast::<Vec<Value>>() };
-            let name = unsafe { CStr::from_ptr(name) }
-                .to_string_lossy()
-                .into_owned();
-            list.push(obj([
-                ("name", name.into()),
-                ("default", (default != 0).into()),
-            ]));
+        let host = cpal::default_host();
+        let default = host
+            .default_input_device()
+            .and_then(|device| device.id().ok());
+        let mut inputs = Vec::new();
+        for device in host.input_devices().map_err(|error| error.to_string())? {
+            if let (Ok(id), Ok(desc)) = (device.id(), device.description()) {
+                inputs.push(obj([
+                    ("name", desc.name().to_owned().into()),
+                    ("default", (default.as_ref() == Some(&id)).into()),
+                ]));
+            }
         }
-        let mut list: Vec<Value> = Vec::new();
-        if unsafe { mr_probe_capture_inputs(each, (&raw mut list).cast()) } != 0 {
-            return Err("Capture enumeration failed".to_owned());
-        }
-        Ok(Value::Array(list))
-    }
-}
-
-impl Drop for Capture {
-    fn drop(&mut self) {
-        self.stop();
+        Ok(Value::Array(inputs))
     }
 }
 

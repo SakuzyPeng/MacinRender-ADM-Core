@@ -63,6 +63,12 @@ if(MSVC)
     # selects the matching CRT through its /DEFAULTLIB directive.
     list(FILTER MR_ADM_RUST_SYSTEM_LIBS EXCLUDE REGEX "^/defaultlib:")
     list(APPEND MR_ADM_RUST_SYSTEM_LIBS avrt.lib ws2_32.lib)
+elseif(APPLE)
+    find_library(MR_ADM_COREAUDIO_FW CoreAudio REQUIRED)
+    list(APPEND MR_ADM_RUST_SYSTEM_LIBS "${MR_ADM_COREAUDIO_FW}")
+elseif(CMAKE_SYSTEM_NAME MATCHES "^(Linux|FreeBSD|NetBSD|DragonFly)$")
+    find_package(ALSA REQUIRED)
+    list(APPEND MR_ADM_RUST_SYSTEM_LIBS ALSA::ALSA)
 endif()
 
 # ── Cargo commands ────────────────────────────────────────────────────────────

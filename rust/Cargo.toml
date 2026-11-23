@@ -1,7 +1,7 @@
 [workspace]
 members = ["crates/mradm-dsp", "crates/mradm-ear", "crates/mradm-math", "crates/mradm-wav", "crates/mradm-osc", "crates/mradm-scene", "crates/mradm-json", "crates/mradm-render", "crates/mradm-engine", "crates/mradm-ffi", "crates/mradm-cli", "crates/mradm-capi", "crates/mradm-room-cuda", "crates/mradm-testkit", "crates/mradm-islands-sys"]
 resolver = "2"
-exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft", "vendor/rayon-core", "vendor/ebur128"]
+exclude = ["vendor/sofar", "vendor/rubato", "vendor/rustfft", "vendor/realfft", "vendor/rayon-core", "vendor/ebur128", "vendor/cpal"]
 
 [workspace.package]
 edition = "2024"
@@ -9,6 +9,7 @@ rust-version = "1.98"
 license = "MIT"
 
 [workspace.dependencies]
+cpal = { version = "=0.18.2", path = "vendor/cpal", default-features = false }
 # The patched default planner remains scalar even with native kernels compiled.
 # Only the room realtime quality explicitly requests the native planner.
 realfft = { version = "=3.5.0", default-features = false }

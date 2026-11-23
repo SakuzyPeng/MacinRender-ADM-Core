@@ -141,6 +141,12 @@ impl Device for IslandDevice {
     fn realtime(&self) -> bool {
         self.device.as_ref().is_ok_and(|d| d.device.realtime())
     }
+    fn progress(&self) -> mradm_engine::scene::output::DeviceProgress {
+        self.device
+            .as_ref()
+            .map(|d| d.device.progress())
+            .unwrap_or_default()
+    }
     fn start(&self, channels: usize, sample_rate: u32, monitor: &Monitor) -> Result<(), Error> {
         let d = self.device.as_ref().map_err(Clone::clone)?;
         // SAFETY of the pointers: the session stops this device before the monitor drops, and the

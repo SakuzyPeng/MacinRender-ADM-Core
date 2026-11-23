@@ -37,7 +37,7 @@
 
 `MR_ADM_BUILD_SAMPLERATE_REFERENCE_TESTS` 默认 OFF；只有开启时才解析/构建 C 库，生产 target 不链接它。
 Cargo.lock、manifest、许可证文本、生成的许可证表与 SBOM 同步更新。继续复用现有 Cargo target 和原生构建目录。
-设备库 miniaudio 内部的采样率适配属于设备后端，本决策不替换该部分。
+硬件监听端点的采样率适配属于设备后端。当前实现见 [CPAL 输出设备](../architecture/RUST_ISLAND_DEVICES.md#当前实现)。
 
 验收及测量限制见 [迁移记录](../architecture/RUST_RESAMPLER_MIGRATION.md)。
 

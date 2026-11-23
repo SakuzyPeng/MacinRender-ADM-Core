@@ -43,28 +43,6 @@
     },
     {
       "type": "library",
-      "name": "miniaudio",
-      "version": "0.11.21",
-      "description": "实时音频设备输出（监听引擎）",
-      "licenses": [
-        {
-          "expression": "Unlicense OR MIT-0"
-        }
-      ],
-      "purl": "pkg:github/mackron/miniaudio@0.11.21",
-      "properties": [
-        {
-          "name": "mradm:distribution",
-          "value": "available"
-        },
-        {
-          "name": "mradm:source-type",
-          "value": "fetchcontent"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "libFLAC",
       "version": "1.5.0",
       "description": "FLAC 编码与 metadata",
@@ -2588,6 +2566,1186 @@
         {
           "name": "mradm:distribution",
           "value": "windows-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-alsa-0.11.0",
+      "version": "0.11.0",
+      "description": "ALSA 设备接口",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/alsa@0.11.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-alsa-sys-0.4.0",
+      "version": "0.4.0",
+      "description": "ALSA 原生绑定",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/alsa-sys@0.4.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-block2-0.6.2",
+      "version": "0.6.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/block2@0.6.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-bumpalo-3.20.4",
+      "version": "3.20.4",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/bumpalo@3.20.4",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-bytes-1.12.2",
+      "version": "1.12.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/bytes@1.12.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-combine-4.6.9",
+      "version": "4.6.9",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/combine@4.6.9",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-coreaudio-rs-0.14.2",
+      "version": "0.14.2",
+      "description": "CoreAudio 音频单元",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/coreaudio-rs@0.14.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-cpal-0.18.2",
+      "version": "0.18.2",
+      "description": "监听设备输出与测试采集",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/cpal@0.18.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-equivalent-1.0.3",
+      "version": "1.0.3",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/equivalent@1.0.3",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-futures-core-0.3.34",
+      "version": "0.3.34",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/futures-core@0.3.34",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-futures-task-0.3.34",
+      "version": "0.3.34",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/futures-task@0.3.34",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-futures-util-0.3.34",
+      "version": "0.3.34",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/futures-util@0.3.34",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-hashbrown-0.17.2",
+      "version": "0.17.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/hashbrown@0.17.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-indexmap-2.14.2",
+      "version": "2.14.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/indexmap@2.14.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-jni-0.22.4",
+      "version": "0.22.4",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/jni@0.22.4",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-jni-macros-0.22.4",
+      "version": "0.22.4",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/jni-macros@0.22.4",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-jni-sys-0.3.1",
+      "version": "0.3.1",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/jni-sys@0.3.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-jni-sys-0.4.1",
+      "version": "0.4.1",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/jni-sys@0.4.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-jni-sys-macros-0.4.1",
+      "version": "0.4.1",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/jni-sys-macros@0.4.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-js-sys-0.3.107",
+      "version": "0.3.107",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/js-sys@0.3.107",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-mach2-0.6.0",
+      "version": "0.6.0",
+      "description": "CoreAudio 宿主时钟",
+      "licenses": [
+        {
+          "expression": "BSD-2-Clause OR MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/mach2@0.6.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-ndk-0.9.0",
+      "version": "0.9.0",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/ndk@0.9.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-ndk-context-0.1.1",
+      "version": "0.1.1",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/ndk-context@0.1.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-ndk-sys-0.6.0+11769913",
+      "version": "0.6.0+11769913",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/ndk-sys@0.6.0%2B11769913",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-num-derive-0.4.2",
+      "version": "0.4.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/num-derive@0.4.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-num_enum-0.7.6",
+      "version": "0.7.6",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause OR MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/num_enum@0.7.6",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-num_enum_derive-0.7.6",
+      "version": "0.7.6",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "BSD-3-Clause OR MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/num_enum_derive@0.7.6",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-avf-audio-0.3.2",
+      "version": "0.3.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Zlib OR Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-avf-audio@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-objc2-core-audio-0.3.2",
+      "version": "0.3.2",
+      "description": "CoreAudio 框架绑定",
+      "licenses": [
+        {
+          "expression": "Zlib OR Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/objc2-core-audio@0.3.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "macos-only"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-pin-project-lite-0.2.18",
+      "version": "0.2.18",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/pin-project-lite@0.2.18",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-pkg-config-0.3.34",
+      "version": "0.3.34",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/pkg-config@0.3.34",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-proc-macro-crate-3.5.0",
+      "version": "3.5.0",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/proc-macro-crate@3.5.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-rustc_version-0.4.1",
+      "version": "0.4.1",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/rustc_version@0.4.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-rustversion-1.0.23",
+      "version": "1.0.23",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/rustversion@1.0.23",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-same-file-1.0.6",
+      "version": "1.0.6",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Unlicense OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/same-file@1.0.6",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-semver-1.0.28",
+      "version": "1.0.28",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/semver@1.0.28",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-simd_cesu8-1.2.0",
+      "version": "1.2.0",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Apache-2.0 OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/simd_cesu8@1.2.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-simdutf8-0.1.5",
+      "version": "0.1.5",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/simdutf8@0.1.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-slab-0.4.12",
+      "version": "0.4.12",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/slab@0.4.12",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-thiserror-1.0.69",
+      "version": "1.0.69",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/thiserror@1.0.69",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-thiserror-impl-1.0.69",
+      "version": "1.0.69",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/thiserror-impl@1.0.69",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-toml_datetime-1.1.3+spec-1.1.0",
+      "version": "1.1.3+spec-1.1.0",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/toml_datetime@1.1.3%2Bspec-1.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-toml_edit-0.25.20+spec-1.1.0",
+      "version": "0.25.20+spec-1.1.0",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/toml_edit@0.25.20%2Bspec-1.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-toml_parser-1.1.6+spec-1.1.0",
+      "version": "1.1.6+spec-1.1.0",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/toml_parser@1.1.6%2Bspec-1.1.0",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-walkdir-2.5.1",
+      "version": "2.5.1",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Unlicense OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/walkdir@2.5.1",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-wasm-bindgen-0.2.130",
+      "version": "0.2.130",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/wasm-bindgen@0.2.130",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-wasm-bindgen-macro-0.2.130",
+      "version": "0.2.130",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/wasm-bindgen-macro@0.2.130",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-wasm-bindgen-macro-support-0.2.130",
+      "version": "0.2.130",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/wasm-bindgen-macro-support@0.2.130",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-wasm-bindgen-shared-0.2.130",
+      "version": "0.2.130",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/wasm-bindgen-shared@0.2.130",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-web-sys-0.3.107",
+      "version": "0.3.107",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/web-sys@0.3.107",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-winapi-util-0.1.11",
+      "version": "0.1.11",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "Unlicense OR MIT"
+        }
+      ],
+      "purl": "pkg:cargo/winapi-util@0.1.11",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-windows-sys-0.61.2",
+      "version": "0.61.2",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "purl": "pkg:cargo/windows-sys@0.61.2",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
+        },
+        {
+          "name": "mradm:source-type",
+          "value": "cargo"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rust-winnow-1.0.5",
+      "version": "1.0.5",
+      "description": "CPAL 锁定依赖",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:cargo/winnow@1.0.5",
+      "properties": [
+        {
+          "name": "mradm:distribution",
+          "value": "available"
         },
         {
           "name": "mradm:source-type",

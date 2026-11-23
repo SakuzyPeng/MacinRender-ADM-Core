@@ -7,27 +7,27 @@
     },
     "islands": {
       "files": 4,
-      "lines": 2311
+      "lines": 2309
     },
     "cuda": {
       "files": 4,
       "lines": 512
     },
     "island-interfaces": {
-      "files": 10,
-      "lines": 1007
+      "files": 8,
+      "lines": 824
     },
     "tests": {
-      "files": 20,
-      "lines": 7922
+      "files": 19,
+      "lines": 7778
     },
     "rust": {
       "files": 402,
-      "lines": 149879
+      "lines": 150078
     },
     "rust-vendor": {
-      "files": 175,
-      "lines": 94573
+      "files": 234,
+      "lines": 118354
     }
   },
   "modules": {
@@ -36,8 +36,8 @@
     "rust/crates/mradm-cli": 3602,
     "rust/crates/mradm-dsp": 42479,
     "rust/crates/mradm-ear": 3421,
-    "rust/crates/mradm-engine": 26850,
-    "rust/crates/mradm-ffi": 20196,
+    "rust/crates/mradm-engine": 26893,
+    "rust/crates/mradm-ffi": 20352,
     "rust/crates/mradm-islands-sys": 230,
     "rust/crates/mradm-json": 1362,
     "rust/crates/mradm-math": 300,
@@ -47,13 +47,14 @@
     "rust/crates/mradm-scene": 5815,
     "rust/crates/mradm-testkit": 1898,
     "rust/crates/mradm-wav": 1653,
+    "rust/vendor/cpal": 23781,
     "rust/vendor/ebur128": 9931,
     "rust/vendor/rayon-core": 7427,
     "rust/vendor/realfft": 1225,
     "rust/vendor/rubato": 9711,
     "rust/vendor/rustfft": 59632,
     "rust/vendor/sofar": 6647,
-    "src/adm_apple": 2311,
+    "src/adm_apple": 2309,
     "src/adm_apple/apple_backend.h": 218,
     "src/adm_apple/apple_island.cpp": 165,
     "src/adm_apple/apple_island.h": 14,
@@ -66,13 +67,11 @@
     "src/adm_engine/platform_island.h": 14,
     "src/adm_metadata": 28,
     "src/adm_realtime": 55,
-    "src/adm_realtime/miniaudio_island.c": 137,
-    "src/adm_realtime/miniaudio_island.h": 46,
     "src/adm_realtime/system_spatial_island.cpp": 30,
     "src/adm_realtime/system_spatial_island.h": 134,
     "src/adm_render_common": 617,
     "src/adm_render_room/cuda": 512,
-    "tests/manual": 817,
+    "tests/manual": 673,
     "tests/support": 1383,
     "tests/unit": 5722
   },
@@ -83,8 +82,6 @@
     "src/adm_apple/island_driver.h": 113,
     "src/adm_engine/platform_island.cpp": 136,
     "src/adm_engine/platform_island.h": 14,
-    "src/adm_realtime/miniaudio_island.c": 137,
-    "src/adm_realtime/miniaudio_island.h": 46,
     "src/adm_realtime/system_spatial_island.cpp": 30,
     "src/adm_realtime/system_spatial_island.h": 134
   }

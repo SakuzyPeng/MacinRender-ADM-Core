@@ -1,7 +1,7 @@
 // avsamplebuffer_device.mm
 //
 // macOS-only output device backed by AVSampleBufferAudioRenderer. Instead of opening a
-// raw multichannel hardware device (the miniaudio path), it enqueues the monitor's
+// raw multichannel hardware device (the CPAL path), it enqueues the monitor's
 // multichannel PCM (e.g. 7.1.4) into the system media playback stack, which spatializes it to
 // the headphone route with dynamic head tracking. The monitor engine pulls exactly as it does
 // for any output device; the AudioChannelLayoutTag (apple_layouts) is what makes the

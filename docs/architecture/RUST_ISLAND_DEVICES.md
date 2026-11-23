@@ -1,5 +1,18 @@
 # 七期 7.3：输出设备
 
+## 当前实现
+
+普通 PCM 监听由 `mradm-ffi` 的 `pcm_device` 通过 CPAL 0.18.2 驱动。设备枚举返回
+CPAL 的不透明 ID，已有 miniaudio 十六进制 ID 在打开时按平台解码。空 ID 或无法解析的 ID
+使用默认输出。多声道监听在打开前检查端点宽度。设备失效时文件监听和 Scene 输出都会上报失败，
+重新选择可用设备可以恢复文件播放。
+
+macOS 的 AudioUnit 按客户端采样率打开，系统负责转换至设备采样率。Windows 使用 WASAPI，
+Linux 使用 ALSA。无硬件输出由 Rust 的定时线程驱动。系统空间监听继续使用两平台的原生实现。
+CPAL 的来源与 macOS 补丁见 [PATCHES.md](../../rust/vendor/cpal/PATCHES.md)。
+
+## 7.3 变更记录
+
 > 合并提交 `5b8f62d4` 已在 macOS arm64 与 Windows x64 复核设备生命周期、原生输出和 164 个 C ABI 导出。
 > 切片与用户决定见[审计七期一节](PCM_CONSISTENCY_AUDIT.md#七期平台岛收缩)，清单见 [7.1 记录](RUST_ISLAND_BASELINE.md)。
 

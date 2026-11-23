@@ -906,7 +906,7 @@ G 已完成（2026-11-19，本机 Linux x64），R3 随之结束。依赖 C++ SD
 1. **顺序**：编码器 → 输出设备 → Apple 岛 → Windows 岛。
 2. **C 库绑定**：libFLAC、libopus 与 IAMF bridge 在 Rust 中手写 `extern` 声明（照 `mradm-ffi/src/flac.rs`），库仍由岛的 CMake 工程构建，vendored 只有一份。
 3. **dr_flac**：7.2 删除，取代此前的暂缓决定。FLAC 读取链的调用方是 FLAC 读取探针与 C++ FLAC 冒烟测试。
-4. **miniaudio**：暂不替换，cpal 是以后的候选。
+4. **普通 PCM 监听**：7.3 保留 miniaudio，后续已切换到 [CPAL 设备实现](RUST_ISLAND_DEVICES.md#当前实现)。
 
 **7.1 状态**：已完成（2026-11-19，合并前在 macOS arm64 复核）。
 - 逐岛清单、共用头的使用者、Apple / Windows 评估标准与规模基线记录在 7.1 记录；

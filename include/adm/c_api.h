@@ -1411,7 +1411,7 @@ adm_error_code_t adm_monitor_get_hptf_stereo_info(adm_monitor_t* monitor, adm_hp
  * v1.21: switch the audio output device live. `device_id` is a token from
  * adm_monitor_output_devices_json; NULL / "" selects the system default. The playhead,
  * play/pause state, current backend and live overrides are preserved across a brief device
- * re-open (a short audio gap is expected; no crossfade). A no-op if already on that device.
+ * re-open (a short audio gap is expected; no crossfade). Selecting a failed device retries it.
  * An unresolvable token falls back to the default device. Returns the device-open / backend
  * error.
  */
@@ -1437,7 +1437,7 @@ typedef struct adm_monitor_status_t {
     uint64_t buffered_frames;
     float ring_fill;            /* 0..1 ring occupancy */
     int32_t ended;              /* bool: reached end of material */
-    int32_t failed;             /* bool: a render error stopped production */
+    int32_t failed;             /* bool: rendering failed or the output device was lost */
     uint64_t override_revision; /* v1.16: revision of the last applied live overrides */
 } adm_monitor_status_t;
 adm_error_code_t adm_monitor_get_status(adm_monitor_t* monitor, adm_monitor_status_t* out) ADM_API_NOEXCEPT;

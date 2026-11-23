@@ -34,40 +34,6 @@ function(mr_adm_core_find_or_fetch package_name target_name)
             GIT_TAG v3.12.0
             GIT_SHALLOW TRUE
         )
-    elseif(package_name STREQUAL "miniaudio")
-        # Single-header realtime audio device I/O (mackron/miniaudio). One translation unit
-        # defines MINIAUDIO_IMPLEMENTATION (src/adm_realtime/miniaudio_island.c); the
-        # INTERFACE target just exposes the header + the platform audio link deps. On Linux
-        # miniaudio dlopen()s ALSA/PulseAudio at runtime, so only dl/pthread/m are needed.
-        FetchContent_Declare(
-            miniaudio
-            GIT_REPOSITORY https://github.com/mackron/miniaudio.git
-            GIT_TAG 0.11.21
-            GIT_SHALLOW TRUE
-        )
-        FetchContent_GetProperties(miniaudio)
-        if(NOT miniaudio_POPULATED)
-            cmake_policy(PUSH)
-            if(POLICY CMP0169)
-                cmake_policy(SET CMP0169 OLD)
-            endif()
-            FetchContent_Populate(miniaudio)
-            cmake_policy(POP)
-        endif()
-        if(NOT TARGET miniaudio)
-            add_library(mr_miniaudio INTERFACE)
-            add_library(miniaudio ALIAS mr_miniaudio)
-            target_include_directories(mr_miniaudio SYSTEM INTERFACE "${miniaudio_SOURCE_DIR}")
-            if(APPLE)
-                target_link_libraries(mr_miniaudio INTERFACE
-                    "-framework CoreFoundation" "-framework CoreAudio" "-framework AudioToolbox"
-                    "-framework AudioUnit")
-            elseif(UNIX)
-                find_package(Threads REQUIRED)
-                target_link_libraries(mr_miniaudio INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
-            endif()
-        endif()
-        return()
     elseif(package_name STREQUAL "FLAC")
         string(TOUPPER "${MR_ADM_FLAC_PROVIDER}" _mr_flac_requested_provider)
         if(MR_ADM_USE_SYSTEM_FLAC)
@@ -294,5 +260,4 @@ if(MR_ADM_CORE_BUILD_TESTS)
 endif()
 mr_adm_core_find_or_fetch(FLAC FLAC::FLAC)
 mr_adm_core_find_or_fetch(Opus Opus::opus)
-mr_adm_core_find_or_fetch(miniaudio miniaudio)
 mr_adm_core_write_dependency_record()

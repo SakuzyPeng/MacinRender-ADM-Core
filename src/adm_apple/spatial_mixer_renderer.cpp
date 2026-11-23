@@ -1,17 +1,18 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <future>
-#include <iterator>
+#include <iomanip>
+#include <locale>
 #include <memory>
 #include <numbers>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -34,18 +35,18 @@
 namespace mradm {
 namespace {
 
-// AUSpatialMixer slice + control-rate update granularity (~10 ms at 48 kHz). The AU
-// smooths parameter changes between updates, so per-block az/el/gain is smooth enough.
+// AUSpatialMixer smooths parameter changes between these control updates (~10 ms at 48 kHz).
 constexpr UInt32 k_render_block = 512;
 
 [[nodiscard]] std::string os_status_message(OSStatus status) {
     return "OSStatus " + std::to_string(static_cast<int>(status));
 }
 
-// fmt's `{:.1f}`: fixed, one decimal, locale-independent.
 [[nodiscard]] std::string fixed1(double value) {
-    std::array<char, 64> text{};
-    return {text.data(), std::to_chars(text.data(), text.data() + 64, value, std::chars_format::fixed, 1).ptr};
+    std::ostringstream text;
+    text.imbue(std::locale::classic());
+    text << std::fixed << std::setprecision(1) << value;
+    return text.str();
 }
 
 [[nodiscard]] Error apple_status_error(std::string message, OSStatus status) {
@@ -211,9 +212,6 @@ class AudioUnitGuard {
     }
     return {};
 }
-
-// Apple speaker-layout id -> AudioChannelLayoutTag table now lives in apple_layouts.h,
-// shared with the AVSampleBufferAudioRenderer monitor sink so both resolve identically.
 
 // Resolved output target for one render. binaural -> 2ch HRTF (Headphones output type,
 // no speaker layout); speaker -> Nch VBAP into a standard CoreAudio layout tag.

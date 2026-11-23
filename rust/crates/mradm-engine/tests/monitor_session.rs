@@ -143,6 +143,7 @@ impl Source for Stream {
 struct Calls {
     devices: Vec<Vec<u8>>,
     starts: usize,
+    device_failed: bool,
     stops: usize,
     /// The token value of each opening.
     opened: Vec<u32>,
@@ -161,11 +162,19 @@ impl Device for MockDevice {
     fn realtime(&self) -> bool {
         false
     }
+    fn progress(&self) -> mradm_engine::scene::output::DeviceProgress {
+        mradm_engine::scene::output::DeviceProgress {
+            failed: self.calls.lock().unwrap().device_failed,
+            ..Default::default()
+        }
+    }
     fn start(&self, _: usize, _: u32, _: &Monitor) -> Result<(), Error> {
         if self.id == b"bad" {
             return Err(err(3, "mock device cannot start"));
         }
-        self.calls.lock().unwrap().starts += 1;
+        let mut calls = self.calls.lock().unwrap();
+        calls.starts += 1;
+        calls.device_failed = false;
         Ok(())
     }
     fn stop(&self) {
@@ -408,6 +417,25 @@ fn message(e: &Error) -> String {
 
 fn playhead(s: &Session) -> u64 {
     s.status().unwrap().playhead_frames
+}
+
+#[test]
+fn a_lost_device_reports_failure_and_the_same_id_can_be_reopened() {
+    let fixture = fixture(Vec::new());
+    let session = fixture.session(false);
+    session.seek_seconds(0.5).unwrap();
+    assert!(eventually(|| playhead(&session) == 24000));
+    session.play();
+    fixture.host.calls.lock().unwrap().device_failed = true;
+    let status = session.status().unwrap();
+    assert!(status.failed && !status.ended);
+    assert_eq!(status.state, State::Stopped);
+    session.set_output_device(b"").unwrap();
+    assert!(eventually(|| {
+        let status = session.status().unwrap();
+        !status.failed && status.playhead_frames == 24000 && status.state == State::Playing
+    }));
+    assert_eq!(fixture.host.calls.lock().unwrap().starts, 2);
 }
 
 #[test]

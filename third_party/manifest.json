@@ -22,24 +22,6 @@
       "notes": ""
     },
     {
-      "name": "miniaudio",
-      "version": "0.11.21",
-      "cmake_key": "miniaudio",
-      "purl": "pkg:github/mackron/miniaudio@0.11.21",
-      "license": "Unlicense OR MIT-0",
-      "purpose": "实时音频设备输出（监听引擎）",
-      "distribution": "available",
-      "source": {
-        "type": "fetchcontent",
-        "deps_dir": "miniaudio-src",
-        "parent": null,
-        "license_files": [
-          "LICENSE"
-        ]
-      },
-      "notes": "header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox"
-    },
-    {
       "name": "libFLAC",
       "version": "1.5.0",
       "cmake_key": "FLAC",
@@ -2307,6 +2289,1081 @@
         ]
       },
       "notes": "Microsoft windows-rs。"
+    },
+    {
+      "name": "rust-alsa-0.11.0",
+      "version": "0.11.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/alsa@0.11.0",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "ALSA 设备接口",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "alsa",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-alsa-sys-0.4.0",
+      "version": "0.4.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/alsa-sys@0.4.0",
+      "license": "MIT",
+      "purpose": "ALSA 原生绑定",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "alsa-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-block2-0.6.2",
+      "version": "0.6.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/block2@0.6.2",
+      "license": "MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "block2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-bumpalo-3.20.4",
+      "version": "3.20.4",
+      "cmake_key": null,
+      "purl": "pkg:cargo/bumpalo@3.20.4",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "bumpalo",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-bytes-1.12.2",
+      "version": "1.12.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/bytes@1.12.2",
+      "license": "MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "bytes",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-combine-4.6.9",
+      "version": "4.6.9",
+      "cmake_key": null,
+      "purl": "pkg:cargo/combine@4.6.9",
+      "license": "MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "combine",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-coreaudio-rs-0.14.2",
+      "version": "0.14.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/coreaudio-rs@0.14.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CoreAudio 音频单元",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "coreaudio-rs",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-cpal-0.18.2",
+      "version": "0.18.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/cpal@0.18.2",
+      "license": "Apache-2.0",
+      "purpose": "监听设备输出与测试采集",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "cpal",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "macOS 使用客户端流格式；补丁见 rust/vendor/cpal/PATCHES.md。"
+    },
+    {
+      "name": "rust-equivalent-1.0.3",
+      "version": "1.0.3",
+      "cmake_key": null,
+      "purl": "pkg:cargo/equivalent@1.0.3",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "equivalent",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-futures-core-0.3.34",
+      "version": "0.3.34",
+      "cmake_key": null,
+      "purl": "pkg:cargo/futures-core@0.3.34",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "futures-core",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-futures-task-0.3.34",
+      "version": "0.3.34",
+      "cmake_key": null,
+      "purl": "pkg:cargo/futures-task@0.3.34",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "futures-task",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-futures-util-0.3.34",
+      "version": "0.3.34",
+      "cmake_key": null,
+      "purl": "pkg:cargo/futures-util@0.3.34",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "futures-util",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-hashbrown-0.17.2",
+      "version": "0.17.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/hashbrown@0.17.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "hashbrown",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-indexmap-2.14.2",
+      "version": "2.14.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/indexmap@2.14.2",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "indexmap",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-jni-0.22.4",
+      "version": "0.22.4",
+      "cmake_key": null,
+      "purl": "pkg:cargo/jni@0.22.4",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "jni",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-jni-macros-0.22.4",
+      "version": "0.22.4",
+      "cmake_key": null,
+      "purl": "pkg:cargo/jni-macros@0.22.4",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "jni-macros",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-jni-sys-0.3.1",
+      "version": "0.3.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/jni-sys@0.3.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "jni-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-jni-sys-0.4.1",
+      "version": "0.4.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/jni-sys@0.4.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "jni-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-jni-sys-macros-0.4.1",
+      "version": "0.4.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/jni-sys-macros@0.4.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "jni-sys-macros",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-js-sys-0.3.107",
+      "version": "0.3.107",
+      "cmake_key": null,
+      "purl": "pkg:cargo/js-sys@0.3.107",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "js-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-mach2-0.6.0",
+      "version": "0.6.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/mach2@0.6.0",
+      "license": "BSD-2-Clause OR MIT OR Apache-2.0",
+      "purpose": "CoreAudio 宿主时钟",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "mach2",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-BSD",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-ndk-0.9.0",
+      "version": "0.9.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/ndk@0.9.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "ndk",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-ndk-context-0.1.1",
+      "version": "0.1.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/ndk-context@0.1.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "ndk-context",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-ndk-sys-0.6.0+11769913",
+      "version": "0.6.0+11769913",
+      "cmake_key": null,
+      "purl": "pkg:cargo/ndk-sys@0.6.0%2B11769913",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "ndk-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-num-derive-0.4.2",
+      "version": "0.4.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num-derive@0.4.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num-derive",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-num_enum-0.7.6",
+      "version": "0.7.6",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num_enum@0.7.6",
+      "license": "BSD-3-Clause OR MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num_enum",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-BSD",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-num_enum_derive-0.7.6",
+      "version": "0.7.6",
+      "cmake_key": null,
+      "purl": "pkg:cargo/num_enum_derive@0.7.6",
+      "license": "BSD-3-Clause OR MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "num_enum_derive",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-BSD",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-objc2-avf-audio-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-avf-audio@0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-avf-audio",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-objc2-core-audio-0.3.2",
+      "version": "0.3.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/objc2-core-audio@0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
+      "purpose": "CoreAudio 框架绑定",
+      "distribution": "macos-only",
+      "source": {
+        "type": "cargo",
+        "package": "objc2-core-audio",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [],
+        "manual_notices": [
+          "LICENSE.md",
+          "NOTICE.txt"
+        ]
+      },
+      "notes": "许可证随上游提交固定。"
+    },
+    {
+      "name": "rust-pin-project-lite-0.2.18",
+      "version": "0.2.18",
+      "cmake_key": null,
+      "purl": "pkg:cargo/pin-project-lite@0.2.18",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "pin-project-lite",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-pkg-config-0.3.34",
+      "version": "0.3.34",
+      "cmake_key": null,
+      "purl": "pkg:cargo/pkg-config@0.3.34",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "pkg-config",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-proc-macro-crate-3.5.0",
+      "version": "3.5.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/proc-macro-crate@3.5.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "proc-macro-crate",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-rustc_version-0.4.1",
+      "version": "0.4.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rustc_version@0.4.1",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rustc_version",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-rustversion-1.0.23",
+      "version": "1.0.23",
+      "cmake_key": null,
+      "purl": "pkg:cargo/rustversion@1.0.23",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "rustversion",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-same-file-1.0.6",
+      "version": "1.0.6",
+      "cmake_key": null,
+      "purl": "pkg:cargo/same-file@1.0.6",
+      "license": "Unlicense OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "same-file",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "COPYING",
+          "LICENSE-MIT",
+          "UNLICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-semver-1.0.28",
+      "version": "1.0.28",
+      "cmake_key": null,
+      "purl": "pkg:cargo/semver@1.0.28",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "semver",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-simd_cesu8-1.2.0",
+      "version": "1.2.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/simd_cesu8@1.2.0",
+      "license": "Apache-2.0 OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "simd_cesu8",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-simdutf8-0.1.5",
+      "version": "0.1.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/simdutf8@0.1.5",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "simdutf8",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-Apache",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-slab-0.4.12",
+      "version": "0.4.12",
+      "cmake_key": null,
+      "purl": "pkg:cargo/slab@0.4.12",
+      "license": "MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "slab",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-thiserror-1.0.69",
+      "version": "1.0.69",
+      "cmake_key": null,
+      "purl": "pkg:cargo/thiserror@1.0.69",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "thiserror",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-thiserror-impl-1.0.69",
+      "version": "1.0.69",
+      "cmake_key": null,
+      "purl": "pkg:cargo/thiserror-impl@1.0.69",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "thiserror-impl",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-toml_datetime-1.1.3+spec-1.1.0",
+      "version": "1.1.3+spec-1.1.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/toml_datetime@1.1.3%2Bspec-1.1.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "toml_datetime",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-toml_edit-0.25.20+spec-1.1.0",
+      "version": "0.25.20+spec-1.1.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/toml_edit@0.25.20%2Bspec-1.1.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "toml_edit",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-toml_parser-1.1.6+spec-1.1.0",
+      "version": "1.1.6+spec-1.1.0",
+      "cmake_key": null,
+      "purl": "pkg:cargo/toml_parser@1.1.6%2Bspec-1.1.0",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "toml_parser",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-walkdir-2.5.1",
+      "version": "2.5.1",
+      "cmake_key": null,
+      "purl": "pkg:cargo/walkdir@2.5.1",
+      "license": "Unlicense OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "walkdir",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "COPYING",
+          "LICENSE-MIT",
+          "UNLICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-wasm-bindgen-0.2.130",
+      "version": "0.2.130",
+      "cmake_key": null,
+      "purl": "pkg:cargo/wasm-bindgen@0.2.130",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "wasm-bindgen",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-wasm-bindgen-macro-0.2.130",
+      "version": "0.2.130",
+      "cmake_key": null,
+      "purl": "pkg:cargo/wasm-bindgen-macro@0.2.130",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "wasm-bindgen-macro",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-wasm-bindgen-macro-support-0.2.130",
+      "version": "0.2.130",
+      "cmake_key": null,
+      "purl": "pkg:cargo/wasm-bindgen-macro-support@0.2.130",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "wasm-bindgen-macro-support",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-wasm-bindgen-shared-0.2.130",
+      "version": "0.2.130",
+      "cmake_key": null,
+      "purl": "pkg:cargo/wasm-bindgen-shared@0.2.130",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "wasm-bindgen-shared",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-web-sys-0.3.107",
+      "version": "0.3.107",
+      "cmake_key": null,
+      "purl": "pkg:cargo/web-sys@0.3.107",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "web-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-APACHE",
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-winapi-util-0.1.11",
+      "version": "0.1.11",
+      "cmake_key": null,
+      "purl": "pkg:cargo/winapi-util@0.1.11",
+      "license": "Unlicense OR MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "winapi-util",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "COPYING",
+          "LICENSE-MIT",
+          "UNLICENSE"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-windows-sys-0.61.2",
+      "version": "0.61.2",
+      "cmake_key": null,
+      "purl": "pkg:cargo/windows-sys@0.61.2",
+      "license": "MIT OR Apache-2.0",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "windows-sys",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "license-apache-2.0",
+          "license-mit"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
+    },
+    {
+      "name": "rust-winnow-1.0.5",
+      "version": "1.0.5",
+      "cmake_key": null,
+      "purl": "pkg:cargo/winnow@1.0.5",
+      "license": "MIT",
+      "purpose": "CPAL 锁定依赖",
+      "distribution": "available",
+      "source": {
+        "type": "cargo",
+        "package": "winnow",
+        "deps_dir": null,
+        "parent": null,
+        "license_files": [
+          "LICENSE-MIT"
+        ]
+      },
+      "notes": "由 Cargo 根据目标平台和功能选择。"
     }
   ]
 }

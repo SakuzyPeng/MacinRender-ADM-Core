@@ -49,7 +49,7 @@ class CMakeTests(Harness):
                 'include(MRStrictFp)\n')
         if deps:
             # Stub the packages so the real MRDependencies can run offline.
-            targets = 'nlohmann_json::nlohmann_json FLAC::FLAC Opus::opus miniaudio'
+            targets = 'nlohmann_json::nlohmann_json FLAC::FLAC Opus::opus'
             if flac:
                 targets = targets.replace(' FLAC::FLAC', '')
                 flac_dir = source / 'flac fixture'
@@ -163,7 +163,6 @@ set(MR_ADM_OPUS_PROVIDER VENDORED CACHE STRING "")
 set(FETCHCONTENT_BASE_DIR "${{CMAKE_CURRENT_SOURCE_DIR}}/shared-cache" CACHE PATH "")
 set(FETCHCONTENT_SOURCE_DIR_FLAC "${{CMAKE_CURRENT_SOURCE_DIR}}/FLAC")
 set(FETCHCONTENT_SOURCE_DIR_OPUS "${{CMAKE_CURRENT_SOURCE_DIR}}/Opus")
-add_library(miniaudio INTERFACE IMPORTED GLOBAL)
 if(DEFINED PARENT_RUNTIME)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "${{PARENT_RUNTIME}}")
 endif()

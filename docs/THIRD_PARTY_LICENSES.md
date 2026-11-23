@@ -32,7 +32,6 @@
 | 依赖 | 用途 | 许可证 (SPDX) | 默认发行可用性 | 备注 |
 |---|---|---|---|---|
 | `nlohmann_json` @ v3.12.0 | JSON 解析/序列化（测试专用：Apple 冒烟测试读能力表 JSON，6.5 C 起不进生产） | MIT | 测试专用（不进生产） |  |
-| `miniaudio` @ 0.11.21 | 实时音频设备输出（监听引擎） | Unlicense OR MIT-0 | 可用 | header-only；实现仅在 src/adm_realtime/miniaudio_device.cpp；Linux dlopen ALSA/PulseAudio，macOS 链接 CoreAudio/AudioToolbox |
 | `libFLAC` @ 1.5.0 | FLAC 编码与 metadata | BSD-3-Clause | 可用 | 默认仅链接 libFLAC（Xiph BSD-like）；源码包内 COPYING.GPL/LGPL/FDL 覆盖未链接的 C++ libs/programs/docs，默认发行不涉及 |
 | `libopus` @ v1.5.2 | Opus MKA 编码 | BSD-3-Clause | 可用 | 发行文档需保留专利 IPR 链接说明（LICENSE_PLEASE_READ.txt） |
 | `aom-iamf-tools-bridge` @ external-sdk | IAMF raw OBU 编码（opt-in，MR_ADM_ENABLE_IAMF） | BSD-3-Clause-Clear AND AOM-PL-1.0 | opt-in（默认关闭） | 预构建 SDK 形式接入；启用时发行包须随实际 SDK 记录其内部依赖许可证。bundle NOTICE.txt 为手写声明，实际包须补全文本 |
@@ -146,6 +145,59 @@
 | `rust-windows-result-0.4.1` @ 0.4.1 | HRESULT 与 Windows 错误类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
 | `rust-windows-strings-0.5.1` @ 0.5.1 | Windows 字符串类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
 | `rust-windows-threading-0.2.1` @ 0.2.1 | Windows 线程支持 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
+| `rust-alsa-0.11.0` @ 0.11.0 | ALSA 设备接口 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-alsa-sys-0.4.0` @ 0.4.0 | ALSA 原生绑定 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-block2-0.6.2` @ 0.6.2 | CPAL 锁定依赖 | MIT | macOS only | 许可证随上游提交固定。 |
+| `rust-bumpalo-3.20.4` @ 3.20.4 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-bytes-1.12.2` @ 1.12.2 | CPAL 锁定依赖 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-combine-4.6.9` @ 4.6.9 | CPAL 锁定依赖 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-coreaudio-rs-0.14.2` @ 0.14.2 | CoreAudio 音频单元 | MIT OR Apache-2.0 | macOS only | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-cpal-0.18.2` @ 0.18.2 | 监听设备输出与测试采集 | Apache-2.0 | 可用 | macOS 使用客户端流格式；补丁见 rust/vendor/cpal/PATCHES.md。 |
+| `rust-equivalent-1.0.3` @ 1.0.3 | CPAL 锁定依赖 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-futures-core-0.3.34` @ 0.3.34 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-futures-task-0.3.34` @ 0.3.34 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-futures-util-0.3.34` @ 0.3.34 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-hashbrown-0.17.2` @ 0.17.2 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-indexmap-2.14.2` @ 2.14.2 | CPAL 锁定依赖 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-jni-0.22.4` @ 0.22.4 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 许可证随上游提交固定。 |
+| `rust-jni-macros-0.22.4` @ 0.22.4 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 许可证随上游提交固定。 |
+| `rust-jni-sys-0.3.1` @ 0.3.1 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-jni-sys-0.4.1` @ 0.4.1 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-jni-sys-macros-0.4.1` @ 0.4.1 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 许可证随上游提交固定。 |
+| `rust-js-sys-0.3.107` @ 0.3.107 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-mach2-0.6.0` @ 0.6.0 | CoreAudio 宿主时钟 | BSD-2-Clause OR MIT OR Apache-2.0 | macOS only | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-ndk-0.9.0` @ 0.9.0 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 许可证随上游提交固定。 |
+| `rust-ndk-context-0.1.1` @ 0.1.1 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 许可证随上游提交固定。 |
+| `rust-ndk-sys-0.6.0+11769913` @ 0.6.0+11769913 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 许可证随上游提交固定。 |
+| `rust-num-derive-0.4.2` @ 0.4.2 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-num_enum-0.7.6` @ 0.7.6 | CPAL 锁定依赖 | BSD-3-Clause OR MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-num_enum_derive-0.7.6` @ 0.7.6 | CPAL 锁定依赖 | BSD-3-Clause OR MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-objc2-avf-audio-0.3.2` @ 0.3.2 | CPAL 锁定依赖 | Zlib OR Apache-2.0 OR MIT | 可用 | 许可证随上游提交固定。 |
+| `rust-objc2-core-audio-0.3.2` @ 0.3.2 | CoreAudio 框架绑定 | Zlib OR Apache-2.0 OR MIT | macOS only | 许可证随上游提交固定。 |
+| `rust-pin-project-lite-0.2.18` @ 0.2.18 | CPAL 锁定依赖 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-pkg-config-0.3.34` @ 0.3.34 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-proc-macro-crate-3.5.0` @ 3.5.0 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-rustc_version-0.4.1` @ 0.4.1 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-rustversion-1.0.23` @ 1.0.23 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-same-file-1.0.6` @ 1.0.6 | CPAL 锁定依赖 | Unlicense OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-semver-1.0.28` @ 1.0.28 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-simd_cesu8-1.2.0` @ 1.2.0 | CPAL 锁定依赖 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-simdutf8-0.1.5` @ 0.1.5 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-slab-0.4.12` @ 0.4.12 | CPAL 锁定依赖 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-thiserror-1.0.69` @ 1.0.69 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-thiserror-impl-1.0.69` @ 1.0.69 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-toml_datetime-1.1.3+spec-1.1.0` @ 1.1.3+spec-1.1.0 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-toml_edit-0.25.20+spec-1.1.0` @ 0.25.20+spec-1.1.0 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-toml_parser-1.1.6+spec-1.1.0` @ 1.1.6+spec-1.1.0 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-walkdir-2.5.1` @ 2.5.1 | CPAL 锁定依赖 | Unlicense OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-wasm-bindgen-0.2.130` @ 0.2.130 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-wasm-bindgen-macro-0.2.130` @ 0.2.130 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-wasm-bindgen-macro-support-0.2.130` @ 0.2.130 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-wasm-bindgen-shared-0.2.130` @ 0.2.130 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-web-sys-0.3.107` @ 0.3.107 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-winapi-util-0.1.11` @ 0.1.11 | CPAL 锁定依赖 | Unlicense OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-windows-sys-0.61.2` @ 0.61.2 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-winnow-1.0.5` @ 1.0.5 | CPAL 锁定依赖 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
 
 <!-- END GENERATED DEPS -->
 

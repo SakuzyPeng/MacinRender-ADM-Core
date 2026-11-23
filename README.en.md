@@ -46,6 +46,7 @@ AirPods, and similar names are trademarks of their respective owners and are ref
 
 - A C++20 compiler (Clang / GCC / MSVC) and CMake ≥ 3.24
 - Rust 1.98.0 with rustfmt / clippy (see `rust/rust-toolchain.toml`)
+- Linux builds require `pkg-config` and the ALSA development package (`libasound2-dev` on Debian/Ubuntu).
 
 ```bash
 rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy

@@ -152,7 +152,7 @@ mod platform {
 }
 
 /// A null output device: a thread that pulls `period` frames every period of the sample clock
-/// while playing, like miniaudio's null backend (10 ms periods), and drops the PCM.
+/// while playing (10 ms periods), and drops the PCM.
 pub struct NullClock {
     playing: AtomicBool,
     stop: AtomicBool,
@@ -192,8 +192,6 @@ impl NullClock {
             }
             if self.playing.load(Ordering::Acquire) {
                 pull(&mut buffer, frames);
-                // Keep the sample clock moving after a late wake, as miniaudio's null
-                // backend does.
                 next += period;
             } else {
                 // Discard only time spent paused.

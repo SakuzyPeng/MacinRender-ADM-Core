@@ -43,6 +43,7 @@ Dolby / Apple 产品认证。
 
 - C++20 编译器（Clang / GCC / MSVC）与 CMake ≥ 3.24
 - Rust 1.98.0（含 rustfmt / clippy，见 `rust/rust-toolchain.toml`）
+- Linux 构建需要 `pkg-config` 和 ALSA 开发包（Debian／Ubuntu 为 `libasound2-dev`）。
 
 ```bash
 rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
