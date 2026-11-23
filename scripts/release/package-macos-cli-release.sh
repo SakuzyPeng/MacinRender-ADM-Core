@@ -98,6 +98,7 @@ while IFS= read -r dep; do
     dep_path="$(awk '{print $1}' <<<"$dep")"
     case "$dep_path" in
         /usr/lib/libSystem.B.dylib|/usr/lib/libc++.1.dylib) ;;
+        /usr/lib/libiconv.2.dylib) ;;
         # Objective-C 运行时（macOS 系统库）：mradm 经 Rust C ABI 链入设备岛，其中含 Objective-C++ 的
         # AVSampleBuffer 系统空间 sink（src/adm_apple/avsamplebuffer_device.mm）。
         /usr/lib/libobjc.A.dylib) ;;
