@@ -2575,15 +2575,15 @@
     },
     {
       "type": "library",
-      "name": "rust-alsa-0.11.0",
-      "version": "0.11.0",
+      "name": "rust-alsa-0.12.1",
+      "version": "0.12.1",
       "description": "ALSA 设备接口",
       "licenses": [
         {
           "expression": "Apache-2.0 OR MIT"
         }
       ],
-      "purl": "pkg:cargo/alsa@0.11.0",
+      "purl": "pkg:cargo/alsa@0.12.1",
       "properties": [
         {
           "name": "mradm:distribution",
@@ -2597,8 +2597,8 @@
     },
     {
       "type": "library",
-      "name": "rust-alsa-sys-0.4.0",
-      "version": "0.4.0",
+      "name": "rust-alsa-sys-0.6.1",
+      "version": "0.6.1",
       "description": "ALSA 原生绑定",
       "licenses": [
         {
@@ -2607,7 +2607,7 @@
           }
         }
       ],
-      "purl": "pkg:cargo/alsa-sys@0.4.0",
+      "purl": "pkg:cargo/alsa-sys@0.6.1",
       "properties": [
         {
           "name": "mradm:distribution",

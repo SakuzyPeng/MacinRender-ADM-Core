@@ -8,9 +8,12 @@ use mradm_engine::request::code;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use std::sync::{OnceLock, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+#[cfg(any(target_os = "macos", windows))]
 const MULTICHANNEL: &str = "multichannel monitoring requires a multichannel device or system spatial audio; use binaural output for headphones";
 const CLOSED: usize = 2;
 const IO_TIMEOUT: Option<Duration> = Some(Duration::from_secs(2));
@@ -54,7 +57,7 @@ fn legacy_id(token: &[u8], windows: bool) -> Option<String> {
     }
 }
 
-fn output_device(host: &cpal::Host, token: &[u8], channels: u16) -> Option<cpal::Device> {
+fn output_device(host: &cpal::Host, token: &[u8], _channels: u16) -> Option<(cpal::Device, bool)> {
     let id = std::str::from_utf8(token)
         .ok()
         .and_then(|text| text.parse::<DeviceId>().ok())
@@ -74,14 +77,17 @@ fn output_device(host: &cpal::Host, token: &[u8], channels: u16) -> Option<cpal:
         .and_then(|id| host.device_by_id(&id))
         .filter(DeviceTrait::supports_output)
     {
-        return Some(device);
+        return Some((device, false));
     }
     let default = host.default_output_device()?;
-    if channels > 2 {
-        host.device_by_id(&default.id().ok()?)
+    // DefaultOutput can reroute without rechecking the width. Pin multichannel CoreAudio output.
+    #[cfg(target_os = "macos")]
+    let default = if _channels > 2 {
+        host.device_by_id(&default.id().ok()?)?
     } else {
-        Some(default)
-    }
+        default
+    };
+    Some((default, true))
 }
 
 pub(crate) fn enumerate(mut each: impl FnMut(&[u8], &[u8], bool)) {
@@ -108,6 +114,16 @@ struct Callbacks {
     gate: AtomicUsize,
     failed: AtomicBool,
     xruns: AtomicU64,
+    #[cfg(windows)]
+    route: OnceLock<DefaultRoute>,
+}
+
+#[cfg(windows)]
+struct DefaultRoute {
+    worker: thread::Thread,
+    changed: AtomicBool,
+    reopening: AtomicBool,
+    unavailable: AtomicBool,
 }
 
 /// The caller keeps the pull target alive through stop. Gate bit 0 marks the active pull and
@@ -123,11 +139,22 @@ impl Callbacks {
             gate: AtomicUsize::new(0),
             failed: AtomicBool::new(false),
             xruns: AtomicU64::new(0),
+            #[cfg(windows)]
+            route: OnceLock::new(),
         }
     }
 
-    fn fill(&self, buffer: &mut [f32]) {
+    fn fill(&self, buffer: &mut [f32], begins_callback: bool) {
         if buffer.is_empty() {
+            return;
+        }
+        #[cfg(windows)]
+        if self
+            .route
+            .get()
+            .is_some_and(|route| route.changed.load(Ordering::Acquire))
+        {
+            buffer.fill(0.0);
             return;
         }
         if self.failed.load(Ordering::Acquire)
@@ -142,13 +169,29 @@ impl Callbacks {
         }
         let frames = buffer.len() / self.channels;
         let produced = self.pull.pull.map_or(0, |pull| unsafe {
-            pull(self.pull.user, buffer.as_mut_ptr(), buffer.len(), frames)
+            pull(
+                self.pull.user,
+                buffer.as_mut_ptr(),
+                buffer.len(),
+                frames,
+                u32::from(begins_callback),
+            )
         });
         buffer[produced.min(frames) * self.channels..].fill(0.0);
         self.gate.fetch_sub(1, Ordering::Release);
     }
 
     fn event(&self, kind: ErrorKind) {
+        #[cfg(windows)]
+        if matches!(
+            kind,
+            ErrorKind::StreamInvalidated | ErrorKind::DeviceNotAvailable
+        ) && let Some(route) = self.route.get()
+        {
+            route.changed.store(true, Ordering::Release);
+            route.worker.unpark();
+            return;
+        }
         match kind {
             ErrorKind::DeviceChanged | ErrorKind::RealtimeDenied => {}
             ErrorKind::Xrun => {
@@ -160,6 +203,22 @@ impl Callbacks {
 
     fn close(&self) {
         self.gate.fetch_or(CLOSED, Ordering::AcqRel);
+    }
+
+    fn closed(&self) -> bool {
+        self.gate.load(Ordering::Acquire) & CLOSED != 0
+    }
+
+    fn health(&self) -> (bool, bool) {
+        let failed = self.failed.load(Ordering::Acquire);
+        #[cfg(windows)]
+        if let Some(route) = self.route.get() {
+            return (
+                failed || route.unavailable.load(Ordering::Acquire),
+                route.changed.load(Ordering::Acquire) || route.reopening.load(Ordering::Acquire),
+            );
+        }
+        (failed, false)
     }
 
     fn drain(&self) {
@@ -184,9 +243,9 @@ fn converted_stream<Sample: SizedSample>(
     device.build_output_stream(
         config,
         move |output: &mut [Sample], _| {
-            for chunk in output.chunks_mut(scratch.len()) {
+            for (index, chunk) in output.chunks_mut(scratch.len()).enumerate() {
                 let samples = &mut scratch[..chunk.len()];
-                callbacks.fill(samples);
+                callbacks.fill(samples, index == 0);
                 for (dest, &sample) in chunk.iter_mut().zip(samples.iter()) {
                     *dest = convert(sample);
                 }
@@ -197,56 +256,48 @@ fn converted_stream<Sample: SizedSample>(
     )
 }
 
-fn hardware(
-    token: &[u8],
+fn play_hardware(
+    device: &cpal::Device,
     config: StreamConfig,
     callbacks: &Arc<Callbacks>,
 ) -> Result<cpal::Stream, Failure> {
-    let device = output_device(&host().map_err(driver_error)?, token, config.channels)
-        .ok_or_else(|| (6, "No audio output device is available".into()))?;
-    let mix = device.default_output_config().map_err(driver_error)?;
-    if config.channels > 2 && config.channels > mix.channels() {
-        #[cfg(any(
-            target_os = "linux",
-            target_os = "freebsd",
-            target_os = "netbsd",
-            target_os = "dragonfly"
-        ))]
-        let supported = device
+    #[cfg(target_os = "macos")]
+    if config.channels > 2
+        && !device
             .supported_output_configs()
             .map_err(driver_error)?
-            .any(|range| {
-                range.channels() == config.channels
-                    && !range.sample_format().is_dsd()
-                    && (range.min_sample_rate()..=range.max_sample_rate())
-                        .contains(&config.sample_rate)
-            });
-        #[cfg(not(any(
-            target_os = "linux",
-            target_os = "freebsd",
-            target_os = "netbsd",
-            target_os = "dragonfly"
-        )))]
-        let supported = false;
-        if !supported {
-            return Err((code::UNSUPPORTED, MULTICHANNEL.into()));
-        }
+            .any(|range| range.channels() >= config.channels)
+    {
+        return Err((code::UNSUPPORTED, MULTICHANNEL.into()));
+    }
+    #[cfg(windows)]
+    if config.channels > 2
+        && config.channels
+            > device
+                .default_output_config()
+                .map_err(driver_error)?
+                .channels()
+    {
+        return Err((code::UNSUPPORTED, MULTICHANNEL.into()));
     }
     let pull = Arc::clone(callbacks);
     let events = Arc::clone(callbacks);
     let result = device.build_output_stream(
         config,
-        move |out: &mut [f32], _| pull.fill(out),
+        move |out: &mut [f32], _| pull.fill(out, true),
         move |error| events.event(error.kind()),
         IO_TIMEOUT,
     );
     let stream = match result {
         Err(error) if error.kind() == ErrorKind::UnsupportedConfig => {
+            let Ok(mix) = device.default_output_config() else {
+                return Err(driver_error(error));
+            };
             macro_rules! converted {
                 ($($variant:ident => $sample:ty),+) => {
                     match mix.sample_format() {
-                        $(SampleFormat::$variant => converted_stream(&device, config, Arc::clone(callbacks), integer_pcm::<$sample>),)+
-                        SampleFormat::F64 => converted_stream(&device, config, Arc::clone(callbacks), f64::from),
+                        $(SampleFormat::$variant => converted_stream(device, config, Arc::clone(callbacks), integer_pcm::<$sample>),)+
+                        SampleFormat::F64 => converted_stream(device, config, Arc::clone(callbacks), f64::from),
                         _ => Err(error),
                     }
                 }
@@ -256,13 +307,76 @@ fn hardware(
         }
         result => result,
     }.map_err(driver_error)?;
-    if let Err(error) = stream.play() {
-        callbacks.close();
-        drop(stream);
-        callbacks.drain();
-        return Err(driver_error(error));
-    }
+    stream.play().map_err(driver_error)?;
     Ok(stream)
+}
+
+#[cfg(windows)]
+fn follow_default_output<S>(
+    callbacks: Arc<Callbacks>,
+    open: impl Fn(&Arc<Callbacks>) -> Result<S, Failure> + Send + 'static,
+) -> Result<JoinHandle<()>, Failure> {
+    let (ready, setup) = mpsc::sync_channel(1);
+    let worker = thread::Builder::new()
+        .name("mradm-pcm-default-output".into())
+        .spawn(move || {
+            let route = callbacks.route.get_or_init(|| DefaultRoute {
+                worker: thread::current(),
+                changed: AtomicBool::new(false),
+                reopening: AtomicBool::new(false),
+                unavailable: AtomicBool::new(false),
+            });
+            let mut stream = match open(&callbacks) {
+                Ok(stream) => stream,
+                Err(error) => {
+                    let _ = ready.send(Err(error));
+                    return;
+                }
+            };
+            if ready.send(Ok(())).is_err() {
+                return;
+            }
+            while !callbacks.closed() {
+                if !route.changed.load(Ordering::Acquire) {
+                    thread::park();
+                    continue;
+                }
+                route.reopening.store(true, Ordering::Release);
+                drop(stream);
+                // Keep the engine and its pull target across an endpoint change. Drop the old
+                // stream before clearing its notification and starting a replacement.
+                thread::park_timeout(Duration::from_millis(25));
+                loop {
+                    if callbacks.closed() {
+                        return;
+                    }
+                    route.changed.store(false, Ordering::Release);
+                    callbacks.failed.store(false, Ordering::Release);
+                    if let Ok(next) = open(&callbacks) {
+                        stream = next;
+                        route.unavailable.store(false, Ordering::Release);
+                        route.reopening.store(false, Ordering::Release);
+                        break;
+                    }
+                    route.unavailable.store(true, Ordering::Release);
+                    thread::park_timeout(Duration::from_millis(250));
+                }
+            }
+        })
+        .map_err(|error| (6, format!("Cannot start the output route worker: {error}")))?;
+    match setup.recv() {
+        Ok(Ok(())) => Ok(worker),
+        result => {
+            let _ = worker.join();
+            Err(match result {
+                Ok(Err(error)) => error,
+                _ => (
+                    6,
+                    "Output route worker stopped during initialization".into(),
+                ),
+            })
+        }
+    }
 }
 
 fn driver_error(error: cpal::Error) -> Failure {
@@ -282,12 +396,12 @@ fn timer(config: StreamConfig, callbacks: Arc<Callbacks>) -> Result<JoinHandle<(
         .name("mradm-null-output".into())
         .spawn(move || {
             let mut next = Instant::now();
-            while callbacks.gate.load(Ordering::Acquire) & CLOSED == 0 {
+            while !callbacks.closed() {
                 let now = Instant::now();
                 if now < next {
                     thread::park_timeout(next - now);
                 } else {
-                    callbacks.fill(&mut samples);
+                    callbacks.fill(&mut samples, true);
                     next = (next + period).max(now);
                 }
             }
@@ -297,12 +411,51 @@ fn timer(config: StreamConfig, callbacks: Arc<Callbacks>) -> Result<JoinHandle<(
 
 enum Driver {
     Hardware(cpal::Stream),
+    #[cfg(windows)]
+    DefaultOutput(JoinHandle<()>),
     Null(JoinHandle<()>),
+}
+
+fn start_hardware(
+    token: &[u8],
+    config: StreamConfig,
+    callbacks: &Arc<Callbacks>,
+) -> Result<(Driver, bool), Failure> {
+    let (device, default) = output_device(&host().map_err(driver_error)?, token, config.channels)
+        .ok_or_else(|| (6, "No audio output device is available".into()))?;
+    let using_fallback = default && !token.is_empty();
+    #[cfg(windows)]
+    if default {
+        let worker = follow_default_output(Arc::clone(callbacks), move |callbacks| {
+            let device = host()
+                .map_err(driver_error)?
+                .default_output_device()
+                .ok_or_else(|| (6, "No audio output device is available".into()))?;
+            let endpoint = device.id().map_err(driver_error)?;
+            let stream = play_hardware(&device, config, callbacks)?;
+            // Cover a route change that happened before CPAL installed its listener.
+            if device.id().as_ref().ok() != Some(&endpoint) {
+                callbacks.event(ErrorKind::StreamInvalidated);
+            }
+            Ok(stream)
+        })?;
+        return Ok((Driver::DefaultOutput(worker), using_fallback));
+    }
+    Ok((
+        Driver::Hardware(play_hardware(&device, config, callbacks)?),
+        using_fallback,
+    ))
+}
+
+fn join(worker: JoinHandle<()>) {
+    worker.thread().unpark();
+    let _ = worker.join();
 }
 
 struct Running {
     callbacks: Arc<Callbacks>,
     driver: Driver,
+    using_fallback: bool,
 }
 
 struct PcmDevice {
@@ -332,13 +485,26 @@ impl PcmDevice {
             buffer_size: BufferSize::Default,
         };
         let callbacks = Arc::new(Callbacks::new(pull, config.channels));
-        let driver = if self.null_backend {
-            Driver::Null(timer(config, Arc::clone(&callbacks))?)
+        let started = if self.null_backend {
+            timer(config, Arc::clone(&callbacks)).map(|worker| (Driver::Null(worker), false))
         } else {
-            Driver::Hardware(hardware(&self.token, config, &callbacks)?)
+            start_hardware(&self.token, config, &callbacks)
         };
-        *slot = Some(Running { callbacks, driver });
-        Ok(())
+        match started {
+            Ok((driver, using_fallback)) => {
+                *slot = Some(Running {
+                    callbacks,
+                    driver,
+                    using_fallback,
+                });
+                Ok(())
+            }
+            Err(error) => {
+                callbacks.close();
+                callbacks.drain();
+                Err(error)
+            }
+        }
     }
 
     fn stop(&self) {
@@ -346,14 +512,16 @@ impl PcmDevice {
             .running
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        if let Some(Running { callbacks, driver }) = slot.take() {
+        if let Some(Running {
+            callbacks, driver, ..
+        }) = slot.take()
+        {
             callbacks.close();
             match driver {
                 Driver::Hardware(stream) => drop(stream),
-                Driver::Null(worker) => {
-                    worker.thread().unpark();
-                    let _ = worker.join();
-                }
+                #[cfg(windows)]
+                Driver::DefaultOutput(worker) => join(worker),
+                Driver::Null(worker) => join(worker),
             }
             callbacks.drain();
         }
@@ -392,19 +560,19 @@ unsafe extern "C" fn progress(ctx: *mut c_void, out: *mut EngineSceneDeviceProgr
         .running
         .lock()
         .unwrap_or_else(|error| error.into_inner());
-    let (failed, xruns) = slot.as_ref().map_or((false, 0), |run| {
-        (
-            run.callbacks.failed.load(Ordering::Acquire),
-            run.callbacks.xruns.load(Ordering::Relaxed),
-        )
-    });
+    let (failed, recovering) = slot
+        .as_ref()
+        .map_or((false, false), |run| run.callbacks.health());
     unsafe {
         *out = EngineSceneDeviceProgress {
             presented_frames: 0,
             media_clock: 0,
             failed: u32::from(failed),
-            recovering: 0,
-            underruns: xruns,
+            recovering: u32::from(recovering),
+            using_fallback: u32::from(slot.as_ref().is_some_and(|run| run.using_fallback)),
+            underruns: slot
+                .as_ref()
+                .map_or(0, |run| run.callbacks.xruns.load(Ordering::Relaxed)),
         };
     }
 }
@@ -467,6 +635,7 @@ mod tests {
         out: *mut f32,
         len: usize,
         frames: usize,
+        _: u32,
     ) -> usize {
         unsafe { &*user.cast::<AtomicUsize>() }.fetch_add(1, Ordering::Relaxed);
         let count = frames / 2;
@@ -489,13 +658,53 @@ mod tests {
         state.event(ErrorKind::DeviceChanged);
         state.event(ErrorKind::Xrun);
         crate::test_alloc::COUNT.with(|count| count.set(Some(0)));
-        state.fill(&mut buffer);
+        state.fill(&mut buffer, true);
         assert_eq!(crate::test_alloc::COUNT.with(|count| count.take()), Some(0));
         assert_eq!(buffer, [0.5, 0.5, 0.5, 0.5, 0., 0., 0., 0.]);
         assert_eq!(state.xruns.load(Ordering::Relaxed), 1);
         state.event(ErrorKind::DeviceNotAvailable);
-        state.fill(&mut buffer);
+        state.fill(&mut buffer, true);
         assert_eq!(buffer, [0.; 8]);
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn default_route_retries_until_the_replacement_is_available() {
+        let calls = AtomicUsize::new(0);
+        let callbacks = Arc::new(Callbacks::new(
+            DevicePull {
+                user: (&raw const calls).cast_mut().cast(),
+                pull: Some(short),
+            },
+            2,
+        ));
+        let available = Arc::new(AtomicBool::new(true));
+        let device_available = Arc::clone(&available);
+        let worker = follow_default_output(Arc::clone(&callbacks), move |_| {
+            if device_available.load(Ordering::Acquire) {
+                Ok(())
+            } else {
+                Err((6, "no default output".into()))
+            }
+        })
+        .unwrap();
+        let wait_for_health = |expected| {
+            let deadline = Instant::now() + Duration::from_secs(4);
+            while callbacks.health() != expected && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(5));
+            }
+            callbacks.health() == expected
+        };
+        available.store(false, Ordering::Release);
+        callbacks.event(ErrorKind::StreamInvalidated);
+        let lost = wait_for_health((true, true));
+        available.store(true, Ordering::Release);
+        let recovered = wait_for_health((false, false));
+        callbacks.fill(&mut [0.0; 4], true);
+        callbacks.close();
+        join(worker);
+        assert!(lost && recovered);
         assert_eq!(calls.load(Ordering::Relaxed), 1);
     }
 
@@ -537,6 +746,7 @@ mod tests {
             _: *mut f32,
             _: usize,
             frames: usize,
+            _: u32,
         ) -> usize {
             let events = unsafe { &*user.cast::<(std::sync::Barrier, std::sync::Barrier)>() };
             events.0.wait();
@@ -552,12 +762,12 @@ mod tests {
             2,
         );
         thread::scope(|scope| {
-            scope.spawn(|| state.fill(&mut [0.0; 4]));
+            scope.spawn(|| state.fill(&mut [0.0; 4], true));
             events.0.wait();
             state.close();
             assert_eq!(state.gate.load(Ordering::Acquire), CLOSED | 1);
             let mut late = [1.0; 4];
-            state.fill(&mut late);
+            state.fill(&mut late, true);
             assert_eq!(late, [0.0; 4]);
             events.1.wait();
             state.drain();

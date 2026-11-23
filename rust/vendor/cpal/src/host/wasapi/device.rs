@@ -501,18 +501,14 @@ impl Device {
         let device = self.immdevice().ok_or_else(|| {
             Error::with_message(ErrorKind::DeviceNotAvailable, "Default device not found")
         })?;
-        unsafe {
-            match device.GetId() {
-                Ok(pwstr) => match pwstr.to_string() {
-                    Ok(id_str) => Ok(DeviceId::new(crate::platform::HostId::Wasapi, id_str)),
-                    Err(e) => Err(Error::with_message(
-                        ErrorKind::BackendError,
-                        format!("Failed to convert device ID to string: {e}"),
-                    )),
-                },
-                Err(e) => Err(Error::from(e)),
-            }
-        }
+        let id = ComString(unsafe { device.GetId() }?);
+        let text = unsafe { id.0.to_string() }.map_err(|e| {
+            Error::with_message(
+                ErrorKind::BackendError,
+                format!("Failed to convert device ID to string: {e}"),
+            )
+        })?;
+        Ok(DeviceId::new(crate::platform::HostId::Wasapi, text))
     }
 
     fn from_immdevice(device: Audio::IMMDevice) -> Self {
@@ -571,10 +567,11 @@ impl Device {
         let audio_client: Audio::IAudioClient = unsafe {
             match &self.device {
                 DeviceHandle::DefaultOutput => {
-                    let path = Com::StringFromIID(&Audio::DEVINTERFACE_AUDIO_RENDER)
-                        .map_err(Error::from)?;
-                    let _guard = ComString(path);
-                    activate_audio_interface_sync(path, activation_timeout).map_err(Error::from)?
+                    // Pin each render client to the endpoint whose mix format was checked.
+                    // The default-device notification asks the caller to open the replacement.
+                    current_default_endpoint(Audio::eRender)
+                        .ok_or(ErrorKind::DeviceNotAvailable)?
+                        .Activate(Com::CLSCTX_ALL, None)?
                 }
                 DeviceHandle::DefaultInput => {
                     let path = Com::StringFromIID(&Audio::DEVINTERFACE_AUDIO_CAPTURE)
@@ -849,36 +846,54 @@ impl Device {
             // is requested here; the value only affects ring-buffer latency.
             let buffer_duration = buffer_size_to_duration(&config.buffer_size, config.sample_rate);
 
-            let mut stream_flags = DEFAULT_FLAGS;
-
-            if self.data_flow() == Audio::eRender {
-                stream_flags |= Audio::AUDCLNT_STREAMFLAGS_LOOPBACK;
-            }
+            let loopback = self.data_flow() == Audio::eRender;
+            let stream_flags = DEFAULT_FLAGS
+                | if loopback {
+                    Audio::AUDCLNT_STREAMFLAGS_LOOPBACK
+                } else {
+                    0
+                };
 
             // Computing the format and initializing the device.
             let waveformatex = {
-                let format_attempt = config_to_waveformatextensible(config, sample_format)
-                    .ok_or_else(|| {
-                        Error::with_message(
+                let mix = if loopback {
+                    Some(WaveFormatExPtr(audio_client.GetMixFormat()?))
+                } else {
+                    None
+                };
+                let format_attempt;
+                // A native loopback starts with the exact mix format, including its speaker mask.
+                let format: *const Audio::WAVEFORMATEX = if let Some(mix) =
+                    mix.as_ref().filter(|mix| {
+                        usize::from((*mix.0).nBlockAlign)
+                            == usize::from(config.channels) * sample_format.sample_size()
+                            && format_from_waveformatex_ptr(mix.0, &audio_client).is_some_and(
+                                |native| {
+                                    native.channels() == config.channels
+                                        && native.sample_rate() == config.sample_rate
+                                        && native.sample_format() == sample_format
+                                },
+                            )
+                    }) {
+                    mix.0
+                } else {
+                    format_attempt = config_to_waveformatextensible(config, sample_format)
+                        .ok_or_else(|| {
+                            Error::with_message(
                             ErrorKind::UnsupportedConfig,
                             "Stream configuration could not be converted to a compatible format",
                         )
-                    })?;
+                        })?;
+                    &format_attempt.Format
+                };
                 let share_mode = Audio::AUDCLNT_SHAREMODE_SHARED;
 
                 // Finally, initializing the audio client
                 audio_client
-                    .Initialize(
-                        share_mode,
-                        stream_flags,
-                        buffer_duration,
-                        0,
-                        &format_attempt.Format,
-                        None,
-                    )
+                    .Initialize(share_mode, stream_flags, buffer_duration, 0, format, None)
                     .context("Failed to initialize audio client")?;
 
-                format_attempt.Format
+                *format
             };
 
             // obtaining the size of the samples buffer in number of frames

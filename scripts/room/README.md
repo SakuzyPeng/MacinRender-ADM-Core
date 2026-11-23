@@ -305,7 +305,8 @@ Windows 发送线程使用独立高精度等待定时器，采样时间按 10 ms
 欠载计数表示应用可观察到的输出回调供数不足；它不覆盖驱动未上报的硬件故障或模拟输出失真。
 
 可添加 `--capture 'BlackHole 16ch'` 指定虚拟输入，或在 Windows 添加 `--capture-loopback`
-使用所选 WASAPI 输出端点回环。每分钟保存一个一秒测量窗口，运行后执行：
+使用所选 WASAPI 输出端点回环。回环按端点混音采样率采集，将前两个声道保存为立体声，
+单声道端点复制到左右声道。每分钟保存一个一秒测量窗口，分析工具会将两个窗口转换到共同采样率。
 
 ```sh
 python3 scripts/room/analyze-loopback.py /path/new-device-evidence/recordings \

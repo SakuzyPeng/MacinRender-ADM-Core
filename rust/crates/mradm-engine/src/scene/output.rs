@@ -47,6 +47,7 @@ pub struct DeviceProgress {
     pub media_clock: bool,
     pub failed: bool,
     pub recovering: bool,
+    pub using_fallback: bool,
     pub underruns: u64,
 }
 
@@ -187,6 +188,16 @@ impl Session {
 
     /// Device callback: fill `output` (`frames` interleaved frames) with media.
     pub fn pull(&self, output: &mut [f32], frames: usize) -> Pulled {
+        self.pull_in_callback(output, frames, true)
+    }
+
+    /// A device that converts samples in chunks advances the output clock only on the first pull.
+    pub fn pull_in_callback(
+        &self,
+        output: &mut [f32],
+        frames: usize,
+        begins_callback: bool,
+    ) -> Pulled {
         output.fill(0.);
         self.pulls.fetch_add(1, Ordering::SeqCst);
         if !self.playing.load(Ordering::SeqCst) {
@@ -195,8 +206,10 @@ impl Session {
         }
         // The previous callback has been submitted: a callback-resolution estimate, kept apart
         // from a buffered sink's media presentation clock.
-        self.presented
-            .store(self.consumed.load(Ordering::SeqCst), Ordering::SeqCst);
+        if begins_callback {
+            self.presented
+                .store(self.consumed.load(Ordering::SeqCst), Ordering::SeqCst);
+        }
         let channels = self.channels as usize;
         let count = frames
             .min(u32::MAX as usize)

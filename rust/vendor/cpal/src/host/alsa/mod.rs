@@ -96,8 +96,18 @@ const DEFAULT_PERIODS: alsa::pcm::Frames = 2;
 static ALSA_OPEN_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn open_pcm(pcm_id: &str, direction: alsa::Direction) -> Result<alsa::pcm::PCM, Error> {
+    open_pcm_with_flags(pcm_id, direction, 0)
+}
+
+fn open_pcm_with_flags(
+    pcm_id: &str,
+    direction: alsa::Direction,
+    flags: libc::c_int,
+) -> Result<alsa::pcm::PCM, Error> {
+    let name = std::ffi::CString::new(pcm_id).map_err(|_| ErrorKind::InvalidInput)?;
     let _guard = ALSA_OPEN_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-    alsa::pcm::PCM::new(pcm_id, direction, true).map_err(|e| {
+    // SAFETY: only ALSA's SND_PCM_NO_AUTO_CHANNELS mode is passed here.
+    unsafe { alsa::pcm::PCM::open_with_flags(&name, direction, true, flags) }.map_err(|e| {
         let e = Error::from(e);
         if e.kind() == ErrorKind::UnsupportedConfig {
             let dir = match direction {
@@ -162,10 +172,17 @@ impl HostTrait for Host {
     }
 
     fn device_by_id(&self, id: &DeviceId) -> Option<Self::Device> {
+        let mut devices = self.devices().ok()?;
         let canonical_id = DeviceId::new(id.host(), canonical_pcm_id(id.id()));
-        self.devices()
-            .ok()?
-            .find(|d| d.id().ok().as_ref() == Some(&canonical_id))
+        let matches = |device: &Device, id: &DeviceId| {
+            device.pcm_id == id.id() && id.host() == crate::platform::HostId::Alsa
+        };
+        devices
+            .as_slice()
+            .iter()
+            .position(|device| matches(device, id))
+            .and_then(|index| devices.nth(index))
+            .or_else(|| devices.find(|device| matches(device, &canonical_id)))
     }
 
     fn default_input_device(&self) -> Option<Self::Device> {
@@ -389,9 +406,29 @@ impl Device {
     ) -> Result<StreamInner, Error> {
         crate::validate_stream_config(&conf)?;
 
-        let handle = open_pcm(&self.pcm_id, stream_type)?;
-
-        let hw_params = set_hw_params_from_format(&handle, conf, sample_format)?;
+        let flags = if stream_type == alsa::Direction::Playback && conf.channels > 2 {
+            alsa_sys::SND_PCM_NO_AUTO_CHANNELS as libc::c_int
+        } else {
+            0
+        };
+        let handle = open_pcm_with_flags(&self.pcm_id, stream_type, flags)?;
+        let handle = match set_hw_params_from_format(&handle, conf, sample_format).map(drop) {
+            Ok(()) => handle,
+            Err(error)
+                if stream_type == alsa::Direction::Playback
+                    && error.kind() == ErrorKind::UnsupportedConfig
+                    && self.pcm_id.starts_with("hw:") =>
+            {
+                // Open the same hardware through ALSA's format and sample rate converter.
+                // The channel-conversion restriction also applies to this retry.
+                drop(handle);
+                let name = format!("plug{}", self.pcm_id);
+                let handle = open_pcm_with_flags(&name, stream_type, flags)?;
+                set_hw_params_from_format(&handle, conf, sample_format)?;
+                handle
+            }
+            Err(error) => return Err(error),
+        };
         let (buffer_size, period_size) = set_sw_params_from_format(&handle, stream_type)?;
         if buffer_size == 0 || period_size == 0 {
             return Err(ErrorKind::DeviceNotAvailable.into());
@@ -408,13 +445,14 @@ impl Device {
         let creation_ts = handle.status()?.get_htstamp();
         let timestamp_mode = if creation_ts.tv_sec == 0 && creation_ts.tv_nsec == 0 {
             TimestampMode::CreationInstant
-        } else if hw_params.supports_audio_ts_type(alsa::pcm::AudioTstampType::LinkSynchronized) {
+        } else if handle
+            .hw_params_current()?
+            .supports_audio_ts_type(alsa::pcm::AudioTstampType::LinkSynchronized)
+        {
             TimestampMode::AudioLink
         } else {
             TimestampMode::SystemClock
         };
-        drop(hw_params);
-
         let period_size = period_size as usize;
         let frame_size = sample_format.sample_size() * conf.channels as usize;
 

@@ -5,6 +5,7 @@
 //! The measuring proxy uses the same device table as the Scene output.
 #![allow(dead_code)]
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{FromSample, SampleFormat, SizedSample, StreamConfig};
 use mradm_ffi::api::islands::{
     AppleIslands, DeviceEnumeration, DeviceIslands, DevicePull, DeviceTable, EngineIslandError,
     EngineSceneDeviceProgress, PlatformIslands, RustServices, Text, services,
@@ -222,6 +223,12 @@ impl Recording {
 
     /// Records the stereo `samples` of a callback of `frames` frames entered at `now`.
     pub fn capture(&mut self, samples: &[f32], frames: usize, now: Instant) {
+        self.record(frames.min(samples.len() / 2), now, |output| {
+            output.copy_from_slice(&samples[..output.len()]);
+        });
+    }
+
+    fn record(&mut self, frames: usize, now: Instant, write: impl FnOnce(&mut [f32])) {
         let time = now.saturating_duration_since(self.origin).as_secs_f64();
         if self.windows.is_empty() || time < f64::from(self.first_second) {
             return;
@@ -236,11 +243,9 @@ impl Recording {
         if window.frames == 0 {
             window.first_ns = now.saturating_duration_since(self.origin).as_nanos() as i64;
         }
-        let count = frames
-            .min(rate - window.frames as usize)
-            .min(samples.len() / 2);
+        let count = frames.min(rate - window.frames as usize);
         let start = (index * rate + window.frames as usize) * 2;
-        self.samples[start..start + count * 2].copy_from_slice(&samples[..count * 2]);
+        write(&mut self.samples[start..start + count * 2]);
         window.frames += count as u32;
         window.maximum_callback_frames = window.maximum_callback_frames.max(frames as u32);
     }
@@ -331,6 +336,7 @@ unsafe extern "C" fn measured_pull(
     out: *mut f32,
     len: usize,
     frames: usize,
+    begins_callback: u32,
 ) -> usize {
     let m = unsafe { measured(user) };
     let now = Instant::now();
@@ -343,12 +349,14 @@ unsafe extern "C" fn measured_pull(
     };
     // The audio thread is the only writer while the device runs.
     let mut trace = m.trace.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(previous) = trace.previous {
-        trace.intervals.add((now - previous).as_secs_f64() * 1000.);
+    if begins_callback != 0 {
+        if let Some(previous) = trace.previous {
+            trace.intervals.add((now - previous).as_secs_f64() * 1000.);
+        }
+        trace.previous = Some(now);
+        trace.callbacks += 1;
     }
-    trace.previous = Some(now);
-    trace.callbacks += 1;
-    let result = unsafe { inner(user, out, len, frames) };
+    let result = unsafe { inner(user, out, len, frames, begins_callback) };
     trace.pull_duration.add(now.elapsed().as_secs_f64() * 1000.);
     trace.valid_frames += result as u64;
     if !out.is_null() && len != 0 {
@@ -491,6 +499,50 @@ pub struct Capture {
     name: String,
 }
 
+fn capture_stream<T: SizedSample>(
+    device: &cpal::Device,
+    config: StreamConfig,
+    recording: Arc<Mutex<Recording>>,
+    failure: Arc<Mutex<Option<String>>>,
+) -> Result<cpal::Stream, cpal::Error>
+where
+    f32: FromSample<T>,
+{
+    let channels = usize::from(config.channels);
+    device.build_input_stream(
+        config,
+        move |input: &[T], _| {
+            let now = Instant::now();
+            recording.lock().unwrap_or_else(|e| e.into_inner()).record(
+                input.len() / channels,
+                now,
+                |output| {
+                    for (stereo, native) in output
+                        .as_chunks_mut::<2>()
+                        .0
+                        .iter_mut()
+                        .zip(input.chunks_exact(channels))
+                    {
+                        stereo[0] = f32::from_sample_(native[0]);
+                        stereo[1] = f32::from_sample_(native[usize::from(channels > 1)]);
+                    }
+                },
+            );
+        },
+        move |error| {
+            if !matches!(
+                error.kind(),
+                cpal::ErrorKind::Xrun
+                    | cpal::ErrorKind::DeviceChanged
+                    | cpal::ErrorKind::RealtimeDenied
+            ) {
+                *failure.lock().unwrap_or_else(|e| e.into_inner()) = Some(error.to_string());
+            }
+        },
+        Some(std::time::Duration::from_secs(2)),
+    )
+}
+
 impl Capture {
     pub fn open(
         origin: Instant,
@@ -499,8 +551,14 @@ impl Capture {
         loopback_output: &str,
         rate: u32,
     ) -> Result<Self, String> {
+        let loopback = !loopback_output.is_empty();
+        if loopback && !cfg!(windows) {
+            return Err(
+                "Output loopback requires WASAPI; use --capture for a virtual input".into(),
+            );
+        }
         let host = cpal::default_host();
-        let device = if loopback_output.is_empty() {
+        let device = if !loopback {
             let mut matches = host
                 .input_devices()
                 .map_err(|error| error.to_string())?
@@ -517,6 +575,7 @@ impl Capture {
                 .parse::<cpal::DeviceId>()
                 .map_err(|error| error.to_string())?;
             host.device_by_id(&id)
+                .filter(DeviceTrait::supports_output)
                 .ok_or("Loopback output is unavailable")?
         };
         let name = device
@@ -524,39 +583,40 @@ impl Capture {
             .map_err(|error| error.to_string())?
             .name()
             .to_owned();
-        let recording = Arc::new(Mutex::new(Recording::new(origin, seconds, true, rate)));
-        let error = Arc::new(Mutex::new(None));
-        let data = Arc::clone(&recording);
-        let failure = Arc::clone(&error);
-        let config = cpal::StreamConfig {
-            channels: 2,
-            sample_rate: rate,
-            buffer_size: cpal::BufferSize::Default,
-        };
-        let stream = device
-            .build_input_stream(
-                config,
-                move |input: &[f32], _| {
-                    data.lock().unwrap_or_else(|e| e.into_inner()).capture(
-                        input,
-                        input.len() / 2,
-                        Instant::now(),
-                    );
+        let (config, format) = if loopback {
+            let mix = device.default_output_config().map_err(|e| e.to_string())?;
+            (mix.config(), mix.sample_format())
+        } else {
+            (
+                StreamConfig {
+                    channels: 2,
+                    sample_rate: rate,
+                    buffer_size: cpal::BufferSize::Default,
                 },
-                move |e| {
-                    if !matches!(
-                        e.kind(),
-                        cpal::ErrorKind::Xrun
-                            | cpal::ErrorKind::DeviceChanged
-                            | cpal::ErrorKind::RealtimeDenied
-                    ) {
-                        *failure.lock().unwrap_or_else(|error| error.into_inner()) =
-                            Some(e.to_string());
-                    }
-                },
-                Some(std::time::Duration::from_secs(2)),
+                SampleFormat::F32,
             )
-            .map_err(|error| error.to_string())?;
+        };
+        let recording = Arc::new(Mutex::new(Recording::new(
+            origin,
+            seconds,
+            true,
+            config.sample_rate,
+        )));
+        let error = Arc::new(Mutex::new(None));
+        macro_rules! open_format {
+            ($($format:ident => $sample:ty),+) => {
+                match format {
+                    $(SampleFormat::$format => capture_stream::<$sample>(
+                        &device, config, Arc::clone(&recording), Arc::clone(&error),
+                    ),)+
+                    _ => return Err(format!("Unsupported capture sample format {format}")),
+                }
+            };
+        }
+        let stream = open_format!(
+            F32 => f32, F64 => f64, U8 => u8, I16 => i16, I24 => cpal::I24, I32 => i32, I64 => i64
+        )
+        .map_err(|e| e.to_string())?;
         stream.play().map_err(|error| error.to_string())?;
         Ok(Self {
             stream: Some(stream),

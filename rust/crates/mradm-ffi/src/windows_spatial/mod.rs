@@ -74,7 +74,7 @@ unsafe impl Send for ThreadPull {}
 impl ThreadPull {
     fn read(&self, out: &mut [f32], frames: usize) -> usize {
         self.0.pull.map_or(0, |f| unsafe {
-            f(self.0.user, out.as_mut_ptr(), out.len(), frames)
+            f(self.0.user, out.as_mut_ptr(), out.len(), frames, 1)
         })
     }
 }
@@ -229,6 +229,7 @@ unsafe extern "C" fn progress(ctx: *mut c_void, out: *mut EngineSceneDeviceProgr
             media_clock: 0,
             failed: 0,
             recovering: u32::from(device.recovering.load(Ordering::Acquire)),
+            using_fallback: 0,
             underruns: 0,
         };
     }

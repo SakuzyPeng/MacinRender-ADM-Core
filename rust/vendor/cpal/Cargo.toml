@@ -92,7 +92,6 @@ pulseaudio = [
 ]
 realtime = [
     "dep:audio_thread_priority",
-    "dep:alsa-sys",
 ]
 realtime-dbus = [
     "realtime",
@@ -206,11 +205,10 @@ features = [
 ]
 
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd"))'.dependencies.alsa]
-version = "0.11"
+version = "0.12.1"
 
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd"))'.dependencies.alsa-sys]
-version = "0.4"
-optional = true
+version = "0.6.1"
 
 [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd"))'.dependencies.audio_thread_priority]
 version = "0.35"

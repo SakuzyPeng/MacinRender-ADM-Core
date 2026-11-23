@@ -144,6 +144,7 @@ struct Calls {
     devices: Vec<Vec<u8>>,
     starts: usize,
     device_failed: bool,
+    using_fallback: bool,
     stops: usize,
     /// The token value of each opening.
     opened: Vec<u32>,
@@ -163,8 +164,10 @@ impl Device for MockDevice {
         false
     }
     fn progress(&self) -> mradm_engine::scene::output::DeviceProgress {
+        let calls = self.calls.lock().unwrap();
         mradm_engine::scene::output::DeviceProgress {
-            failed: self.calls.lock().unwrap().device_failed,
+            failed: calls.device_failed,
+            using_fallback: calls.using_fallback,
             ..Default::default()
         }
     }
@@ -175,6 +178,7 @@ impl Device for MockDevice {
         let mut calls = self.calls.lock().unwrap();
         calls.starts += 1;
         calls.device_failed = false;
+        calls.using_fallback = false;
         Ok(())
     }
     fn stop(&self) {
@@ -436,6 +440,22 @@ fn a_lost_device_reports_failure_and_the_same_id_can_be_reopened() {
         !status.failed && status.playhead_frames == 24000 && status.state == State::Playing
     }));
     assert_eq!(fixture.host.calls.lock().unwrap().starts, 2);
+}
+
+#[test]
+fn reselecting_an_endpoint_retries_a_fallback_but_keeps_a_matched_device() {
+    let fixture = fixture(Vec::new());
+    let session = fixture.session(false);
+    session.set_output_device(b"usb").unwrap();
+    fixture.host.calls.lock().unwrap().using_fallback = true;
+    session.set_output_device(b"usb").unwrap();
+    session.set_output_device(b"usb").unwrap();
+    let calls = fixture.host.calls.lock().unwrap();
+    assert_eq!(
+        calls.devices,
+        [b"".to_vec(), b"usb".to_vec(), b"usb".to_vec()]
+    );
+    assert_eq!(calls.starts, 3);
 }
 
 #[test]

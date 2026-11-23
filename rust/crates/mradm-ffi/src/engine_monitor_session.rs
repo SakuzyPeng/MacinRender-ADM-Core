@@ -127,6 +127,7 @@ unsafe extern "C" fn pull_monitor(
     out: *mut f32,
     len: usize,
     frames: usize,
+    _begins_callback: u32,
 ) -> usize {
     let p = unsafe { &*user.cast::<Puller>() };
     let output = unsafe { device_output(out, len) };

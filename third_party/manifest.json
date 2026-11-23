@@ -2291,10 +2291,10 @@
       "notes": "Microsoft windows-rs。"
     },
     {
-      "name": "rust-alsa-0.11.0",
-      "version": "0.11.0",
+      "name": "rust-alsa-0.12.1",
+      "version": "0.12.1",
       "cmake_key": null,
-      "purl": "pkg:cargo/alsa@0.11.0",
+      "purl": "pkg:cargo/alsa@0.12.1",
       "license": "Apache-2.0 OR MIT",
       "purpose": "ALSA 设备接口",
       "distribution": "available",
@@ -2311,10 +2311,10 @@
       "notes": "由 Cargo 根据目标平台和功能选择。"
     },
     {
-      "name": "rust-alsa-sys-0.4.0",
-      "version": "0.4.0",
+      "name": "rust-alsa-sys-0.6.1",
+      "version": "0.6.1",
       "cmake_key": null,
-      "purl": "pkg:cargo/alsa-sys@0.4.0",
+      "purl": "pkg:cargo/alsa-sys@0.6.1",
       "license": "MIT",
       "purpose": "ALSA 原生绑定",
       "distribution": "available",

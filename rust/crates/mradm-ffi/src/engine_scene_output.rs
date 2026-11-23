@@ -32,8 +32,8 @@ use std::sync::{Mutex, MutexGuard};
 pub struct EngineSceneOutput {
     session: Session,
     device: Device,
-    /// Serialises the control calls (play, pause, epochs, volume, HpTF, status).
-    control: Mutex<()>,
+    /// Serialises control calls and holds the device underrun count at the current epoch's start.
+    control: Mutex<u64>,
     _pinned: PhantomPinned,
 }
 
@@ -102,11 +102,13 @@ impl EngineSceneOutput {
     /// A stale epoch is rejected before the device queue is disturbed; otherwise park, flush the
     /// device and reset to `target`.
     pub fn begin_epoch(&self, epoch: u64, target: i64) -> Result<(), Error> {
-        let _control = self.lock();
+        let mut underruns_at_epoch_start = self.lock();
         self.session.check_epoch(epoch)?;
         self.park();
         self.device.flush();
-        self.session.reset_epoch(epoch, target)
+        self.session.reset_epoch(epoch, target)?;
+        *underruns_at_epoch_start = self.device.progress().underruns;
+        Ok(())
     }
 
     pub fn set_volume(&self, gain: f32) -> Result<(), Error> {
@@ -135,8 +137,12 @@ impl EngineSceneOutput {
     }
 
     pub fn status(&self) -> EngineSceneOutputStatus {
-        let _control = self.lock();
-        let v = self.session.status(self.device.progress());
+        let underruns_at_epoch_start = self.lock();
+        let mut progress = self.device.progress();
+        if !progress.media_clock {
+            progress.underruns = progress.underruns.saturating_sub(*underruns_at_epoch_start);
+        }
+        let v = self.session.status(progress);
         EngineSceneOutputStatus {
             state: v.state as u32,
             epoch: v.epoch,
@@ -151,7 +157,7 @@ impl EngineSceneOutput {
         }
     }
 
-    fn lock(&self) -> MutexGuard<'_, ()> {
+    fn lock(&self) -> MutexGuard<'_, u64> {
         self.control.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -180,6 +186,7 @@ pub struct EngineSceneDeviceProgress {
     pub media_clock: u32,
     pub failed: u32,
     pub recovering: u32,
+    pub using_fallback: u32,
     pub underruns: u64,
 }
 
@@ -205,6 +212,7 @@ unsafe extern "C" fn pull(
     output: *mut f32,
     output_len: usize,
     frames: usize,
+    begins_callback: u32,
 ) -> usize {
     let h = unsafe { &*user.cast::<EngineSceneOutput>() };
     let s = &h.session;
@@ -217,7 +225,10 @@ unsafe extern "C" fn pull(
         unsafe { std::slice::from_raw_parts_mut(output, output_len) }
     };
     // The pull counts itself before anything can fail, so a caught panic still releases.
-    let (frames, eos, active) = match catch_unwind(AssertUnwindSafe(|| s.pull(output, frames))) {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        s.pull_in_callback(output, frames, begins_callback != 0)
+    }));
+    let (frames, eos, active) = match result {
         Ok(p) => (p.frames, p.eos, p.active),
         Err(_) => (0, false, true),
     };
@@ -241,7 +252,7 @@ fn start(
     let output = Box::pin(EngineSceneOutput {
         session,
         device,
-        control: Mutex::new(()),
+        control: Mutex::new(0),
         _pinned: PhantomPinned,
     });
     // The address is taken only after pinning; it stays valid until the output drops.
@@ -296,11 +307,7 @@ mod tests {
         true
     }
 
-    /// An HpTF publication designs and publishes while a status query holds the control lock
-    /// (formerly the C++ `hptf_parameters_test` over the SDK `SceneOutputSession`, R3 D2); the
-    /// epoch reset then adopts the complete shared or independent target.
-    #[test]
-    fn hptf_publication_does_not_wait_for_a_status_query() {
+    fn test_stream() -> Box<EngineSceneStream> {
         let renderer = renderer::Config {
             selection: Selection::SafBinaural,
             layout_id: b"binaural",
@@ -325,6 +332,42 @@ mod tests {
             },
             sink: true,
         };
+        let config = Config {
+            output_sample_rate: 48000,
+            output_ring_frames: 1 << 16,
+            ..Config::default()
+        };
+        super::super::engine_scene::create_stream(&config, &renderer).unwrap()
+    }
+
+    #[test]
+    fn a_new_epoch_counts_only_device_underruns_after_the_reset() {
+        use std::sync::atomic::AtomicU64;
+        unsafe extern "C" fn progress(ctx: *mut c_void, out: *mut EngineSceneDeviceProgress) {
+            unsafe { (*out).underruns = (&*ctx.cast::<AtomicU64>()).load(Ordering::Relaxed) };
+        }
+        let underruns = AtomicU64::new(2);
+        let table = DeviceTable {
+            ctx: std::ptr::from_ref(&underruns).cast_mut().cast(),
+            progress: Some(progress),
+            ..DeviceTable::empty()
+        };
+        let stream = test_stream();
+        let output = start(&stream, unsafe { Device::adopt(&table) }, true).unwrap();
+        assert_eq!(output.status().underruns, 2);
+        output.begin_epoch(1, 0).unwrap();
+        assert_eq!(output.status().underruns, 0);
+        underruns.store(3, Ordering::Relaxed);
+        assert_eq!(output.status().underruns, 1);
+        assert!(output.begin_epoch(1, 0).is_err());
+        assert_eq!(output.status().underruns, 1);
+    }
+
+    /// An HpTF publication designs and publishes while a status query holds the control lock
+    /// (formerly the C++ `hptf_parameters_test` over the SDK `SceneOutputSession`, R3 D2); the
+    /// epoch reset then adopts the complete shared or independent target.
+    #[test]
+    fn hptf_publication_does_not_wait_for_a_status_query() {
         let band = dsp::Band {
             kind: dsp::BandKind::Peaking,
             enabled: true,
@@ -339,12 +382,7 @@ mod tests {
         for independent in [false, true] {
             ENTERED.store(false, Ordering::SeqCst);
             RELEASE.store(false, Ordering::SeqCst);
-            let config = Config {
-                output_sample_rate: 48000,
-                output_ring_frames: 1 << 16,
-                ..Config::default()
-            };
-            let stream = super::super::engine_scene::create_stream(&config, &renderer).unwrap();
+            let stream = test_stream();
             let table = DeviceTable::progress_only(blocking);
             let output = start(&stream, unsafe { Device::adopt(&table) }, true).unwrap();
             let settings = if independent {

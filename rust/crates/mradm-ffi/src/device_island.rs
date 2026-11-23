@@ -10,15 +10,16 @@ use mradm_engine::scene::output::DeviceProgress;
 use mradm_render::routing::Error;
 use std::ffi::c_void;
 
-/// A device's pull: fills `out` (`len` floats) with up to `frames` frames on its audio thread.
-pub(crate) type Pull = unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize) -> usize;
+/// A device's pull: fills up to the requested frames. The last argument is nonzero on the first
+/// pull of each device callback, including callbacks that convert samples in several chunks.
+pub(crate) type Pull = unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize, u32) -> usize;
 
 /// A device's pull and its user data (copied by `start`).
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct DevicePull {
     pub user: *mut c_void,
-    pub pull: Option<unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize) -> usize>,
+    pub pull: Option<unsafe extern "C" fn(*mut c_void, *mut f32, usize, usize, u32) -> usize>,
 }
 
 /// One playback device per `each` call (`enumerate`); the texts live during the call.
@@ -318,6 +319,7 @@ impl Device {
             media_clock: 0,
             failed: 0,
             recovering: 0,
+            using_fallback: 0,
             underruns: 0,
         };
         if let Some(f) = self.table.progress {
@@ -328,6 +330,7 @@ impl Device {
             media_clock: p.media_clock != 0,
             failed: p.failed != 0,
             recovering: p.recovering != 0,
+            using_fallback: p.using_fallback != 0,
             underruns: p.underruns,
         }
     }

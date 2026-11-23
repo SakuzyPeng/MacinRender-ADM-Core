@@ -4,11 +4,13 @@
 
 普通 PCM 监听由 `mradm-ffi` 的 `pcm_device` 通过 CPAL 0.18.2 驱动。设备枚举返回
 CPAL 的不透明 ID，已有 miniaudio 十六进制 ID 在打开时按平台解码。空 ID 或无法解析的 ID
-使用默认输出。多声道监听在打开前检查端点宽度。设备失效时文件监听和 Scene 输出都会上报失败，
-重新选择可用设备可以恢复文件播放。
+使用默认输出。目标重新出现后，重选同一 ID 会尝试打开该端点。多声道监听校验 CoreAudio
+合计声道数或 WASAPI 混音宽度，在 ALSA 上禁用多声道自动折叠。设备失效时文件监听和 Scene
+输出都会上报失败，重新选择可用设备可以恢复文件播放。
 
-macOS 的 AudioUnit 按客户端采样率打开，系统负责转换至设备采样率。Windows 使用 WASAPI，
-Linux 使用 ALSA。无硬件输出由 Rust 的定时线程驱动。系统空间监听继续使用两平台的原生实现。
+macOS 的 AudioUnit 按客户端采样率打开，系统负责转换至设备采样率。Windows 系统默认输出变化后
+由控制线程重开 WASAPI 端点。Linux 的固定采样率 ALSA 硬件可以通过 plug 层转换。无硬件输出由
+Rust 的定时线程驱动。系统空间监听继续使用两平台的原生实现。
 CPAL 的来源与 macOS 补丁见 [PATCHES.md](../../rust/vendor/cpal/PATCHES.md)。
 
 ## 7.3 变更记录

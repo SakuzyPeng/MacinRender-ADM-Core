@@ -155,7 +155,13 @@ fn invalid_layout_and_width_fail_before_device_activation() {
     ] {
         let table = open(id.into(), 0);
         let device = unsafe { crate::render::device_island::Device::adopt(&table) };
-        unsafe extern "C" fn silence(_: *mut c_void, _: *mut f32, _: usize, _: usize) -> usize {
+        unsafe extern "C" fn silence(
+            _: *mut c_void,
+            _: *mut f32,
+            _: usize,
+            _: usize,
+            _: u32,
+        ) -> usize {
             0
         }
         let e = device
@@ -250,7 +256,13 @@ fn failed_start_can_retry_and_stop_joins_the_last_pull() {
         gate: Mutex<()>,
         events: mpsc::Sender<Event>,
     }
-    unsafe extern "C" fn blocked_pull(user: *mut c_void, _: *mut f32, _: usize, _: usize) -> usize {
+    unsafe extern "C" fn blocked_pull(
+        user: *mut c_void,
+        _: *mut f32,
+        _: usize,
+        _: usize,
+        _: u32,
+    ) -> usize {
         let pull = unsafe { &*user.cast::<PullGate>() };
         let events = pull.events.clone();
         let _ = events.send(Event::PullEntered);

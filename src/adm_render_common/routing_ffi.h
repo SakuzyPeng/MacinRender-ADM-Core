@@ -53,12 +53,12 @@ typedef struct MradmRenderLiveOverride {
     float diffuse_scale;
     float divergence_scale;
 } MradmRenderLiveOverride;
-// AudioDeviceProgress.
 typedef struct MradmEngineSceneDeviceProgress {
     uint64_t presented_frames;
     uint32_t media_clock;
     uint32_t failed;
     uint32_t recovering;
+    uint32_t using_fallback; // The requested output was unavailable, so the default was opened.
     uint64_t underruns;
 } MradmEngineSceneDeviceProgress;
 // cppcheck-suppress-end unusedStructMember

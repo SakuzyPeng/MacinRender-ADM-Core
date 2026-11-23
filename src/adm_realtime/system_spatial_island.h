@@ -93,9 +93,8 @@ template <class Sink> MradmDeviceTable device_table(std::unique_ptr<Sink> device
                  const MradmDevicePull* pull,
                  const MradmEngineIslandError* e) noexcept -> int32_t {
         try {
-            const MradmDevicePull p = *pull;
-            auto started = of(ctx).start(channels, rate, [p](std::span<float> out, std::size_t frames) {
-                return p.pull(p.user, out.data(), out.size(), frames);
+            auto started = of(ctx).start(channels, rate, [p = *pull](std::span<float> out, std::size_t frames) {
+                return p.pull(p.user, out.data(), out.size(), frames, 1U);
             });
             return started ? 0 : sink::fail(started.error(), e);
         } catch (...) {
@@ -117,6 +116,7 @@ template <class Sink> MradmDeviceTable device_table(std::unique_ptr<Sink> device
                     p.has_media_clock ? 1U : 0U,
                     p.failed ? 1U : 0U,
                     p.recovering ? 1U : 0U,
+                    0U,
                     p.underruns};
         });
     };

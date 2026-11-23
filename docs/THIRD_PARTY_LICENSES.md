@@ -145,8 +145,8 @@
 | `rust-windows-result-0.4.1` @ 0.4.1 | HRESULT 与 Windows 错误类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
 | `rust-windows-strings-0.5.1` @ 0.5.1 | Windows 字符串类型 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
 | `rust-windows-threading-0.2.1` @ 0.2.1 | Windows 线程支持 | MIT OR Apache-2.0 | Windows only | Microsoft windows-rs。 |
-| `rust-alsa-0.11.0` @ 0.11.0 | ALSA 设备接口 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
-| `rust-alsa-sys-0.4.0` @ 0.4.0 | ALSA 原生绑定 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-alsa-0.12.1` @ 0.12.1 | ALSA 设备接口 | Apache-2.0 OR MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
+| `rust-alsa-sys-0.6.1` @ 0.6.1 | ALSA 原生绑定 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |
 | `rust-block2-0.6.2` @ 0.6.2 | CPAL 锁定依赖 | MIT | macOS only | 许可证随上游提交固定。 |
 | `rust-bumpalo-3.20.4` @ 3.20.4 | CPAL 锁定依赖 | MIT OR Apache-2.0 | 可用 | 由 Cargo 根据目标平台和功能选择。 |
 | `rust-bytes-1.12.2` @ 1.12.2 | CPAL 锁定依赖 | MIT | 可用 | 由 Cargo 根据目标平台和功能选择。 |

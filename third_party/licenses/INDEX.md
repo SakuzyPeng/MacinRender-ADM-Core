@@ -15,8 +15,8 @@
 | nlohmann-derived-rust-json | nlohmann-3.12.0-subset | MIT | `LICENSE`, `NOTICE.txt` |
 | nlohmann_json | v3.12.0 | MIT | `LICENSE.MIT` |
 | rust-adler2-2.0.1 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | `LICENSE-0BSD`, `LICENSE-APACHE`, `LICENSE-MIT` |
-| rust-alsa-0.11.0 | 0.11.0 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
-| rust-alsa-sys-0.4.0 | 0.4.0 | MIT | `LICENSE` |
+| rust-alsa-0.12.1 | 0.12.1 | Apache-2.0 OR MIT | `LICENSE-APACHE`, `LICENSE-MIT` |
+| rust-alsa-sys-0.6.1 | 0.6.1 | MIT | `LICENSE` |
 | rust-anstyle-1.0.11 | 1.0.11 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |
 | rust-approx-0.5.1 | 0.5.1 | Apache-2.0 | `LICENSE` |
 | rust-arrayvec-0.7.8 | 0.7.8 | MIT OR Apache-2.0 | `LICENSE-APACHE`, `LICENSE-MIT` |

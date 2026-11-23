@@ -174,11 +174,11 @@ struct MradmAppleIslands {
     void (*destroy)(MradmApplePrepared* prepared);
 };
 
-// A device's pull: fills out (len floats) with up to frames frames and returns how many, on the
-// device's audio thread, never blocking or allocating; the device's mark_end may be called inside.
+// A device's pull: fills up to frames and returns how many, without waiting or allocating.
+// begins_callback marks the first pull per callback. Pull may call the device's mark_end.
 typedef struct MradmDevicePull {
     void* user;
-    size_t (*pull)(void* user, float* out, size_t len, size_t frames);
+    size_t (*pull)(void* user, float* out, size_t len, size_t frames, uint32_t begins_callback);
 } MradmDevicePull;
 // An opened output device. start begins pulling (the pull record is copied) and
 // returns 0 or an error code (100: the device threw, its message the exception's). An absent entry is

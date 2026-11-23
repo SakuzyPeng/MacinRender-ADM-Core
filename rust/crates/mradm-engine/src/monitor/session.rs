@@ -585,7 +585,10 @@ impl Session {
             return Err(error(code::INTERNAL_ERROR, INVALID_SESSION));
         };
         if device_id == inner.device_id.as_slice()
-            && !inner.device.as_ref().is_some_and(|d| d.progress().failed)
+            && !inner.device.as_ref().is_some_and(|d| {
+                let progress = d.progress();
+                progress.failed || progress.using_fallback
+            })
         {
             return Ok(());
         }

@@ -351,6 +351,33 @@ fn status_follows_the_former_priority() {
     );
 }
 
+#[test]
+fn conversion_chunks_do_not_present_the_tail_until_the_next_device_callback() {
+    let (_s, output) = session(true, false, 512, 0.25);
+    let mut chunk = [0.0; 2048];
+    for begins_callback in [true, false] {
+        assert!(
+            output
+                .pull_in_callback(&mut chunk, 1024, begins_callback)
+                .eos
+        );
+        output.release();
+    }
+    let status = output.status(progress());
+    assert_eq!(
+        (
+            status.state,
+            status.consumed_frames,
+            status.presented_frames
+        ),
+        (State::Draining, 512, 0)
+    );
+    output.pull(&mut chunk, 1024);
+    output.release();
+    let status = output.status(progress());
+    assert_eq!((status.state, status.presented_frames), (State::Ended, 512));
+}
+
 // ── R3 D2: the remaining checks of the C++ `stereo_peak_guard_test` ───────────────────────────
 
 /// A stream over `selection` / `layout` at 48 kHz with a one-frame startup watermark.
