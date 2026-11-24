@@ -344,6 +344,56 @@ fn percent(fraction: f64) -> i32 {
     }
 }
 
+/// How often the render's Ctrl-C watcher checks for SIGINT.
+const INTERRUPT_POLL: Duration = Duration::from_millis(25);
+
+/// Ends the watcher when the work ends, by returning or by unwinding.
+struct EndWatch<'a> {
+    done: &'a AtomicBool,
+    watcher: Option<&'a std::thread::Thread>,
+}
+
+impl Drop for EndWatch<'_> {
+    fn drop(&mut self) {
+        self.done.store(true, Ordering::Release);
+        if let Some(watcher) = self.watcher {
+            watcher.unpark();
+        }
+    }
+}
+
+/// Runs `work` while a watcher checks `interrupt` every `poll`. On Ctrl-C the watcher calls
+/// `on_interrupt` and sets the flag handed to `work`, which the render polls. When `work` ends the
+/// watcher is woken, so the command does not wait out a poll, nor hang after a panic.
+fn watch_interrupt<T>(
+    interrupt: Option<&impl Interrupt>,
+    poll: Duration,
+    on_interrupt: impl Fn() + Sync,
+    work: impl FnOnce(&AtomicBool) -> T,
+) -> T {
+    let (cancel, done) = (AtomicBool::new(false), AtomicBool::new(false));
+    std::thread::scope(|scope| {
+        let watcher = interrupt.map(|interrupt| {
+            let (cancel, done, on_interrupt) = (&cancel, &done, &on_interrupt);
+            scope.spawn(move || {
+                while !done.load(Ordering::Acquire) {
+                    if interrupt.requested() {
+                        on_interrupt();
+                        cancel.store(true, Ordering::Release);
+                        return;
+                    }
+                    std::thread::park_timeout(poll);
+                }
+            })
+        });
+        let _end = EndWatch {
+            done: &done,
+            watcher: watcher.as_ref().map(|w| w.thread()),
+        };
+        work(&cancel)
+    })
+}
+
 fn render(service: &impl Service, v: &args::Values<'_>, log: &Logger) -> i32 {
     let text = |name: &str| v.text(name).filter(|t| !t.is_empty());
     let input = v.text("--input").unwrap_or_default();
@@ -462,29 +512,16 @@ fn render(service: &impl Service, v: &args::Values<'_>, log: &Logger) -> i32 {
             }
         }
     };
-    let cancel = AtomicBool::new(false);
-    let done = AtomicBool::new(false);
     let interrupt = service.interrupt();
     if interrupt.is_none() {
         log.warn(b"Ctrl-C cancellation is unavailable: failed to install SIGINT handler");
     }
-    let outcome = std::thread::scope(|scope| {
-        if let Some(interrupt) = &interrupt {
-            scope.spawn(|| {
-                while !done.load(Ordering::Acquire) {
-                    if interrupt.requested() {
-                        log.info(b"Ctrl-C received; cancelling render...");
-                        cancel.store(true, Ordering::Release);
-                        return;
-                    }
-                    std::thread::sleep(Duration::from_millis(25));
-                }
-            });
-        }
-        let outcome = service.render(&request, &|| cancel.load(Ordering::Acquire), &events);
-        done.store(true, Ordering::Release);
-        outcome
-    });
+    let outcome = watch_interrupt(
+        interrupt.as_ref(),
+        INTERRUPT_POLL,
+        || log.info(b"Ctrl-C received; cancelling render..."),
+        |cancel| service.render(&request, &|| cancel.load(Ordering::Acquire), &events),
+    );
     drop(interrupt);
     if outcome.code != 0 {
         if outcome.code == 5 {
@@ -503,6 +540,8 @@ fn render(service: &impl Service, v: &args::Values<'_>, log: &Logger) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
+    use std::time::Instant;
 
     #[test]
     fn csv_lists_split_as_the_cpp_did() {
@@ -524,5 +563,104 @@ mod tests {
         assert_eq!(percent(0.125), 13);
         assert_eq!(percent(1.0), 100);
         assert_eq!(percent(0.0), 0);
+    }
+
+    struct TestInterrupt {
+        pressed_at: Instant,
+        polled: Option<mpsc::Sender<()>>,
+    }
+
+    impl TestInterrupt {
+        fn observe_polls(pressed_at: Instant) -> (Self, mpsc::Receiver<()>) {
+            let (polled, polls) = mpsc::channel();
+            (
+                Self {
+                    pressed_at,
+                    polled: Some(polled),
+                },
+                polls,
+            )
+        }
+    }
+
+    impl Interrupt for TestInterrupt {
+        fn requested(&self) -> bool {
+            if let Some(polled) = &self.polled {
+                // This check runs after the watcher has observed that work is still running.
+                let _ = polled.send(());
+            }
+            Instant::now() >= self.pressed_at
+        }
+    }
+
+    /// A poll the watcher must not wait out. Its Ctrl-C comes at the same time, so a watcher that
+    /// is not woken ends the test after ten seconds instead of hanging it.
+    const LONG: Duration = Duration::from_secs(10);
+
+    #[test]
+    fn the_render_ends_the_watcher_without_waiting_out_its_poll() {
+        let start = Instant::now();
+        let (interrupt, polls) = TestInterrupt::observe_polls(start + LONG);
+        let cancelled = watch_interrupt(
+            Some(&interrupt),
+            LONG,
+            || panic!("no Ctrl-C was pressed"),
+            |cancel| {
+                polls
+                    .recv_timeout(LONG / 2)
+                    .expect("the watcher did not check for Ctrl-C");
+                cancel.load(Ordering::Acquire)
+            },
+        );
+        assert!(!cancelled);
+        assert!(start.elapsed() < LONG / 2, "{:?}", start.elapsed());
+    }
+
+    #[test]
+    fn a_panicking_render_ends_the_watcher() {
+        let start = Instant::now();
+        let (interrupt, polls) = TestInterrupt::observe_polls(start + LONG);
+        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            watch_interrupt(
+                Some(&interrupt),
+                LONG,
+                || {},
+                |_| {
+                    polls
+                        .recv_timeout(LONG / 2)
+                        .expect("the watcher did not check for Ctrl-C");
+                    panic!("the render panicked")
+                },
+            )
+        }));
+        let panic = unwound.expect_err("the render should have panicked");
+        assert_eq!(panic.downcast_ref::<&str>(), Some(&"the render panicked"));
+        assert!(start.elapsed() < LONG / 2, "{:?}", start.elapsed());
+    }
+
+    #[test]
+    fn ctrl_c_cancels_the_render_and_is_reported_once() {
+        let start = Instant::now();
+        let interrupt = TestInterrupt {
+            pressed_at: start,
+            polled: None,
+        };
+        let reports = std::sync::atomic::AtomicUsize::new(0);
+        let cancelled = watch_interrupt(
+            Some(&interrupt),
+            Duration::from_millis(1),
+            || {
+                reports.fetch_add(1, Ordering::Relaxed);
+            },
+            |cancel| {
+                while !cancel.load(Ordering::Acquire) {
+                    assert!(start.elapsed() < LONG, "Ctrl-C did not cancel the render");
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                true
+            },
+        );
+        assert!(cancelled);
+        assert_eq!(reports.load(Ordering::Relaxed), 1);
     }
 }

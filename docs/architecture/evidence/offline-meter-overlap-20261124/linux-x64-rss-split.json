@@ -1,0 +1,102 @@
+{
+ "fixture": "objects-long.wav",
+ "unit": "KiB",
+ "runs": {
+  "before": [
+   {
+    "RssAnon": 3548,
+    "RssFile": 7916,
+    "VmHWM": 11072
+   },
+   {
+    "RssAnon": 3548,
+    "RssFile": 7788,
+    "VmHWM": 11156
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 7972,
+    "VmHWM": 11284
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 7632,
+    "VmHWM": 10996
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 7920,
+    "VmHWM": 11320
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 7704,
+    "VmHWM": 11068
+   }
+  ],
+  "meter-fix": [
+   {
+    "RssAnon": 3544,
+    "RssFile": 9308,
+    "VmHWM": 12620
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 9360,
+    "VmHWM": 12760
+   },
+   {
+    "RssAnon": 3548,
+    "RssFile": 9796,
+    "VmHWM": 12920
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 9368,
+    "VmHWM": 12680
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 9488,
+    "VmHWM": 12800
+   },
+   {
+    "RssAnon": 3548,
+    "RssFile": 9480,
+    "VmHWM": 12616
+   }
+  ],
+  "watcher-fix": [
+   {
+    "RssAnon": 3540,
+    "RssFile": 8184,
+    "VmHWM": 11656
+   },
+   {
+    "RssAnon": 3540,
+    "RssFile": 8116,
+    "VmHWM": 11476
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 7944,
+    "VmHWM": 11308
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 8144,
+    "VmHWM": 11620
+   },
+   {
+    "RssAnon": 3540,
+    "RssFile": 8036,
+    "VmHWM": 11396
+   },
+   {
+    "RssAnon": 3544,
+    "RssFile": 7944,
+    "VmHWM": 11308
+   }
+  ]
+ }
+}
