@@ -718,19 +718,16 @@ impl Driver {
         }
         let frames = self.block_size.min(self.frames - self.done) as usize;
         let out_samples = self.outputs * frames;
-        // Reclaim this buffer once the meter has finished its previous use of it.
-        while self.buffers[self.slot].is_none() {
+        // The meter still holds this slot's buffers: take back the oldest pair, measured while the
+        // previous block rendered. The pairs are interchangeable, so the block committed last is
+        // still measured during this render.
+        if self.buffers[self.slot].is_none() {
             let (buffers, result) = self
                 .meter
                 .reclaim()
                 .ok_or_else(|| Error::failed(&self.failure, "meter worker stopped"))?;
             result.map_err(|e| Error::failed(&self.failure, e))?;
-            let free = self
-                .buffers
-                .iter()
-                .position(Option::is_none)
-                .unwrap_or(self.slot);
-            self.buffers[free] = Some(buffers);
+            self.buffers[self.slot] = Some(buffers);
         }
         let (input, output) = self.buffers[self.slot].as_mut().expect("reclaimed above");
         let input = &mut input[..self.inputs * frames];
@@ -867,5 +864,123 @@ fn chunk(window: Option<Window>, start: u64, len: u64) -> (usize, usize) {
         (0, 0)
     } else {
         ((lo - start) as usize, (hi - lo) as usize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mradm_wav::{Format, SampleFormat, Writer, WriterOptions};
+
+    const RATE: u32 = 48000;
+
+    /// Renders the mono `path` to two outputs, checking that no block waits for the measurement
+    /// of the block committed before it; returns the driver's metrics and those of the same
+    /// frames metered inline.
+    fn render(
+        path: &str,
+        frames: u64,
+        window: Option<Window>,
+        meter_window: Option<Window>,
+    ) -> (Metrics, Metrics) {
+        let plan = pcm_mix::Plan::new(
+            1,
+            2,
+            vec![pcm_mix::Row {
+                input_channel: 0,
+                block_offset: 0,
+                block_count: 1,
+                output_gain: 1.,
+            }],
+            vec![pcm_mix::Block {
+                end: frames,
+                ..Default::default()
+            }],
+            pcm_mix::Coefficients::Speaker(vec![0.5, 0.25]),
+        )
+        .unwrap();
+        let mut driver = Driver::new(
+            Driver::open_reader(path).unwrap(),
+            Settings {
+                kernel: Kernel::Mix(Arc::new(plan)),
+                inputs: 1,
+                outputs: 2,
+                frames,
+                sample_rate: RATE,
+                default_interp_ms: 5,
+                smoothing_frames: 0,
+                window,
+                meter_window,
+                backend: "test".to_owned(),
+            },
+        )
+        .unwrap();
+        let mut inline = Meter::new(2, RATE, MeterMode::IntegratedTruePeak, &[]).unwrap();
+        let mut previous_metered = false;
+        while let Some(block) = driver.render().unwrap() {
+            // Exact whatever the worker's timing: taking buffers back waits for their result.
+            assert_eq!(
+                driver.meter.outstanding,
+                usize::from(previous_metered),
+                "the block at {} waited for the previous block's measurement",
+                block.start
+            );
+            let (offset, count) = if window.is_some() {
+                (block.emit_offset, block.emit_frames)
+            } else {
+                chunk(meter_window, block.start, block.frames as u64)
+            };
+            if count > 0 {
+                let output = &driver.output()[offset * 2..(offset + count) * 2];
+                inline.add_frames(output).unwrap();
+            }
+            let submitted = driver.meter.outstanding;
+            driver.commit().unwrap();
+            previous_metered = driver.meter.outstanding > submitted;
+        }
+        (driver.finish().unwrap(), Measure::Speaker(inline).metrics())
+    }
+
+    #[test]
+    fn the_meter_measures_each_block_while_the_next_one_renders() {
+        let frames = 40 * 1024 + 300;
+        let path = std::env::temp_dir().join(format!(
+            "mradm-render-offline-meter-{}.wav",
+            std::process::id()
+        ));
+        let format = Format {
+            channels: 1,
+            sample_rate: RATE,
+            sample_format: SampleFormat::Float32,
+            channel_mask: None,
+        };
+        let mut writer = Writer::new(
+            File::create(&path).unwrap(),
+            format,
+            WriterOptions::default(),
+        )
+        .unwrap();
+        let samples: Vec<f32> = (0..frames)
+            .map(|i| ((i * 7919) % 2001) as f32 / 1000. - 1.)
+            .collect();
+        writer.write_frames(&samples).unwrap();
+        writer.finish().unwrap();
+        let range = |start, count| Some(Window { start, count });
+        // Every block metered; a meter window, which leaves the blocks outside it unmetered; and
+        // an output window, which renders from the block edge before its start.
+        for (window, meter_window) in [
+            (None, None),
+            (None, range(5000, 25000)),
+            (range(7000, 24000), None),
+        ] {
+            let (driver, inline) =
+                render(path.to_str().unwrap(), frames as u64, window, meter_window);
+            assert!(driver.lufs.is_some() && driver.peak_dbtp.is_some());
+            assert_eq!(
+                driver, inline,
+                "window {window:?} meter window {meter_window:?}"
+            );
+        }
+        std::fs::remove_file(&path).unwrap();
     }
 }
