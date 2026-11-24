@@ -1,0 +1,220 @@
+{
+ "platform": "Linux-6.18.44-fc-v819-x86_64-with-glibc2.39",
+ "machine": "x86_64",
+ "cpus": 4,
+ "rounds": 12,
+ "sides": {
+  "woken": {
+   "binary_sha256": "68d9db559ba058951666298d36f2f468a8773bf18019080d10e7bdc43fa9ca40",
+   "preload": null
+  },
+  "no-watcher": {
+   "binary_sha256": "68d9db559ba058951666298d36f2f468a8773bf18019080d10e7bdc43fa9ca40",
+   "preload": {
+    "name": "no_sigint.so",
+    "sha256": "d640cff70b6bff83e971c168e3bc45a5722b37e59de5ceb08e008fbc14fc1d89"
+   }
+  }
+ },
+ "cases": [
+  {
+   "case": "triple-balance-714",
+   "fixture": "objects-room",
+   "fixture_sha256": "bbe204610e44f63c2f7b6343dd3bab9108a05d21c8317777819101a9af3d0a01",
+   "options": [
+    "--renderer",
+    "triple-balance",
+    "--output-layout",
+    "7.1.4"
+   ],
+   "medians": {
+    "woken": {
+     "ms": 44.328,
+     "rss_mib": 11.11
+    },
+    "no-watcher": {
+     "ms": 48.878,
+     "rss_mib": 11.05
+    }
+   },
+   "time_ratio": 1.1026,
+   "identical": {
+    "pcm_bits_sha256": "5a2a957e622a443f074cbf7b64296d0a4f682a5855457f30cfffd6bbe67ccd33",
+    "meters": [
+     "measured loudness: -3.5 LUFS",
+     "measured true peak: 1.63 dBTP"
+    ]
+   },
+   "rounds": [
+    {
+     "order": [
+      "woken",
+      "no-watcher"
+     ],
+     "woken": {
+      "ms": 38.813,
+      "rss_mib": 11.35
+     },
+     "no-watcher": {
+      "ms": 54.06,
+      "rss_mib": 11.02
+     }
+    },
+    {
+     "order": [
+      "no-watcher",
+      "woken"
+     ],
+     "no-watcher": {
+      "ms": 42.043,
+      "rss_mib": 10.84
+     },
+     "woken": {
+      "ms": 40.24,
+      "rss_mib": 11.27
+     }
+    },
+    {
+     "order": [
+      "woken",
+      "no-watcher"
+     ],
+     "woken": {
+      "ms": 52.209,
+      "rss_mib": 11.2
+     },
+     "no-watcher": {
+      "ms": 51.12,
+      "rss_mib": 11.09
+     }
+    },
+    {
+     "order": [
+      "no-watcher",
+      "woken"
+     ],
+     "no-watcher": {
+      "ms": 46.941,
+      "rss_mib": 11.03
+     },
+     "woken": {
+      "ms": 46.363,
+      "rss_mib": 10.91
+     }
+    },
+    {
+     "order": [
+      "woken",
+      "no-watcher"
+     ],
+     "woken": {
+      "ms": 54.158,
+      "rss_mib": 11.1
+     },
+     "no-watcher": {
+      "ms": 46.452,
+      "rss_mib": 10.84
+     }
+    },
+    {
+     "order": [
+      "no-watcher",
+      "woken"
+     ],
+     "no-watcher": {
+      "ms": 48.299,
+      "rss_mib": 10.95
+     },
+     "woken": {
+      "ms": 42.207,
+      "rss_mib": 10.9
+     }
+    },
+    {
+     "order": [
+      "woken",
+      "no-watcher"
+     ],
+     "woken": {
+      "ms": 37.343,
+      "rss_mib": 11.16
+     },
+     "no-watcher": {
+      "ms": 51.689,
+      "rss_mib": 11.11
+     }
+    },
+    {
+     "order": [
+      "no-watcher",
+      "woken"
+     ],
+     "no-watcher": {
+      "ms": 45.911,
+      "rss_mib": 10.87
+     },
+     "woken": {
+      "ms": 43.805,
+      "rss_mib": 11.2
+     }
+    },
+    {
+     "order": [
+      "woken",
+      "no-watcher"
+     ],
+     "woken": {
+      "ms": 38.287,
+      "rss_mib": 11.12
+     },
+     "no-watcher": {
+      "ms": 49.769,
+      "rss_mib": 11.07
+     }
+    },
+    {
+     "order": [
+      "no-watcher",
+      "woken"
+     ],
+     "no-watcher": {
+      "ms": 40.641,
+      "rss_mib": 11.1
+     },
+     "woken": {
+      "ms": 48.323,
+      "rss_mib": 10.84
+     }
+    },
+    {
+     "order": [
+      "woken",
+      "no-watcher"
+     ],
+     "woken": {
+      "ms": 44.851,
+      "rss_mib": 10.91
+     },
+     "no-watcher": {
+      "ms": 55.087,
+      "rss_mib": 11.3
+     }
+    },
+    {
+     "order": [
+      "no-watcher",
+      "woken"
+     ],
+     "no-watcher": {
+      "ms": 49.457,
+      "rss_mib": 11.13
+     },
+     "woken": {
+      "ms": 46.347,
+      "rss_mib": 10.8
+     }
+    }
+   ]
+  }
+ ]
+}
