@@ -167,40 +167,87 @@ class Tail(unittest.TestCase):
         times = (np.arange(count) + 0.5) * self.WIDTH
         return 10 ** (slope * times / 10)
 
+    @staticmethod
+    def squares(energy, hits):
+        """Per-bin squared contributions that give `hits` effective arrivals."""
+        return np.divide(energy ** 2, hits, out=np.zeros_like(energy), where=hits > 0)
+
     def test_leading_silence_is_kept(self):
         energy = np.r_[np.zeros(5), self.decay(300)]
         hits = np.r_[np.zeros(5), np.full(300, 100.)]
-        result, info = ray.tail(energy, hits, self.WIDTH, 32)
+        result, info = ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)
         self.assertEqual(info["status"], "measured")
         np.testing.assert_array_equal(result, energy)
 
     def test_a_short_sparse_dip_does_not_start_the_tail(self):
         energy, hits = self.decay(), np.full(600, 100.)
         hits[200:202] = 3
-        self.assertEqual(ray.tail(energy, hits, self.WIDTH, 32)[1]["status"], "measured")
+        self.assertEqual(ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)[1]["status"], "measured")
 
-    def test_sustained_sparsity_extrapolates_along_the_fitted_decay(self):
+    def test_sustained_sparsity_merges_into_reliable_windows(self):
         energy, hits = self.decay(), np.full(600, 100.)
-        hits[300:] = 5
+        hits[300:] = 4
         noisy = energy.copy()
-        noisy[300:] *= np.random.Generator(np.random.PCG64(5)).uniform(0, 3, 300)
-        result, info = ray.tail(noisy, hits, self.WIDTH, 32)
-        self.assertEqual(info["status"], "extrapolated")
+        noisy[300:] *= np.random.Generator(np.random.PCG64(5)).uniform(0, 2, 300)
+        result, info = ray.tail(noisy, self.squares(noisy, hits), self.WIDTH, 32)
+        self.assertEqual(info["status"], "merged")
         self.assertAlmostEqual(info["start_seconds"], 0.3)
-        self.assertAlmostEqual(info["slope_db_per_second"] / -120., 1., delta=0.03)
+        self.assertGreater(info["windows"], 10)
         np.testing.assert_array_equal(result[:300], noisy[:300])
-        np.testing.assert_allclose(result[300:] / energy[300:], 1., rtol=0.08)
+        ratio = result[300:] / energy[300:]
+        self.assertTrue(np.all((ratio > 0.5) & (ratio < 2)))
+        self.assertAlmostEqual(result[300:].sum() / noisy[300:].sum(), 1., delta=0.05)
+        times = (np.arange(600) + 0.5) * self.WIDTH
+        slope = np.polyfit(times[300:], 10 * np.log10(result[300:]), 1)[0]
+        self.assertAlmostEqual(slope / -120., 1., delta=0.1)
 
-    def test_zero_unestablished_and_unfit_series(self):
+    def test_long_windows_keep_an_exponential_decay(self):
+        # Half an arrival per bin: windows span tens of bins, where placing a window mean at any one
+        # time (its centre or its centroid) misreads the decay by several dB.
+        energy, hits = self.decay(1000), np.full(1000, 100.)
+        hits[300:] = 0.5
+        result, info = ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)
+        self.assertGreater(info["last_window_seconds"], 0.05)
+        np.testing.assert_allclose(result, energy, rtol=1e-9)
+        rising = np.r_[np.full(300, 1.), np.linspace(1., 2., 100)]
+        hits = np.r_[np.full(300, 100.), np.full(100, 0.5)]
+        flat, _ = ray.tail(rising, self.squares(rising, hits), self.WIDTH, 32)
+        np.testing.assert_allclose(flat[300:], rising[300:].mean(), rtol=1e-12)  # no rising tail
+
+    def test_a_short_last_window_joins_the_one_before(self):
+        energy, hits = np.full(40, 1e-3), np.full(40, 100.)
+        hits[20:] = 4  # windows of 8 bins reach 32 arrivals; the last 4 bins join the second window
+        squares = self.squares(energy, hits)
+        result, info = ray.tail(energy, squares, self.WIDTH, 32)
+        self.assertEqual(info["status"], "merged")
+        self.assertEqual(info["windows"], 2)
+        self.assertAlmostEqual(info["last_window_seconds"], 0.012)
+        self.assertAlmostEqual(result[20:].sum() / energy[20:].sum(), 1., delta=1e-12)
+
+    def test_a_sparse_direction_continues_along_the_pooled_band_shape(self):
+        # A decay that is not one exponential: the pooled shape carries the slower late part.
+        times = (np.arange(600) + 0.5) * self.WIDTH
+        shape = 10 ** (-150 * times / 10) + 1e-3 * 10 ** (-60 * times / 10)
+        energy, hits = 0.25 * shape, np.full(600, 100.)
+        hits[120:] = 4
+        energy[120:] *= np.random.Generator(np.random.PCG64(7)).uniform(0, 2, 480)
+        result, info = ray.continue_direction(energy, hits, shape, self.WIDTH, 32)
+        self.assertEqual(info["status"], "continued")
+        self.assertAlmostEqual(info["start_seconds"], 0.12)
+        np.testing.assert_array_equal(result[:120], energy[:120])
+        np.testing.assert_allclose(result[120:], 0.25 * shape[120:], rtol=1e-12)
+        self.assertEqual(ray.continue_direction(np.zeros(9), np.zeros(9), shape[:9], self.WIDTH, 32)[1]["status"],
+                         "zero")
+
+    def test_zero_and_unestablished_series(self):
         result, info = ray.tail(np.zeros(50), np.zeros(50), self.WIDTH, 32)
         self.assertEqual(info["status"], "zero")
         self.assertFalse(result.any())
+        energy = self.decay(50)
         with self.assertRaisesRegex(ray.RayEnergyError, "没有连续"):
-            ray.tail(self.decay(50), np.full(50, 10.), self.WIDTH, 32)
-        hits = np.full(600, 100.)
-        hits[8:] = 2  # sparse long before -25 dB
-        with self.assertRaisesRegex(ray.RayEnergyError, "不足以拟合"):
-            ray.tail(self.decay(), hits, self.WIDTH, 32)
+            ray.tail(energy, self.squares(energy, np.full(50, 10.)), self.WIDTH, 32)
+        with self.assertRaisesRegex(ray.RayEnergyError, "没有连续"):
+            ray.continue_direction(energy, np.full(50, 10.), energy, self.WIDTH, 32)
 
 
 class Generator(unittest.TestCase):
@@ -236,9 +283,13 @@ class Generator(unittest.TestCase):
         return late
 
     def test_rebuild_is_byte_identical_for_any_job_count_and_seed_variation_is_statistical(self):
-        first, a = self.run_generator("a", self.small())
-        second, b = self.run_generator("b", self.small(), "--jobs", "2")
-        other, c = self.run_generator("c", self.small(seed=11))
+        # Three sources and two scattering groups: three or more parts per band, so the merge order
+        # would change the rounding if --jobs changed it.
+        late = self.small(source_positions=SOURCES + [{"azimuth": 170, "elevation": -20, "distance": 1.5}],
+                          materials=dict(absorption=[[0.2] * 8] * 6, scattering=[[0.3] * 4 + [0.8] * 4] * 6))
+        first, a = self.run_generator("a", late)
+        second, b = self.run_generator("b", late, "--jobs", "3")
+        other, c = self.run_generator("c", {**late, "seed": 11})
         for process in (first, second, other):
             self.assertEqual(process.returncode, 0, process.stderr)
         self.assertEqual((a / "late.f32").read_bytes(), (b / "late.f32").read_bytes())

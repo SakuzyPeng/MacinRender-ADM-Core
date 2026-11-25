@@ -232,6 +232,7 @@ def trace_source(config, room, position, rng, bands=tuple(range(BANDS))):
     energy = np.full((rays, len(bands)), initial)
     elapsed = np.zeros(rays)
     reflected = np.zeros(rays, dtype=bool)
+    stalled = np.zeros(rays, dtype=np.int64)
     times, arrivals, energies = [], [], []
     rows = np.arange(rays)
     while len(rows):
@@ -241,6 +242,10 @@ def trace_source(config, room, position, rng, bands=tuple(range(BANDS))):
         axis = np.argmin(span, axis=1)
         index = np.arange(len(rows))
         step = span[index, axis]
+        # A box corner or edge gives at most two zero-length steps in a row.
+        stalled = np.where(step > 0, 0, stalled + 1)
+        if not np.all(np.isfinite(step) & (step >= 0)) or stalled.max(initial=0) > 2:
+            raise RayEnergyError("a ray left the room; the reflection geometry is inconsistent")
         # Volume receiver: chord of the segment inside the sphere, reflected paths only.
         offset = origin - centre
         b = np.einsum("ij,ij->i", offset, direction)
@@ -286,7 +291,7 @@ def trace_source(config, room, position, rng, bands=tuple(range(BANDS))):
         reflected[:] = True
         alive = (elapsed <= limit) & (energy.max(axis=1) >= TERMINATION * initial)
         rows, origin, direction = rows[alive], origin[alive], direction[alive]
-        energy, elapsed, reflected = energy[alive], elapsed[alive], reflected[alive]
+        energy, elapsed, reflected, stalled = energy[alive], elapsed[alive], reflected[alive], stalled[alive]
     if not times:
         return np.zeros(0), np.zeros((0, 3)), np.zeros((0, len(bands)))
     return np.concatenate(times), np.concatenate(arrivals), np.concatenate(energies)
@@ -321,6 +326,9 @@ def binned(config, room, directions, times, arrivals, energies, direct_time, ban
     index_bins = np.minimum((late / width).astype(np.int64), bins - 1)
     energy = np.zeros((count, len(bands), bins))
     squares = np.zeros_like(energy)
+    pooled = np.zeros((len(bands), bins))  # squares of whole arrivals, before the direction split
+    for column in range(len(bands)):
+        pooled[column] = np.bincount(index_bins, weighted[:, column] ** 2, minlength=bins)
     for start in range(0, len(late), chunk):
         stop = start + chunk
         weights = soft_directions(arrivals[start:stop], directions, config["direction_kappa"])
@@ -329,7 +337,8 @@ def binned(config, room, directions, times, arrivals, energies, direct_time, ban
             values = (weights * weighted[start:stop, column, None]).ravel()
             energy[:, column] += np.bincount(index, values, minlength=count * bins).reshape(count, bins)
             squares[:, column] += np.bincount(index, values * values, minlength=count * bins).reshape(count, bins)
-    result.update(energy=energy, squares=squares, allocated=float(weighted.sum()), hits=len(late))
+    result.update(energy=energy, squares=squares, pooled_squares=pooled, allocated=float(weighted.sum()),
+                  hits=len(late))
     return result
 
 
@@ -353,6 +362,7 @@ class Histogram:
         self.bins = bin_count(config)
         shape = (len(self.directions), BANDS, self.bins)
         self.energy, self.squares = np.zeros(shape), np.zeros(shape)
+        self.pooled_squares = np.zeros((BANDS, self.bins))
         self.raw, self.windowed, self.uncovered = np.zeros(BANDS), np.zeros(BANDS), np.zeros(BANDS)
         self.allocated, self.hits = 0., 0
 
@@ -363,6 +373,7 @@ class Histogram:
         self.uncovered[bands] += part["uncovered"]
         self.energy[:, bands] += part["energy"]
         self.squares[:, bands] += part["squares"]
+        self.pooled_squares[bands] += part["pooled_squares"]
         self.allocated += part["allocated"]
         self.hits += part["hits"]
 
@@ -406,49 +417,114 @@ def fit_decay(times, energy, low, high, compensation=0.):
     return dict(slope=float(slope), first=int(chosen[0]), last=int(chosen[-1]))
 
 
-def tail(energy, hits, width, minimum):
-    """Keep the measured series or extrapolate its sparse tail; see the design §7."""
-    count = len(energy)
-    times = (np.arange(count) + 0.5) * width
-    if not energy.any():
-        return energy.copy(), dict(status="zero")
+def _seam(energy, hits, minimum):
+    """(onset, seam) by the §7 rules; seam is None when the measured series stays reliable."""
     reliable = hits >= minimum
     established = _runs(reliable)
     if not established.any():
         raise RayEnergyError(
             f"晚场直方图没有连续 {RUN} 个分箱达到 {minimum} 次有效命中：提高 rays 或 histogram_seconds")
     onset = int(np.argmax(established))
-    peak = int(np.argmax(np.where(reliable & (np.arange(count) >= onset), energy, -np.inf)))
+    peak = int(np.argmax(np.where(reliable & (np.arange(len(energy)) >= onset), energy, -np.inf)))
     sparse = _runs(~reliable)
     candidates = np.flatnonzero(sparse[peak + 1:]) + peak + 1 if len(sparse) > peak + 1 else np.zeros(0, int)
-    if not len(candidates):
+    return reliable, onset, (int(candidates[0]) if len(candidates) else None)
+
+
+def _geometric_sum(rate, count):
+    """Σ e^(-rate j) for j = 0..count-1."""
+    return float(count) if rate == 0 else float(-np.expm1(-rate * count) / -np.expm1(-rate))
+
+
+def _pair_rate(first, second):
+    """Decay per bin of one exponential that gives both windows' mean energy densities.
+
+    For windows [a, a + n) the mean is e^(-k a) S(k, n) / n with S the geometric sum, so the
+    log ratio of the second to the first mean falls monotonically in k; k follows by bisection
+    and is held at zero when the later window is not quieter.
+    """
+    (a1, b1, e1), (a2, b2, e2) = first, second
+    n1, n2 = b1 - a1, b2 - a2
+    target = math.log((e2 / n2) / (e1 / n1))
+    if target >= 0:
+        return 0.
+
+    def ratio(rate):
+        return -rate * (a2 - a1) + math.log(_geometric_sum(rate, n2) / n2) - math.log(_geometric_sum(rate, n1) / n1)
+
+    low, high = 0., 1.
+    while ratio(high) > target and high < 1e3:
+        high *= 2
+    for _ in range(100):
+        middle = 0.5 * (low + high)
+        low, high = (middle, high) if ratio(middle) > target else (low, middle)
+    return 0.5 * (low + high)
+
+
+def tail(energy, squares, width, minimum):
+    """A band's direction-pooled series: keep it, or merge its sparse tail into reliable windows.
+
+    From the seam on, each window grows bin by bin until its effective arrivals
+    (Σ energy)² / Σ energy² reach `minimum`; a short last window joins the one before it. Each
+    window keeps its energy, spread along an exponential whose rate is the mean of the rates that
+    reproduce its mean density together with each neighbour's (window means are reliable, a single
+    window's internal shape is not). The windows reach the end of the series, so nothing is
+    extrapolated, and the decay may change from window to window (late decays need not be one
+    exponential; a fitted extrapolation also carries the truncation bias of its integral).
+    """
+    count = len(energy)
+    if not energy.any():
+        return energy.copy(), dict(status="zero")
+    hits = np.divide(energy ** 2, squares, out=np.zeros_like(energy), where=squares > 0)
+    reliable, onset, seam = _seam(energy, hits, minimum)
+    if seam is None:
         return energy.copy(), dict(status="measured")
-    seam = int(candidates[0])
-    observed = energy[onset:seam]
-    fit = fit_decay(times[onset:seam], observed, -5., -25.)
-    compensation = 0.
-    for _ in range(8 if fit is not None else 0):
-        # Truncation correction: the bins after the seam, continued along the current slope.
-        ratio = 10 ** (fit["slope"] * width / 10)
-        compensation_next = float(energy[seam - 1] * ratio / (1 - ratio))
-        refit = fit_decay(times[onset:seam], observed, -5., -25., compensation_next)
-        if refit is None:
-            break
-        fit, converged = refit, abs(compensation_next - compensation) <= 1e-9 * compensation_next
-        compensation = compensation_next
-        if converged:
-            break
-    if fit is None:
-        raise RayEnergyError(
-            f"晚场尾段在 {seam * width:.3f} s 变稀疏，之前的可靠观测不足以拟合 -5 至 -25 dB"
-            f"（需要至少 {FIT_POINTS} 个分箱）：提高 rays")
-    before = np.flatnonzero(reliable[onset:seam])[-SEAM_BINS:] + onset
-    slope = fit["slope"]
-    level = float(np.mean(energy[before] * 10 ** (slope * (times[seam] - times[before]) / 10)))
+    windows, start = [], seam
+    while start < count:
+        stop, total, square = start, 0., 0.
+        while stop < count:
+            total, square, stop = total + energy[stop], square + squares[stop], stop + 1
+            if square > 0 and total * total >= minimum * square:
+                break
+        windows.append([start, stop, total, square])
+        start = stop
+    if len(windows) > 1 and not (windows[-1][3] > 0 and windows[-1][2] ** 2 >= minimum * windows[-1][3]):
+        last = windows.pop()
+        windows[-1] = [windows[-1][0], last[1], windows[-1][2] + last[2], windows[-1][3] + last[3]]
     result = energy.copy()
-    result[seam:] = level * 10 ** (slope * (times[seam:] - times[seam]) / 10)
-    return result, dict(status="extrapolated", start_seconds=float(seam * width), slope_db_per_second=slope,
-                        fit_seconds=[float(times[onset + fit["first"]]), float(times[onset + fit["last"]])])
+    spans = [(first, stop, total) for first, stop, total, _ in windows]
+    for i, (first, stop, total) in enumerate(spans):
+        if not total > 0:
+            result[first:stop] = 0.
+            continue
+        rates = [_pair_rate(spans[j], spans[j + 1]) for j in (i - 1, i) if 0 <= j and j + 1 < len(spans)
+                 and spans[j][2] > 0 and spans[j + 1][2] > 0]
+        rate = float(np.mean(rates)) if rates else 0.
+        weights = np.exp(-rate * np.arange(stop - first, dtype=np.float64))
+        result[first:stop] = total * weights / weights.sum()
+    return result, dict(status="merged", start_seconds=float(seam * width), windows=len(windows),
+                        last_window_seconds=float((windows[-1][1] - windows[-1][0]) * width))
+
+
+def continue_direction(energy, hits, shape, width, minimum):
+    """One (direction, band) series: after its own seam it follows the band's finished pooled shape.
+
+    Per-direction fits on sparse data scatter widely and see only the early part of a decay that
+    need not be one exponential; the pooled band series is about one direction count more
+    reliable. The level at the seam comes from the direction's own last reliable bins.
+    """
+    if not energy.any():
+        return energy.copy(), dict(status="zero")
+    reliable, onset, seam = _seam(energy, hits, minimum)
+    if seam is None:
+        return energy.copy(), dict(status="measured")
+    before = np.flatnonzero(reliable[onset:seam])[-SEAM_BINS:] + onset
+    if not np.all(shape[before] > 0) or not shape[seam] > 0:
+        raise RayEnergyError("晚场的频带合并形状在方向尾段起点为零")
+    level = float(np.mean(energy[before] / shape[before]))
+    result = energy.copy()
+    result[seam:] = level * shape[seam:]
+    return result, dict(status="continued", start_seconds=float(seam * width), level_to_pooled=level)
 
 
 def synthesize(energy, bands, sample_rate, duration, width, rng):
@@ -527,16 +603,22 @@ def generate(late, room, bands, directions, tool_dir, jobs=1):
     if not sum(account["histogram"]) > 0:
         raise RayEnergyError("no reflected energy reached the late-field histogram")
     hits = histogram.effective_hits()
+    minimum = config["min_hits_per_bin"]
+    shapes, pooled_tails = np.zeros((BANDS, histogram.bins)), []
+    for b in range(BANDS):
+        shapes[b], info = tail(histogram.energy[:, b].sum(axis=0), histogram.pooled_squares[b], histogram.width,
+                               minimum)
+        pooled_tails.append(info)
     finished = np.zeros_like(histogram.energy)
-    extrapolation = [[None] * BANDS for _ in range(len(directions))]
+    continuation = [[None] * BANDS for _ in range(len(directions))]
     zero = 0
     for d in range(len(directions)):
         for b in range(BANDS):
-            finished[d, b], info = tail(histogram.energy[d, b], hits[d, b], histogram.width,
-                                        config["min_hits_per_bin"])
+            finished[d, b], info = continue_direction(histogram.energy[d, b], hits[d, b], shapes[b],
+                                                      histogram.width, minimum)
             zero += info["status"] == "zero"
-            extrapolation[d][b] = None if info["status"] != "extrapolated" else \
-                [info["start_seconds"], info["slope_db_per_second"]] + info["fit_seconds"]
+            continuation[d][b] = None if info["status"] != "continued" else \
+                [info["start_seconds"], info["level_to_pooled"]]
     noise = np.random.Generator(np.random.PCG64(np.random.SeedSequence(seed, spawn_key=(1,))))
     field = synthesize(finished, bands, int(room["sample_rate"]), config["duration_seconds"], histogram.width, noise)
     band_energy = finished.sum(axis=(0, 2))
@@ -550,8 +632,8 @@ def generate(late, room, bands, directions, tool_dir, jobs=1):
         late_t30_seconds=[d["t30"] for d in decays],
         direction_energy_fraction=[(finished[:, b].sum(axis=1) / band_energy[b]).tolist()
                                    if band_energy[b] > 0 else None for b in range(BANDS)],
-        extrapolation=dict(columns=["start_seconds", "slope_db_per_second", "fit_start_seconds", "fit_end_seconds"],
-                           by_direction_band=extrapolation),
+        pooled_tail=pooled_tails,
+        continuation=dict(columns=["start_seconds", "level_to_pooled"], by_direction_band=continuation),
         zero_series=zero, energy=account,
         decay_scope="Late-field component only: arrivals after the direct sound plus the predelay, "
                     "weighted by 1 - fade(u)^2; not a complete room RT.")
