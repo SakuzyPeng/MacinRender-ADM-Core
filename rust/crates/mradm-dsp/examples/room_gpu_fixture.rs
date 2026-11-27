@@ -88,6 +88,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     fs::create_dir(out)?;
     let quality = Quality::Realtime;
     let profile = Arc::new(assets::profile(Path::new(&args[1]))?);
+    if profile.surfaces.is_some() {
+        return Err("GPU fixture supports uniform-wall rooms only".into());
+    }
     let data = Arc::new(assets::hrir_at_rate(
         Path::new(&args[2]),
         profile.sample_rate,

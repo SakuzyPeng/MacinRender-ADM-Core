@@ -1,0 +1,438 @@
+{
+  "schema": "mradm.room-definition",
+  "version": 2,
+  "id": "treated-reference-v2-candidate",
+  "name": "Zoned reference listening room (audition candidate)",
+  "dimensions": [7.0, 6.0, 3.2],
+  "listener": [3.4, 3.0, 1.2],
+  "speed_of_sound": 344.02,
+  "reference_distance": 2.1,
+  "minimum_distance": 0.25,
+  "boundary_clearance": 0.15,
+  "reflection_order": 4,
+  "early_fade_seconds": [0.015, 0.025],
+  "late_predelay_seconds": 0.018,
+  "late_energy": 0.46449639418374566,
+  "surface_model": {
+    "materials": [
+      {
+        "id": "lining",
+        "absorption": [0.15, 0.12, 0.1, 0.09, 0.08, 0.08, 0.1, 0.1],
+        "scattering": [0.06, 0.06, 0.06, 0.1, 0.1, 0.1, 0.1, 0.1],
+        "law": "lambert",
+        "mounting": "Painted rigid wall with a backed lining",
+        "source": "Engineering baseline for the untreated wall area.",
+        "model_scope": "All eight bands and scattering are equivalent design estimates."
+      },
+      {
+        "id": "wood",
+        "absorption": [0.12, 0.09, 0.08, 0.07, 0.08, 0.09, 0.1, 0.1],
+        "scattering": [0.04, 0.04, 0.04, 0.08, 0.08, 0.08, 0.08, 0.08],
+        "law": "lambert",
+        "mounting": "Timber floor on subfloor",
+        "source": "Engineering baseline for exposed timber.",
+        "model_scope": "All eight bands and scattering are equivalent design estimates."
+      },
+      {
+        "id": "broadband",
+        "absorption": [0.46, 0.8, 0.93, 0.95, 0.94, 0.91, 0.89, 0.89],
+        "scattering": [0.1, 0.1, 0.1, 0.16, 0.16, 0.16, 0.16, 0.16],
+        "law": "lambert",
+        "mounting": "Broadband porous panels on a backed wall/plenum or ceiling cloud",
+        "source": "https://auralex.com/performance-data/",
+        "model_scope": "Model curve constrained by thick wedge/panel behaviour; plenum and scattering estimated."
+      },
+      {
+        "id": "lf-trap",
+        "absorption": [0.96, 0.92, 0.95, 0.98, 0.97, 0.96, 0.87, 0.87],
+        "scattering": [0.08, 0.08, 0.08, 0.14, 0.14, 0.14, 0.14, 0.14],
+        "law": "lambert",
+        "mounting": "Deep porous absorber on a rigid backing; recessed absorbent pockets under open grilles are modelled by the same equivalent curve",
+        "source": "https://auralex.com/content/performance/deep6amount.pdf",
+        "model_scope": "Type A data constrain the mid and low octave values. Grilles, edge effects, scattering and the top octave are modelled."
+      },
+      {
+        "id": "floor-treatment",
+        "absorption": [0.1, 0.18, 0.33, 0.61, 0.71, 0.76, 0.74, 0.74],
+        "scattering": [0.05, 0.05, 0.05, 0.12, 0.12, 0.12, 0.12, 0.12],
+        "law": "lambert",
+        "mounting": "Pile on underlay around the recessed central floor treatment",
+        "source": "https://doi.org/10.1080/00405008408658478",
+        "model_scope": "Equivalent curve follows the reported carpet/underlay trend. Values and scattering are estimates."
+      },
+      {
+        "id": "rear-fan",
+        "absorption": [0.22, 0.25, 0.21, 0.16, 0.13, 0.15, 0.15, 0.15],
+        "scattering": [0.12, 0.12, 0.12, 0.75, 0.75, 0.75, 0.75, 0.75],
+        "law": "fan",
+        "mounting": "Wall-mounted one-dimensional diffuser with horizontal spread axis",
+        "source": "https://www.rpgacoustic.com/wp-content/uploads/2022/07/QRD-734-Data-Sheet.pdf",
+        "model_scope": "Directional model and absorption/scattering trends are constrained by the data sheet. The ideal fan and extrapolated bands are model assumptions; diffusion uniformity is not a scattering probability."
+      }
+    ],
+    "faces": [
+      {
+        "material": "lining",
+        "regions": [
+          {
+            "material": "rear-fan",
+            "polygon": [
+              [1.12, 2.02],
+              [4.88, 2.02],
+              [4.88, 3.08],
+              [1.12, 3.08]
+            ],
+            "angle_deg": 0
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.1, 0.3],
+              [4.9, 0.3],
+              [4.9, 1.96],
+              [1.1, 1.96]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [0.05, 0.15],
+              [1.1, 0.15],
+              [1.1, 3.05],
+              [0.05, 3.05]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [4.9, 0.15],
+              [5.95, 0.15],
+              [5.95, 3.05],
+              [4.9, 3.05]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.9, 0.08],
+              [4.1, 0.08],
+              [4.1, 0.25],
+              [1.9, 0.25]
+            ],
+            "role": "bass-trap"
+          }
+        ]
+      },
+      {
+        "material": "lining",
+        "regions": [
+          {
+            "material": "broadband",
+            "polygon": [
+              [0.65, 0.35],
+              [5.35, 0.35],
+              [5.35, 2.7],
+              [0.65, 2.7]
+            ]
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.65, 0.45],
+              [4.35, 0.45],
+              [4.35, 1.97],
+              [1.65, 1.97]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.9, 0.08],
+              [4.1, 0.08],
+              [4.1, 0.25],
+              [1.9, 0.25]
+            ],
+            "role": "bass-trap"
+          }
+        ]
+      },
+      {
+        "material": "lining",
+        "regions": [
+          {
+            "material": "broadband",
+            "polygon": [
+              [1.75, 0.4],
+              [5.2, 0.4],
+              [5.2, 2.5],
+              [1.75, 2.5]
+            ]
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [0.06, 0.18],
+              [1.36, 0.18],
+              [1.36, 2.88],
+              [0.06, 2.88]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.78, 0.3],
+              [5.25, 0.3],
+              [5.25, 1.88],
+              [1.78, 1.88]
+            ],
+            "role": "side-reflection"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [2.38, 0.16],
+              [4.43, 0.16],
+              [4.43, 0.36],
+              [2.38, 0.36]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "broadband",
+            "polygon": [
+              [2.38, 2.61],
+              [4.43, 2.61],
+              [4.43, 2.83],
+              [2.38, 2.83]
+            ]
+          }
+        ]
+      },
+      {
+        "material": "lining",
+        "regions": [
+          {
+            "material": "broadband",
+            "polygon": [
+              [1.75, 0.4],
+              [5.2, 0.4],
+              [5.2, 2.5],
+              [1.75, 2.5]
+            ]
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [0.06, 0.18],
+              [1.36, 0.18],
+              [1.36, 2.88],
+              [0.06, 2.88]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.78, 0.3],
+              [5.25, 0.3],
+              [5.25, 1.88],
+              [1.78, 1.88]
+            ],
+            "role": "side-reflection"
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [2.38, 0.16],
+              [4.43, 0.16],
+              [4.43, 0.36],
+              [2.38, 0.36]
+            ],
+            "role": "bass-trap"
+          },
+          {
+            "material": "broadband",
+            "polygon": [
+              [2.38, 2.61],
+              [4.43, 2.61],
+              [4.43, 2.83],
+              [2.38, 2.83]
+            ]
+          }
+        ]
+      },
+      {
+        "material": "wood",
+        "regions": [
+          {
+            "material": "floor-treatment",
+            "polygon": [
+              [1.05, 1.5],
+              [1.45, 1.08],
+              [5.5, 1.08],
+              [5.9, 1.5],
+              [5.9, 4.5],
+              [5.5, 4.92],
+              [1.45, 4.92],
+              [1.05, 4.5]
+            ]
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.6, 1.84],
+              [2.2, 1.26],
+              [4.6, 1.26],
+              [5.2, 1.84],
+              [5.2, 4.16],
+              [4.6, 4.74],
+              [2.2, 4.74],
+              [1.6, 4.16]
+            ]
+          }
+        ]
+      },
+      {
+        "material": "lining",
+        "regions": [
+          {
+            "material": "broadband",
+            "polygon": [
+              [1.28, 1.08],
+              [5.52, 1.08],
+              [5.52, 4.92],
+              [1.28, 4.92]
+            ]
+          },
+          {
+            "material": "lf-trap",
+            "polygon": [
+              [1.45, 1.2],
+              [5.3, 1.2],
+              [5.3, 4.8],
+              [1.45, 4.8]
+            ]
+          }
+        ]
+      }
+    ],
+    "band_centres_hz": [125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+  },
+  "common_eq": [
+    [0.0, 3.24926],
+    [35.0, 2.58948],
+    [36.9643, 1.75923],
+    [39.0389, 1.30895],
+    [41.23, 1.13054],
+    [43.544, 1.19109],
+    [45.9879, 1.31955],
+    [48.5689, 1.29038],
+    [51.2948, 0.64665],
+    [54.1737, -0.74649],
+    [57.2141, -0.66156],
+    [60.4252, 0.71047],
+    [63.8166, -0.69381],
+    [67.3982, -0.7065],
+    [71.1809, 0.33983],
+    [75.1759, 1.48939],
+    [79.3951, 3.47957],
+    [83.851, 2.91271],
+    [88.5571, 1.90817],
+    [93.5273, -0.11726],
+    [98.7765, -0.0595],
+    [104.3202, 0.87208],
+    [110.1751, 1.46602],
+    [116.3586, 1.18155],
+    [122.8892, 0.78258],
+    [129.7863, 2.05366],
+    [137.0704, 2.06228],
+    [144.7634, 1.89637],
+    [152.8881, 1.94647],
+    [161.4689, 1.44807],
+    [170.5312, 0.50134],
+    [180.1021, 3.56235],
+    [190.2102, 3.47402],
+    [200.8857, 1.32645],
+    [212.1602, 0.11202],
+    [224.0676, -3.39497],
+    [236.6432, 2.56176],
+    [249.9246, 0.93993],
+    [263.9515, 2.69961],
+    [278.7655, 7.51332],
+    [294.4111, -5.81138],
+    [310.9347, 4.24676],
+    [328.3857, 7.16242],
+    [346.8161, 2.55397],
+    [366.2809, 0.40778],
+    [386.8381, -1.25992],
+    [408.5491, 1.76714],
+    [431.4787, -7.77841],
+    [455.6951, 1.86188],
+    [481.2706, 7.39402],
+    [508.2816, 4.92701],
+    [536.8086, 0.54169],
+    [566.9365, 2.56971],
+    [598.7555, -1.19689],
+    [632.3602, -0.89356],
+    [667.8509, -1.11209],
+    [705.3336, -4.15759],
+    [744.9199, -6.15445],
+    [786.728, -5.05621],
+    [830.8826, 0.59927],
+    [877.5153, 3.96942],
+    [926.7652, 4.35023],
+    [978.7792, 1.12396],
+    [1033.7125, -1.6554],
+    [1091.7289, -2.88683],
+    [1153.0014, -4.55229],
+    [1217.7127, -5.49275],
+    [1286.056, -1.47284],
+    [1358.2349, 0.38529],
+    [1434.4649, 6.57722],
+    [1514.9732, 2.77643],
+    [1600.0, 1.43646],
+    [1742.4367, 2.24611],
+    [1897.5536, 1.03769],
+    [2066.4795, -0.90204],
+    [2250.4436, -1.73148],
+    [2450.7847, -0.8884],
+    [2668.9609, 1.69117],
+    [2906.5597, 1.50477],
+    [3165.3102, 0.31072],
+    [3447.0955, 0.05988],
+    [3753.9662, 0.03689],
+    [4088.1553, -0.22303],
+    [4452.095, 0.57061],
+    [4848.4337, 0.94262],
+    [5280.0557, 0.97835],
+    [5750.1019, 0.83671],
+    [6261.993, 0.58724],
+    [6819.4541, 0.26647],
+    [7426.5421, -0.01866],
+    [8087.6749, -0.04406],
+    [8807.6637, 0.22746],
+    [9591.748, 0.58058],
+    [10445.6338, 0.74778],
+    [11375.5351, 0.69727],
+    [12388.2189, 0.53632],
+    [13491.0549, 0.34502],
+    [14692.0685, 0.15658],
+    [16000.0, 0.03729],
+    [20000.0, -0.01445],
+    [24000.0, -0.03511]
+  ],
+  "late": {
+    "generator": "ray-energy-v1",
+    "seed": 3,
+    "rays": 100000,
+    "duration_seconds": 0.8,
+    "receiver_radius": 0.36,
+    "histogram_seconds": 0.004,
+    "min_hits_per_bin": 32
+  }
+}

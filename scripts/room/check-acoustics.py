@@ -38,6 +38,8 @@ def fit_decay(response, low=-5, high=-25):
     if slope >= 0:
         return None
     variance = np.sum((values - values.mean()) ** 2)
+    if variance <= 0:
+        return None
     r2 = 1 - np.sum((values - (slope * t + intercept)) ** 2) / variance
     return {'rt60_seconds': float(-60 / slope), 'fit_r2': float(r2), 'fit_samples': int(use.sum()),
             'fit_interval_seconds': [float(t[0]), float(t[-1])]}
@@ -76,25 +78,37 @@ def measure(response, filters, filter_decays, lower, upper):
         # Keep T30 visible as a supplementary decay-shape diagnostic.
         passed = (t20 is not None and (lower[i] is None or t20['rt60_seconds'] >= lower[i])
                   and t20['rt60_seconds'] <= upper[i])
-        rows.append({'hz': hz, 'exact_centre_hz': float(RT_CENTERS[i]), 't20': t20, 't30': t30, 'lower_seconds': lower[i],
+        rows.append({'hz': hz, 'exact_centre_hz': float(RT_CENTERS[i]), 'edt': fit_decay(filtered, low=0, high=-10), 't20': t20, 't30': t30, 'lower_seconds': lower[i],
                      'upper_seconds': float(upper[i]), 'filter_t20_seconds': filter_decays[i],
                      'filter_shorter_than_measured': bool(t20 is not None and filter_decays[i] < t20['rt60_seconds']),
                      'passed': bool(passed and t20 is not None and filter_decays[i] < t20['rt60_seconds'])})
     return rows
 
 
+def asset(room, root, name):
+    entry = room['assets'][name]
+    filename = entry['file']
+    if Path(filename).name != filename or filename in ('.', '..') or ':' in filename:
+        raise ValueError('Invalid acoustic component name')
+    payload = (root / filename).read_bytes()
+    if len(payload) != entry['bytes'] or hashlib.sha256(payload).hexdigest() != entry['sha256']:
+        raise ValueError('Acoustic component hash mismatch')
+    return np.frombuffer(payload, dtype=entry['dtype']).reshape(entry['shape'])
+
+
+def matched_decay(response, bands, offset):
+    """Apply the template's eight full FIRs to either the authored or the measured late component."""
+    rows = []
+    for band in bands:
+        x = signal.fftconvolve(response, band, mode='full')[offset:]
+        rows.append({key: fit_decay(x, lo, hi) for key, lo, hi in
+                     [('edt', 0, -10), ('t20', -5, -25), ('t30', -5, -35)]})
+    return rows
+
+
 def early_metrics(metadata, room, root):
-    def asset(name):
-        entry = room['assets'][name]
-        filename = entry['file']
-        if Path(filename).name != filename or filename in ('.', '..') or ':' in filename:
-            raise ValueError('Invalid acoustic component name')
-        payload = (root / filename).read_bytes()
-        if len(payload) != entry['bytes'] or hashlib.sha256(payload).hexdigest() != entry['sha256']:
-            raise ValueError('Acoustic component hash mismatch')
-        return np.frombuffer(payload, dtype=entry['dtype']).reshape(entry['shape'])
-    bands = asset('bands')
-    phases = asset('propagation_phases')
+    bands = asset(room, root, 'bands')
+    phases = asset(room, root, 'propagation_phases')
     frequencies = np.fft.rfftfreq(8192, 1 / RATE)
     selected = (frequencies >= 1000) & (frequencies <= 8000)
     def transfer(row):
@@ -132,7 +146,10 @@ def main():
     parser.add_argument('--room', type=Path, required=True)
     parser.add_argument('--positions', type=Path, default=Path(__file__).with_name('reference-positions.json'))
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--capture', type=Path, help='new private directory for the measured three-channel float32 responses')
     args = parser.parse_args()
+    if args.capture:
+        args.capture.mkdir(parents=True, exist_ok=False)
     room = json.loads(args.room.read_text(encoding='utf-8'))
     RATE = int(room["sample_rate"])
     if RATE not in (48000, 96000):
@@ -147,12 +164,21 @@ def main():
     unit[0] = 1.
     floor = [fit_decay(signal.sosfilt(sos, unit))['rt60_seconds'] for sos in filters]
     results = []
+    ray = room.get('generation', {}).get('ray_energy')
+    late_reference = None
+    if ray:
+        bands = asset(room, args.room.parent, 'bands')
+        world = asset(room, args.room.parent, 'late').sum(axis=0, dtype=np.float64)
+        equalized = signal.fftconvolve(world, asset(room, args.room.parent, 'eq'))
+        late_reference = matched_decay(equalized, bands, room['band_filter_offset'])
     with tempfile.TemporaryDirectory(prefix='mradm-omni-') as tmp:
         for point in definition['positions']:
             output = Path(tmp) / 'response.f32'
             metadata = json.loads(subprocess.check_output([str(args.probe.resolve()), str(args.room.resolve()),
                                   str(point['azimuth']), str(point['elevation']), str(point['distance']), str(output)], text=True, encoding='utf-8'))
             raw = output.read_bytes()
+            if args.capture:
+                (args.capture / f'{len(results):02}.f32').write_bytes(raw)
             channels = np.frombuffer(raw, dtype='<f4').reshape(-1, 3).astype(np.float64)
             output.unlink()
             if not np.isfinite(channels).all():
@@ -198,6 +224,12 @@ def main():
                     'maximum_early_reflection_db': early, 'early_passed': early <= -10, 'early_analysis': early_report,
                     'uncalibrated_frequency_levels_db': levels.tolist(),
                     'frequency_levels_db': (levels + 20 * np.log10(gain)).tolist()}
+            if ray:
+                delay = ((metadata['distance_m'] / room['speed_of_sound'] + room['late_predelay_seconds']) * RATE
+                         + room['alignment_guard_samples'] + room['band_filter_offset']
+                         + metadata['propagation_guard_frames'] + metadata['receiver_guard_frames'])
+                rows['late_origin_frames'] = float(delay)
+                rows['late_octaves'] = matched_decay(channels[int(round(delay)):, 2], bands, room['band_filter_offset'])
             results.append(rows)
             print(f"{point['label']}: RT={rows['rt_passed']}, early={early:.3f} dB", flush=True)
     # One common reference level for the entire fixed measurement set. The
@@ -230,6 +262,17 @@ def main():
               'scope': 'Static ideal-omni model at the listed listener/sources and source gains; no physical room, background-noise, headphone or complete standards certification.',
               'references': ['https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.1116-3-201502-I!!PDF-E.pdf',
                              'https://tech.ebu.ch/docs/tech/tech3276.pdf']}
+    if ray:
+        report['late_comparison'] = dict(authored_octaves=late_reference,
+            ray_envelope_seconds={k: ray['late_' + k + '_seconds'] for k in ('edt', 't20', 't30')},
+            method='Sum the world FIRs for the omni receiver, apply the common EQ, then use the same eight template filters and Schroeder intervals on that reference and the aligned native late channel.')
+        reference_errors = {}
+        for method in ('edt', 't20', 't30'):
+            deltas = [abs(actual[method]['rt60_seconds'] - expected[method]['rt60_seconds'])
+                      for point in results for actual, expected in zip(point['late_octaves'], late_reference)
+                      if actual[method] is not None and expected[method] is not None]
+            reference_errors[method] = dict(valid_pairs=len(deltas), max_seconds=max(deltas, default=None))
+        report['late_comparison']['native_vs_authored'] = reference_errors
     args.output.write_text(json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + '\n', encoding='utf-8')
     print(json.dumps({'passed': report['passed'], 'rt_failures': [r['label'] for r in results if not r['rt_passed']],
                       'frequency_failures': [r['label'] for r in results if not r['frequency_passed']],

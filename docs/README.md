@@ -25,6 +25,7 @@
 - [ROOM 准备迁移审查与对照](architecture/RUST_ROOM_PREPARATION_REVIEW.md) — 4.6 D 浮点环境修复与 macOS / Windows Release 对照
 - [ROOM 运行时迁移审查与对照](architecture/RUST_ROOM_RUNTIME_REVIEW.md) — 4.6 E 并发与回收队列修复、macOS / Windows Release 对照
 - [房间晚场生成器 ray-energy-v1](architecture/ROOM_RAY_ENERGY_LATE_FIELD.md)（A 批已实施）
+- [分区参考听音室与双采样率试听候选](architecture/ROOM_TREATED_REFERENCE.md)
 - [ADM 特性覆盖审计](architecture/ADM_FEATURE_COVERAGE.md)
 - [adm_apple 后端实现说明（AUSpatialMixer）](architecture/ADM_APPLE_BACKEND.md)
 - [adm_windows：系统空间音频监听 sink（ISpatialAudioClient）](architecture/ADM_WINDOWS_SYSTEM_SPATIAL.md)

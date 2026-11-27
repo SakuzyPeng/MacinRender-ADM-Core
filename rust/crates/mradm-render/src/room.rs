@@ -280,6 +280,7 @@ pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Pre
         spread: r.spread != Spread::None,
     };
     let mut screen_warned = false;
+    let mut candidates = Vec::new();
     for (oi, object) in s.objects.iter().enumerate() {
         let object_id = s.strings[object.id as usize].as_bytes();
         let mute = scene.overlay.objects[oi].mute;
@@ -330,6 +331,7 @@ pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Pre
             }
             let role = description.role;
             p.descriptions.push(description);
+            let mut candidate = crate::room_speakers::Candidate::default();
             p.channels.push(track.channel as u16);
             p.objects.push(object_id.to_vec());
             p.labels.push(
@@ -398,6 +400,20 @@ pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Pre
             for (i, &b) in direct_blocks.iter().enumerate() {
                 let block = &direct[b];
                 let lfe = is_lfe(b);
+                let label = labels(scene, block.labels)
+                    .first()
+                    .map_or_else(Vec::new, |s| routing::direct_label(s));
+                if i == 0 {
+                    candidate.label = if lfe && label.is_empty() {
+                        b"LFE1".to_vec()
+                    } else {
+                        label
+                    };
+                } else if label != candidate.label {
+                    // A track reassigned during the programme is not a fixed speaker feed.
+                    candidate.reassigned = true;
+                }
+
                 if (role == 2) != lfe {
                     return Err(unsupported("同一房间声源不能在全频与 LFE 角色间切换"));
                 }
@@ -437,6 +453,16 @@ pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Pre
                         point = block.position;
                     }
                     state.position = position(point, object, polar)?;
+                    if i == 0 {
+                        candidate.position = state.position;
+                        candidate.inferred =
+                            !has_position && !user_override && object.offset_present == 0;
+                    } else if !mradm_dsp::room::calibration::same_position(
+                        state.position,
+                        candidate.position,
+                    ) {
+                        candidate.reassigned = true;
+                    }
                 }
                 let next = direct_blocks
                     .get(i + 1)
@@ -444,8 +470,10 @@ pub fn prepare(r: &Request, log: &mut Log, polar: PolarConversion) -> Result<Pre
                 let end = block.end.min(object.end).min(next).min(p.frames);
                 add_block(&mut p, source, block.start, end, 0, &state);
             }
+            candidates.push(candidate);
         }
     }
+    crate::room_speakers::assign(&mut p.descriptions, &candidates);
     p.events
         .sort_by_key(|e| (e.sample, e.priority, e.command.element));
     log(Level::Info, PREPARED_INFO.as_bytes().to_vec());

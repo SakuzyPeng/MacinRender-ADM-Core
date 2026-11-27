@@ -29,6 +29,11 @@ fn bind_impl(
     library: Option<&Path>,
     complete_v2: bool,
 ) -> Result<(Arc<PreparedSet>, serde_json::Value)> {
+    if prepared.room.profile.surfaces.is_some() {
+        return Err(Error::Unsupported(
+            "hybrid-shoebox-v2 needs CPU room rendering",
+        ));
+    }
     #[cfg(windows)]
     {
         use mradm_dsp::room::{

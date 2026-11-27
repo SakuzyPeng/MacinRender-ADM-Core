@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a finite hybrid-shoebox-v1 package from a room definition.
+"""Generate a finite hybrid-shoebox-v1 or zoned hybrid-shoebox-v2 package from a room definition.
 
 The template package provides verified band synthesis, propagation kernels, EQ
 and world directions. The new seeded octave-decay or ray-traced (ray-energy-v1,
@@ -9,11 +9,13 @@ reference room's validation claims.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 import time
 
 import numpy as np
@@ -101,6 +103,46 @@ def ray_energy_module():
     return ray_energy, hashlib.sha256(Path(ray_energy.__file__).read_bytes()).hexdigest()
 
 
+def common_eq(points, rate):
+    """Shared physical-frequency response in dB; export a causal minimum-phase FIR."""
+    if not points:
+        return np.ones(1, dtype="<f8")
+    curve = np.asarray(points, dtype=np.float64)
+    if (curve.ndim != 2 or curve.shape[1] != 2 or len(curve) < 2 or not np.isfinite(curve).all()
+            or curve[0, 0] != 0 or np.any(np.diff(curve[:, 0]) <= 0) or np.any(np.abs(curve[:, 1]) > 18)):
+        raise ValueError("common_eq requires ordered frequency/gain pairs starting at 0 Hz within +/-18 dB")
+    length = 1 << (2 * rate - 1).bit_length()
+    freqs = np.fft.rfftfreq(length, 1 / rate)
+    log_mag = np.interp(freqs, curve[:, 0], curve[:, 1]) * (np.log(10.) / 20.)
+    cepstrum = np.fft.irfft(log_mag)
+    cepstrum[1:length // 2] *= 2
+    cepstrum[length // 2 + 1:] = 0
+    impulse = np.fft.irfft(np.exp(np.fft.rfft(cepstrum)))[:rate // 3 + 1].copy()
+    fade = rate // 200
+    impulse[-fade:] *= np.linspace(1., 0., fade)
+    return impulse.astype("<f8")
+
+
+@contextmanager
+def package_directory(target):
+    """Reserve a new directory and publish its manifest after all verified files are in place."""
+    target.mkdir(parents=True, exist_ok=False)
+    installed = []
+    try:
+        with tempfile.TemporaryDirectory(dir=target) as temp:
+            stage = Path(temp)
+            yield stage
+            for path in sorted(stage.iterdir(), key=lambda p: p.name == "room.json"):
+                destination = target / path.name
+                path.rename(destination)
+                installed.append(destination)
+    except BaseException:
+        for path in installed:
+            path.unlink(missing_ok=True)
+        target.rmdir()
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--template-package", type=Path, required=True, help="existing room.json")
@@ -120,17 +162,27 @@ def main():
     if ((base.get("schema"), base.get("version"), base.get("kind")) != (
             "mradm.room", 1, "hybrid-shoebox-v1") or base.get("sample_rate") not in (48000, 96000)):
         raise ValueError("unsupported template package")
-    if definition.get("schema") != "mradm.room-definition" or definition.get("version") != 1:
+    if definition.get("schema") != "mradm.room-definition" or definition.get("version") not in (1, 2):
         raise ValueError("unsupported room definition")
     fields = ("id", "name", "dimensions", "listener", "speed_of_sound", "reference_distance", "minimum_distance",
               "boundary_clearance", "reflection_order", "absorption", "early_fade_seconds", "late_predelay_seconds",
               "late_energy")
+    zoned = definition["version"] == 2
+    if zoned:
+        if definition["late"]["generator"] != "ray-energy-v1" or "absorption" in definition:
+            raise ValueError("v2 rooms use one surface_model and ray-energy-v1")
+        base["kind"] = "hybrid-shoebox-v2"
+        base["surface_model"] = definition["surface_model"]
+        del base["absorption"]
     for key in fields:
-        base[key] = definition[key]
+        if key != "absorption" or not zoned:
+            base[key] = definition[key]
+    if zoned:
+        base["id"] += "-" + str(base["sample_rate"])
     dimensions = np.asarray(base["dimensions"], dtype=np.float64)
     listener = np.asarray(base["listener"], dtype=np.float64)
-    absorption = np.asarray(base["absorption"], dtype=np.float64)
-    if dimensions.shape != (3,) or listener.shape != (3,) or absorption.shape != (6, 8):
+    absorption = np.asarray(base.get("absorption", []), dtype=np.float64)
+    if dimensions.shape != (3,) or listener.shape != (3,) or (not zoned and absorption.shape != (6, 8)):
         raise ValueError("geometry or six-wall/eight-band absorption shape")
     if (not np.isfinite(dimensions).all() or not np.isfinite(listener).all() or
             not np.isfinite(absorption).all() or np.any(dimensions < 1) or np.any(dimensions > 50) or
@@ -162,38 +214,51 @@ def main():
     if not np.isfinite(encoded).all():
         raise ValueError("late field is outside finite float32 range")
     payload = encoded.tobytes()
-    args.output.mkdir(parents=True, exist_ok=False)
-    for name, entry in base["assets"].items():
-        if name != "late":
-            shutil.copyfile(source / entry["file"], args.output / entry["file"])
-    (args.output / "late.f32").write_bytes(payload)
-    base["assets"]["late"] = dict(file="late.f32", dtype="<f4", shape=list(field.shape), bytes=len(payload),
-                                    sha256=hashlib.sha256(payload).hexdigest())
-    base["generator"] = "mradm-generate-room-v1"
-    base["generation"] = dict(template_manifest_sha256=hashlib.sha256(args.template_package.read_bytes()).hexdigest(),
-                               tool_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), definition_sha256=hashlib.sha256(definition_bytes).hexdigest(),
-                               numpy=np.__version__, scipy=scipy.__version__, late=late,
-                               orthogonal_energy_relative_error_before_tilt=mix_error)
-    if ray_summary is not None:
-        base["generation"]["ray_energy_tool_sha256"] = ray_tool
-        base["generation"]["ray_energy"] = ray_summary
-    base["validation_scope"] = "New preset. Resource integrity only; requires independent acoustic validation."
-    if args.include_hrir:
-        hrir_name = base["default_hrir"]
-        if not hrir_name or hrir_name in (".", "..") or any(c in hrir_name for c in "/\\:\0"):
-            raise ValueError("default HRIR manifest must be a flat relative name")
-        hrir = json.loads((source / hrir_name).read_text(encoding="utf-8"))
-        for entry in hrir["assets"].values():
-            read_asset(source, entry)
-            shutil.copyfile(source / entry["file"], args.output / entry["file"])
-        shutil.copyfile(source / hrir_name, args.output / hrir_name)
-    (args.output / "room.json").write_text(json.dumps(base, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-    (args.output / "definition.json").write_bytes(definition_bytes)
-    if ray_report is not None:
-        # Per-run facts stay out of room.json, whose bytes are the runtime room identity.
-        ray_report.update(seconds=time.perf_counter() - started, numpy=np.__version__, scipy=scipy.__version__)
-        (args.output / "generation-report.json").write_text(
-            json.dumps(ray_report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    eq = common_eq(definition.get("common_eq", []), base["sample_rate"]) if zoned else None
+    with package_directory(args.output) as output:
+        for name, entry in base["assets"].items():
+            if name != "late" and (not zoned or name != "eq"):
+                shutil.copyfile(source / entry["file"], output / entry["file"])
+        if zoned:
+            eq_bytes = eq.tobytes()
+            (output / "eq.f64").write_bytes(eq_bytes)
+            base["assets"]["eq"] = dict(file="eq.f64", dtype="<f8", shape=[len(eq)], bytes=len(eq_bytes),
+                                        sha256=hashlib.sha256(eq_bytes).hexdigest())
+        (output / "late.f32").write_bytes(payload)
+        base["assets"]["late"] = dict(file="late.f32", dtype="<f4", shape=list(field.shape), bytes=len(payload),
+                                        sha256=hashlib.sha256(payload).hexdigest())
+        base["generator"] = "mradm-generate-room-v1"
+        base["generation"] = dict(template_manifest_sha256=hashlib.sha256(args.template_package.read_bytes()).hexdigest(),
+                                   tool_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), definition_sha256=hashlib.sha256(definition_bytes).hexdigest(),
+                                   numpy=np.__version__, scipy=scipy.__version__, late=late,
+                                   orthogonal_energy_relative_error_before_tilt=mix_error)
+        if zoned:
+            base["generation"]["surface_tool_sha256"] = hashlib.sha256(
+                Path(__file__).with_name("room_surfaces.py").read_bytes()).hexdigest()
+        if ray_summary is not None:
+            base["generation"]["ray_energy_tool_sha256"] = ray_tool
+            base["generation"]["ray_energy"] = ray_summary
+        base["validation_scope"] = "New preset. Resource integrity only; requires independent acoustic validation."
+        if args.include_hrir:
+            hrir_name = base["default_hrir"]
+            if not hrir_name or hrir_name in (".", "..") or any(c in hrir_name for c in "/\\:\0"):
+                raise ValueError("default HRIR manifest must be a flat relative name")
+            hrir = json.loads((source / hrir_name).read_text(encoding="utf-8"))
+            for entry in hrir["assets"].values():
+                read_asset(source, entry)
+                shutil.copyfile(source / entry["file"], output / entry["file"])
+            shutil.copyfile(source / hrir_name, output / hrir_name)
+        (output / "room.json").write_text(json.dumps(base, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        (output / "definition.json").write_bytes(definition_bytes)
+        if ray_report is not None:
+            # Per-run facts stay out of room.json, whose bytes are the runtime room identity.
+            ray_report.update(seconds=time.perf_counter() - started, numpy=np.__version__, scipy=scipy.__version__)
+            (output / "generation-report.json").write_text(
+                json.dumps(ray_report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        if zoned:
+            files = sorted(p for p in output.iterdir() if p.name != "generation-report.json")
+            checksums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in files)
+            (output / "SHA256SUMS").write_bytes(checksums.encode("utf-8"))
     print(json.dumps(dict(room=str(args.output / "room.json"), hrir_included=args.include_hrir,
                          bytes=sum(p.stat().st_size for p in args.output.iterdir()))))
 

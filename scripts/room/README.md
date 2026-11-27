@@ -18,6 +18,7 @@
   各方向在同一时间窗内共享频带能量。若整个尾段的有效命中数不足，且余量超过该频带总能量的
   百万分之一，生成器会报告余量和有效命中数，可增加 `late.rays` 或加宽 `late.histogram_seconds`。
   自测为 `tests/unit/room_ray_energy_test.py`（ctest `mr_adm_room_ray_energy_tests`）。
+- [分区参考听音室](../../docs/architecture/ROOM_TREATED_REFERENCE.md)使用版本 2 制作定义。早反射和射线晚场共用墙面多边形、材料与安装方向，48/96 kHz 各从本采样率模板生成。
 - `mradm room-check room.json --hrir /path/to/hrir.json` 检查版本、形状、有限值、哈希、滤波支持
   并准备 FFT，输出资源身份、尾长和缓冲延迟。缺省 `--hrir` 读取包内默认绑定。
 - `validate-reference.py` 调用 **Release** `room_impulse`，在验证端显式恢复参考测量的距离
@@ -173,8 +174,7 @@ build/release/mradm room-check /path/room.json --hrir /path/new-hrir/hrir.json
 Python 回归：`python3 -B tests/unit/room_hrir_prepare_test.py build/release/mr_adm_room_hrir_check`。
 CMake 可用 `MR_ADM_ROOM_PREP_PYTHON` 指定已有环境，避免另外创建依赖缓存。
 
-新增算法类型需要新的 `kind` 及对应 Rust 实现；不要只修改版本字符串伪装兼容。当前仅
-接受 `hybrid-shoebox-v1` 和 `delay-aligned-v1`。新算法必须实现不可变准备、会话处理、
+新增算法类型需要新的 `kind` 及对应 Rust 实现；不要只修改版本字符串伪装兼容。房间加载支持 `hybrid-shoebox-v1` 与 CPU 分区房间 `hybrid-shoebox-v2`，HRIR 使用 `delay-aligned-v1`。新算法必须实现不可变准备、会话处理、
 确定尾长、reset 与双实例切换契约，并提供各平台相同资源/事件的逐位回归。
 
 性能探针 `room_bench` 新增 `--hrir SOFA_OR_MANIFEST`，支持原生 SOFA、预处理包和距离集合。
@@ -384,3 +384,12 @@ python scripts/room/benchmark-windows.py --binary CANDIDATE.exe `
 正负 1 位于保留边界留距后的墙面。显式正数保留固定米数比例。C ABI 的
 `adm_room_config_t.metres_per_unit=0` 选择自动模式。
 见 [映射语义与验证](../../docs/architecture/ROOM_COORDINATE_MAPPING.md)。
+
+### 将逐箱测量打入原生房间包
+
+```sh
+python3 scripts/room/package-speaker-calibration.py --room /path/original/room.json \
+  --profiles /path/measured-profiles --mradm build/release/mradm --output /path/calibrated-room
+```
+
+输入为对应采样率的三份 `mradm.offline-speaker-calibration` 配置和实测 LFE FIR。将生成的 `room.json` 直接传给 ROOM 或选择为监听房间。完整音箱布局在引擎内施加一次校准；将已做过逐箱校准的 PCM 复送时选用原始房间包。[原生校准的几何、时序和 FIR](../../docs/architecture/ROOM_TREATED_REFERENCE.md#固定虚拟音箱校准)

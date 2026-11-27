@@ -15,6 +15,7 @@ pub struct RoomDescription {
     pub position: [f32; 3],
     pub padding: u32,
     pub screens: super::screen::RoomScreens,
+    pub speaker: Option<super::calibration::Speaker>,
 }
 impl RoomDescription {
     pub fn same_source(&self, other: &Self) -> bool {

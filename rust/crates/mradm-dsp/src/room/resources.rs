@@ -32,13 +32,26 @@ pub(crate) fn hash_complex(values: &[crate::Complex32]) -> String {
 }
 
 pub fn manifest(bytes: &[u8], schema: &str, kind: &str) -> Result<Value> {
+    manifest_kinds(bytes, schema, &[kind])
+}
+
+fn manifest_kinds(bytes: &[u8], schema: &str, kinds: &[&str]) -> Result<Value> {
     if bytes.len() > 1024 * 1024 {
         return Err(invalid());
     }
     let value: Value = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    // A calibrated room requires a reader which applies the electrical transfer.
+    // Version-one readers must reject it instead of silently playing uncalibrated audio.
+    let version = if schema == "mradm.room" && value.get("speaker_calibration").is_some() {
+        2
+    } else {
+        1
+    };
     if value["schema"] != schema
-        || value["version"] != 1
-        || value["kind"] != kind
+        || value["version"] != version
+        || !value["kind"]
+            .as_str()
+            .is_some_and(|kind| kinds.contains(&kind))
         || !matches!(value["sample_rate"].as_u64(), Some(48000 | 96000))
     {
         return Err(Error::Unsupported(
@@ -195,6 +208,8 @@ pub struct RoomProfile {
     pub reflection_order: usize,
     /// west, east, south, north, floor, ceiling; eight octave bands each.
     pub absorption: [[f64; 8]; 6],
+    pub surfaces: Option<super::surfaces::SurfaceModel>,
+    pub calibration: Option<super::calibration::Calibration>,
     pub early_fade: [f64; 2],
     pub late_predelay: f64,
     pub late_energy: f64,
@@ -214,7 +229,11 @@ impl RoomProfile {
         bytes: &[u8],
         mut read: impl FnMut(&str, usize) -> Result<Vec<u8>>,
     ) -> Result<Self> {
-        let value = manifest(bytes, "mradm.room", "hybrid-shoebox-v1")?;
+        let value = manifest_kinds(
+            bytes,
+            "mradm.room",
+            &["hybrid-shoebox-v1", "hybrid-shoebox-v2"],
+        )?;
         if value["source_directivity"] != "cosine2-listener" {
             return Err(Error::Unsupported("Unsupported room source directivity"));
         }
@@ -255,22 +274,33 @@ impl RoomProfile {
             return Err(invalid());
         }
         let mut absorption = [[0.; 8]; 6];
-        let walls = value["absorption"]
-            .as_array()
-            .filter(|a| a.len() == 6)
-            .ok_or_else(invalid)?;
-        for (out, wall) in absorption.iter_mut().zip(walls) {
-            let bands = wall
+        let surfaces = if value["kind"] == "hybrid-shoebox-v2" {
+            if value.get("absorption").is_some() {
+                return Err(invalid());
+            }
+            Some(super::surfaces::SurfaceModel::parse(
+                &value["surface_model"],
+                dimensions,
+            )?)
+        } else {
+            let walls = value["absorption"]
                 .as_array()
-                .filter(|a| a.len() == 8)
+                .filter(|a| a.len() == 6)
                 .ok_or_else(invalid)?;
-            for (out, band) in out.iter_mut().zip(bands) {
-                *out = number(band)?;
-                if !(0.0..=1.0).contains(out) {
-                    return Err(invalid());
+            for (out, wall) in absorption.iter_mut().zip(walls) {
+                let bands = wall
+                    .as_array()
+                    .filter(|a| a.len() == 8)
+                    .ok_or_else(invalid)?;
+                for (out, band) in out.iter_mut().zip(bands) {
+                    *out = number(band)?;
+                    if !(0.0..=1.0).contains(out) {
+                        return Err(invalid());
+                    }
                 }
             }
-        }
+            None
+        };
         let assets = &value["assets"];
         let (shape, bands) = Array::f64(&assets["bands"], &mut read)?;
         if shape.len() != 2 || shape[0] != 8 || shape[1] > 4096 {
@@ -324,6 +354,17 @@ impl RoomProfile {
             clearance,
             reflection_order,
             absorption,
+            surfaces,
+            calibration: value
+                .get("speaker_calibration")
+                .map(|v| {
+                    super::calibration::Calibration::parse(
+                        v,
+                        value["sample_rate"].as_u64().unwrap() as u32,
+                        &mut read,
+                    )
+                })
+                .transpose()?,
             early_fade,
             late_predelay,
             late_energy,

@@ -134,10 +134,24 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         let mut gains = [1f32; 8];
-        for (wall, count) in image.walls.iter().enumerate() {
-            for (band, gain) in gains.iter_mut().enumerate() {
-                for _ in 0..*count {
-                    *gain *= (1. - profile.absorption[wall][band]).sqrt() as f32;
+        let mut hit_info = Vec::new();
+        if let Some(surfaces) = &profile.surfaces {
+            let hits = surfaces.hits(profile.dimensions, profile.listener, position, *image);
+            for h in &hits[..image.order] {
+                hit_info.push(serde_json::json!({"face":h.wall,"uv_m":h.uv,"material":surfaces.name(h.material)}));
+            }
+            gains = surfaces.gains(&surfaces.key(
+                profile.dimensions,
+                profile.listener,
+                position,
+                *image,
+            ));
+        } else {
+            for (wall, count) in image.walls.iter().enumerate() {
+                for (band, gain) in gains.iter_mut().enumerate() {
+                    for _ in 0..*count {
+                        *gain *= (1. - profile.absorption[wall][band]).sqrt() as f32;
+                    }
                 }
             }
         }
@@ -170,6 +184,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 "delay_after_direct_ms":(path.samples/f64::from(profile.sample_rate)-direct_time)*1000.,
                 "gain":path.gain as f32,"fraction":(path.samples-integer) as f32,"band_gains":gains,
                 "level_db_1_2_4_8khz":std::array::from_fn::<_,4,_>(|i|20.*libm::log10((response[i]/direct_magnitude[i]).max(1e-30)))}));
+            if profile.surfaces.is_some() {
+                reflections.last_mut().unwrap()["surface_hits"] =
+                    serde_json::Value::Array(hit_info);
+            }
         }
     }
     let mut out = fs::OpenOptions::new()

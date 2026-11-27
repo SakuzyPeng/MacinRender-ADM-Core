@@ -602,6 +602,20 @@ fn prepare_room(
     .map_err(render_error)?;
     let quality = mradm_dsp::room::quality::Quality::try_from(r.room.quality)
         .map_err(|_| Error::new(code::INVALID_ARGUMENT, "无效房间档位", ""))?;
+    if r.room.metres == 0.
+        && let Some(cal) = &resources.set.room.profile.calibration
+        && let Some(s) = table.descriptions.iter().find_map(|d| d.speaker)
+        && cal.trim(s.feed).is_some()
+    {
+        lines.render(
+            mradm_render::routing::Level::Info,
+            format!(
+                "已启用 {} 固定音箱延时、电平和 LFE 校准",
+                s.feed.layout.id()
+            )
+            .into_bytes(),
+        );
+    }
     let mut prepared = base(Kind::Room, scene, 2);
     prepared.room = Some(RoomPrepared {
         table: Arc::new(table),

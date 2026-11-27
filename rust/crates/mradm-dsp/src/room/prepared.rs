@@ -22,6 +22,7 @@ pub struct PreparedRoom {
     pub eq: Arc<LongFilters>,
     pub late: Vec<Arc<LongFilters>>,
     material: Vec<Complex32>,
+    band_basis: Vec<Complex32>,
     propagation: FractionalBank,
 }
 
@@ -40,11 +41,16 @@ impl PreparedRoom {
     }
     /// Preparation-only stage checksums for room-scoped cross-platform replay.
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"hrir":self.hrir.fingerprint(),"decoder_hrir":self.decoder_hrir.fingerprint(),
+        let mut value = serde_json::json!({"hrir":self.hrir.fingerprint(),"decoder_hrir":self.decoder_hrir.fingerprint(),
             "materials":super::resources::hash_complex(&self.material),
             "propagation":self.propagation.fingerprint(),"eq":self.eq.fingerprint(),
             "late":self.late.iter().map(|v|v.fingerprint()).collect::<Vec<_>>(),
-            "short_taps":self.short_taps,"path_bucket_stride":self.path_bucket_stride,"send_taps":self.send_taps})
+            "short_taps":self.short_taps,"path_bucket_stride":self.path_bucket_stride,"send_taps":self.send_taps});
+        if self.profile.surfaces.is_some() {
+            value["surface_profile"] = self.profile.identity.clone().into();
+            value["material_band_basis"] = super::resources::hash_complex(&self.band_basis).into();
+        }
+        value
     }
     pub fn required_fft(profile: &RoomProfile, hrir: &HrirData) -> Result<(usize, usize, usize)> {
         super::validate_sample_rate(profile.sample_rate)?;
@@ -103,10 +109,15 @@ impl PreparedRoom {
         }
         let images = geometry::images(profile.reflection_order);
         let bins = fft_length / 2 + 1;
-        let mut material = vec![Complex32::default(); images.len() * bins];
+        let static_count = if profile.surfaces.is_some() {
+            1
+        } else {
+            images.len()
+        };
+        let mut material = vec![Complex32::default(); static_count * bins];
         let mut fft = RealFft::with_policy(fft_length, quality.fft())?;
         let mut time = vec![0.; fft_length];
-        for (index, image) in images.iter().enumerate() {
+        for (index, image) in images.iter().take(static_count).enumerate() {
             let mut band_gain = [1f32; 8];
             for (wall, count) in image.walls.iter().enumerate() {
                 for (band, gain) in band_gain.iter_mut().enumerate() {
@@ -125,6 +136,20 @@ impl PreparedRoom {
                 *destination = value as f32;
             }
             fft.forward(&time, &mut material[index * bins..(index + 1) * bins])?;
+        }
+        let mut band_basis = Vec::new();
+        if profile.surfaces.is_some() {
+            band_basis.resize(8 * bins, Complex32::default());
+            for (band, row) in band_basis.chunks_exact_mut(bins).enumerate() {
+                time.fill(0.);
+                for (out, &value) in time
+                    .iter_mut()
+                    .zip(&profile.bands[band * profile.band_taps..(band + 1) * profile.band_taps])
+                {
+                    *out = value as f32;
+                }
+                fft.forward(&time, row)?;
+            }
         }
         let propagation = FractionalBank::from_impulses_with_policy(
             fft_length,
@@ -152,6 +177,7 @@ impl PreparedRoom {
             eq,
             late,
             material,
+            band_basis,
             propagation,
         })
     }
@@ -248,7 +274,71 @@ impl PreparedRoom {
     }
 }
 
+/// Geometry changes select rows by the complete multiset of materials hit. Scratch is
+/// owned by a worker and never grows on a miss. Head rotation cannot change this key.
+struct MaterialWork {
+    keys: Vec<Option<[u8; 8]>>,
+    spectra: Vec<Complex32>,
+    next: usize,
+}
+impl MaterialWork {
+    fn new(room: &PreparedRoom) -> Self {
+        let slots = if room.profile.surfaces.is_some() {
+            32
+        } else {
+            0
+        };
+        Self {
+            keys: vec![None; slots],
+            spectra: vec![Complex32::default(); slots * (room.fft_length / 2 + 1)],
+            next: 0,
+        }
+    }
+    fn row<'a>(
+        &'a mut self,
+        room: &'a PreparedRoom,
+        index: usize,
+        position: Position,
+    ) -> &'a [Complex32] {
+        let bins = room.fft_length / 2 + 1;
+        let Some(surfaces) = &room.profile.surfaces else {
+            return &room.material[index * bins..(index + 1) * bins];
+        };
+        let image = room.images[index];
+        if image.order == 0 {
+            return &room.material[..bins];
+        }
+        let key = surfaces.key(
+            room.profile.dimensions,
+            room.profile.listener,
+            position,
+            image,
+        );
+        let slot = if let Some(slot) = self.keys.iter().position(|stored| *stored == Some(key)) {
+            slot
+        } else {
+            let slot = self.next;
+            self.next = (slot + 1) % self.keys.len();
+            self.keys[slot] = Some(key);
+            let row = &mut self.spectra[slot * bins..(slot + 1) * bins];
+            row.fill(Complex32::default());
+            for (gain, basis) in surfaces
+                .gains(&key)
+                .into_iter()
+                .zip(room.band_basis.chunks_exact(bins))
+            {
+                for (out, &v) in row.iter_mut().zip(basis) {
+                    *out += v * gain;
+                }
+            }
+            slot
+        };
+        &self.spectra[slot * bins..(slot + 1) * bins]
+    }
+}
+
 pub struct ResponseWork {
+    material_work: MaterialWork,
     fft: RealFft,
     query: Vec<f32>,
     direct: Vec<f32>,
@@ -286,6 +376,7 @@ impl ResponseWork {
     pub fn new(room: &PreparedRoom) -> Result<Self> {
         let bins = room.fft_length / 2 + 1;
         let mut result = Self {
+            material_work: MaterialWork::new(room),
             fft: RealFft::with_policy(room.fft_length, room.quality.fft())?,
             query: vec![0.; room.hrir.stride() * 4],
             direct: vec![
@@ -325,6 +416,7 @@ impl ResponseWork {
         super::touch_pages(&mut result.time);
         super::touch_pages(&mut result.impulse);
         super::touch_pages(&mut result.cached_transfers);
+        super::touch_pages(&mut result.material_work.spectra);
         Ok(result)
     }
 
@@ -411,7 +503,7 @@ impl ResponseWork {
                 let absolute = integer as usize + room.profile.alignment_guard;
                 let start = (absolute % room.path_bucket_stride) as f64;
                 let gain = path.gain as f32 * source.weight;
-                let material = &room.material[index * bins..(index + 1) * bins];
+                let material = self.material_work.row(room, index, source.position);
                 for band in 0..bins {
                     let fractional = low[band] + (high[band] - low[band]) * alpha;
                     let phase = room.hrir.integer_phase(start as i64, band);
@@ -507,7 +599,7 @@ impl ResponseWork {
                 let absolute = integer as usize + room.profile.alignment_guard;
                 let start = (absolute % room.path_bucket_stride) as f64;
                 let gain = path.gain as f32 * source.weight;
-                let material = &room.material[index * bins..(index + 1) * bins];
+                let material = self.material_work.row(room, index, source.position);
                 let destination = if image.order == 0 {
                     &mut self.direct
                 } else {

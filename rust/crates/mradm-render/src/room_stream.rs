@@ -446,6 +446,7 @@ impl Live {
         self.diagnostics.clear();
         let mut descriptions = Vec::with_capacity(elements.len());
         let mut index = HashMap::with_capacity(elements.len());
+        let mut candidates = Vec::with_capacity(elements.len());
         for element in elements {
             let role = element
                 .role
@@ -466,6 +467,12 @@ impl Live {
                     position = [0., 1., 0.];
                 }
             }
+            candidates.push(crate::room_speakers::Candidate {
+                label: element.speaker_label.to_vec(),
+                position,
+                inferred: !element.has_position,
+                reassigned: false,
+            });
             index.insert(element.id, descriptions.len() as u32);
             descriptions.push(RoomDescription {
                 id: element.id,
@@ -480,6 +487,7 @@ impl Live {
                 ..RoomDescription::default()
             });
         }
+        crate::room_speakers::assign(&mut descriptions, &candidates);
         self.runtime.configure(&descriptions)?;
         self.generation = generation;
         self.index = index;

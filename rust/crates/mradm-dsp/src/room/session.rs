@@ -2,6 +2,7 @@
 //! 256 frames of processing latency; it makes fragmented input bit-identical.
 use super::{
     BLOCK,
+    calibration::{Calibration, Feed, FeedDelay, same_position},
     control::{self, Control, RoomCommand, RoomDescription, RoomOverride, State},
     geometry::{self, Position, WeightedPosition},
     partition::{Dynamic, Long, LongFilters},
@@ -27,6 +28,7 @@ pub struct PreparedSet {
     compact_control: bool,
     pub room: Arc<PreparedRoom>,
     pub lfe: Arc<LongFilters>,
+    speaker_lfe: Option<Arc<LongFilters>>,
     workers: Arc<super::workers::Workers>,
 }
 impl PreparedSet {
@@ -41,6 +43,12 @@ impl PreparedSet {
             .map(|v| (v[0] + v[1]) * 0.5)
             .collect();
         let lfe = LongFilters::with_policy(1, &mean, room.quality.fft())?;
+        let speaker_lfe = room
+            .profile
+            .calibration
+            .as_ref()
+            .map(|c| LongFilters::with_policy(1, &c.lfe, room.quality.fft()))
+            .transpose()?;
         Ok(Self {
             #[cfg(feature = "room-gpu-experiment")]
             gpu_factory: None,
@@ -52,6 +60,7 @@ impl PreparedSet {
             compact_control: false,
             room,
             lfe,
+            speaker_lfe,
             workers: super::workers::shared()?,
         })
     }
@@ -65,6 +74,11 @@ impl PreparedSet {
                 "GPU experiment requires realtime binaural paths",
             ));
         }
+        if self.room.profile.surfaces.is_some() {
+            return Err(Error::Unsupported(
+                "CUDA does not implement hybrid-shoebox-v2 surface hits",
+            ));
+        }
         Ok(Self {
             gpu_factory: Some(factory),
             eq_stagger: false,
@@ -72,6 +86,7 @@ impl PreparedSet {
             compact_control: false,
             room: self.room.clone(),
             lfe: self.lfe.clone(),
+            speaker_lfe: self.speaker_lfe.clone(),
             workers: self.workers.clone(),
         })
     }
@@ -100,12 +115,24 @@ impl PreparedSet {
             compact_control: true,
             room: self.room.clone(),
             lfe: self.lfe.clone(),
+            speaker_lfe: self.speaker_lfe.clone(),
             workers: self.workers.clone(),
         })
     }
+    fn electrical_tail(&self, layouts: u8) -> usize {
+        self.room
+            .profile
+            .calibration
+            .as_ref()
+            .map_or(0, |c| c.tail_for_layouts(layouts))
+    }
     pub fn tail_frames(&self) -> usize {
-        (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
-            .max(self.lfe.taps - 1)
+        self.tail_for_layouts(u8::MAX)
+    }
+    fn tail_for_layouts(&self, layouts: u8) -> usize {
+        self.electrical_tail(layouts)
+            + (self.room.history_frames() + super::diffuse_tail(self.room.profile.sample_rate))
+                .max(self.lfe.taps - 1)
             + BLOCK
     }
     pub fn preroll_frames(&self) -> usize {
@@ -113,6 +140,9 @@ impl PreparedSet {
             .preroll_frames()
             .saturating_add(super::diffuse_tail(self.room.profile.sample_rate))
             .max(self.lfe.history_frames() + BLOCK)
+            + self.speaker_lfe.as_ref().map_or(0, |f| {
+                f.history_frames() + self.room.profile.calibration.as_ref().unwrap().max_delay
+            })
     }
 }
 
@@ -202,6 +232,7 @@ impl HeadSignal {
 
 struct Slot {
     description: RoomDescription,
+    feeds: [Option<Feed>; BLOCK],
     screen: super::screen::Mapping,
     automatic: bool,
     previous_screens: Vec<bool>,
@@ -257,6 +288,7 @@ impl Slot {
         drop(query_cache.lock().unwrap());
         Ok(Self {
             description,
+            feeds: [None; BLOCK],
             screen: super::screen::Mapping::new(description.screens)?,
             automatic,
             previous_screens: vec![false; BLOCK],
@@ -294,6 +326,7 @@ impl Slot {
             position: self.description.position,
             ..State::default()
         });
+        self.feeds.fill(None);
         self.diffuse.reset();
         self.live.initialize(self.live_target);
         self.head_signal.reset();
@@ -598,6 +631,26 @@ impl Slot {
             self.directions[offset] = self.last_direction;
             self.previous_screens[offset] = self.last_screen;
         }
+        self.feeds[offset] = self
+            .description
+            .speaker
+            .filter(|speaker| {
+                if !self.automatic {
+                    return false;
+                }
+                if self.description.role == 2 {
+                    return true;
+                }
+                let pos = if state.valid & 4 != 0 {
+                    state.position
+                } else {
+                    self.description.position
+                };
+                same_position(speaker.position(pos), speaker.nominal)
+                    && state.channel_lock == 0
+                    && state.screen_reference == 0
+            })
+            .map(|speaker| speaker.feed);
         let gain = if state.active != 0 { state.gain } else { 0. };
         let value = if self.description.role == 2 {
             value * gain
@@ -825,6 +878,7 @@ struct Voices {
     room: Arc<PreparedRoom>,
     voices: Vec<Voice>,
     inputs: Vec<VoiceInput>,
+    calibrated_lfe: Option<[f32; BLOCK]>,
     block: Option<VoiceBlock>,
 }
 fn render_voice(
@@ -1129,6 +1183,16 @@ struct InstanceOutput {
     wet: [f32; 2 * BLOCK],
 }
 impl InstanceOutput {
+    fn process_lfe(&mut self, group: &Voices, block: &VoiceBlock) -> Result<()> {
+        if block.excitation
+            && let Some(filtered) = &group.calibrated_lfe
+        {
+            for (i, input) in self.lfe_input.iter_mut().enumerate() {
+                *input += filtered[i] * block.wet_gain[i];
+            }
+        }
+        self.lfe.process(&self.lfe_input, &mut self.lfe_output)
+    }
     #[cfg(feature = "room-gpu-experiment")]
     fn gpu_field(&mut self, group: &Voices, order: &[usize]) -> Result<()> {
         let block = group
@@ -1151,7 +1215,7 @@ impl InstanceOutput {
             }
         }
         self.field.begin_field(&self.send)?;
-        self.lfe.process(&self.lfe_input, &mut self.lfe_output)
+        self.process_lfe(group, &block)
     }
     #[cfg(feature = "room-gpu-experiment")]
     fn gpu_short(&mut self, group: &Voices, order: &[usize]) {
@@ -1213,7 +1277,7 @@ impl InstanceOutput {
         }
         drop(profile);
         self.field.begin_field(&self.send)?;
-        self.lfe.process(&self.lfe_input, &mut self.lfe_output)?;
+        self.process_lfe(group, &block)?;
         for i in 0..BLOCK {
             for ear in 0..2 {
                 let at = ear * BLOCK + i;
@@ -1224,8 +1288,74 @@ impl InstanceOutput {
     }
 }
 
+/// Per-room electrical history. Old and incoming rooms advance independently
+/// through warmup and fading; the shared LFE FIR sees both bass feeds in stable source order.
+struct SpeakerInputs {
+    delays: Vec<FeedDelay>,
+    filter: Long,
+    started: bool,
+}
+impl SpeakerInputs {
+    fn process(
+        &mut self,
+        calibration: &Calibration,
+        slots: &[Slot],
+        order: &[usize],
+        inputs: &mut [VoiceInput],
+    ) -> Result<Option<[f32; BLOCK]>> {
+        let mut bass = [0.; BLOCK];
+        for &index in order {
+            let slot = &slots[index];
+            if slot.description.role == 0 {
+                continue;
+            }
+            let delay = &mut self.delays[index];
+            if delay.is_empty()
+                && !slot
+                    .feeds
+                    .iter()
+                    .flatten()
+                    .any(|&f| calibration.trim(f).is_some())
+            {
+                continue;
+            }
+            let input = &mut inputs[index];
+            if let Some(speaker) = slot.description.speaker
+                && calibration.trim(speaker.feed).is_some()
+                && speaker.source_nominal.is_some()
+            {
+                for state in &mut input.states {
+                    state.position = speaker.position(state.position);
+                }
+                input.description.position = speaker.position(input.description.position);
+            }
+            let lfe = slot.description.role == 2;
+            for (i, sample) in input.world.iter_mut().enumerate() {
+                let trim = slot.feeds[i].and_then(|f| calibration.trim(f));
+                let due = delay.next(*sample, trim);
+                if trim.is_some() {
+                    *sample = 0.;
+                }
+                if lfe {
+                    bass[i] += due;
+                    self.started |= trim.is_some();
+                } else {
+                    *sample += due;
+                }
+            }
+        }
+        if !self.started {
+            return Ok(None);
+        }
+        let mut out = [0.; BLOCK];
+        self.filter.process(&bass, &mut out)?;
+        Ok(Some(out))
+    }
+}
+
 pub struct Instance {
     pub prepared: Arc<PreparedSet>,
+    speakers: Option<SpeakerInputs>,
     group: Arc<Mutex<Voices>>,
     output: Arc<Mutex<InstanceOutput>>,
 }
@@ -1261,6 +1391,7 @@ impl Instance {
                 room: prepared.room.clone(),
                 voices: Vec::with_capacity(capacity),
                 inputs: Vec::with_capacity(capacity),
+                calibrated_lfe: None,
                 block: None,
             })),
             output: Arc::new(Mutex::new(InstanceOutput {
@@ -1272,6 +1403,17 @@ impl Instance {
                 direct: [0.; 2 * BLOCK],
                 wet: [0.; 2 * BLOCK],
             })),
+            speakers: prepared
+                .speaker_lfe
+                .as_ref()
+                .map(|f| -> Result<_> {
+                    Ok(SpeakerInputs {
+                        delays: Vec::with_capacity(capacity),
+                        filter: Long::new(f.clone())?,
+                        started: false,
+                    })
+                })
+                .transpose()?,
             prepared,
         };
         #[cfg(feature = "room-gpu-experiment")]
@@ -1301,6 +1443,11 @@ impl Instance {
             return Err(Error::Unsupported("GPU source capacity exceeded"));
         }
         while group.voices.len() < count {
+            if let (Some(stage), Some(cal)) =
+                (&mut self.speakers, &self.prepared.room.profile.calibration)
+            {
+                stage.delays.push(FeedDelay::new(cal.max_delay));
+            }
             group.inputs.push(VoiceInput::default());
             let position =
                 geometry::position(&self.prepared.room.profile, [0., 1., 0.], 1.5, [1., 0., 0.])?;
@@ -1327,6 +1474,13 @@ impl Instance {
         Ok(())
     }
     fn reset(&mut self) {
+        if let Some(stage) = &mut self.speakers {
+            stage.filter.reset();
+            stage.started = false;
+            for delay in &mut stage.delays {
+                delay.reset();
+            }
+        }
         for voice in &mut self.group.lock().unwrap().voices {
             voice.emitter.reset();
             voice.shape = None;
@@ -1340,6 +1494,9 @@ impl Instance {
         output.wet.fill(0.);
     }
     fn reset_voice(&mut self, index: usize) {
+        if let Some(stage) = &mut self.speakers {
+            stage.delays[index].reset();
+        }
         let mut group = self.group.lock().unwrap();
         let voice = &mut group.voices[index];
         voice.emitter.reset();
@@ -1352,6 +1509,7 @@ impl Instance {
     fn prepare_render(
         &mut self,
         slots: &[Slot],
+        order: &[usize],
         marks: &[bool; BLOCK],
         poses: &[[f32; 3]; BLOCK],
         wet_gain: &[f32; BLOCK],
@@ -1379,6 +1537,12 @@ impl Instance {
                 input.states.copy_from_slice(&slot.states);
                 input.directions.copy_from_slice(&slot.directions);
                 input.world = slot.world;
+            }
+            if metres == 0.
+                && let (Some(stage), Some(cal)) =
+                    (&mut self.speakers, &self.prepared.room.profile.calibration)
+            {
+                group.calibrated_lfe = stage.process(cal, slots, order, &mut group.inputs)?;
             }
             group.block = Some(VoiceBlock {
                 marks: *marks,
@@ -1450,6 +1614,7 @@ pub struct Session {
     head_output: [f32; BLOCK * 2],
     ended: Option<u64>,
     end_tail: usize,
+    speaker_layouts: u8,
 }
 
 impl Session {
@@ -1557,6 +1722,7 @@ impl Session {
             head_output: [0.; BLOCK * 2],
             ended: None,
             end_tail: 0,
+            speaker_layouts: 0,
         })
     }
     /// Preparation call; source histories survive generation changes.
@@ -1676,6 +1842,13 @@ impl Session {
             self.slots[index].description = *description;
             self.active.push(index);
         }
+        // Retain the tail budget of previous topologies until reset: removed
+        // speakers may still have a scheduled input or a decaying bass filter.
+        if self.metres == 0. {
+            for s in descriptions.iter().filter_map(|d| d.speaker) {
+                self.speaker_layouts |= 1 << s.feed.layout as usize;
+            }
+        }
         self.order = (0..self.slots.len()).collect();
         self.order.sort_unstable_by_key(|i| {
             (
@@ -1717,6 +1890,16 @@ impl Session {
         self.phase = 0;
         self.sync_voice_pair();
         self.current.reset();
+        self.speaker_layouts = 0;
+        if self.metres == 0. {
+            for s in self
+                .active
+                .iter()
+                .filter_map(|i| self.slots[*i].description.speaker)
+            {
+                self.speaker_layouts |= 1 << s.feed.layout as usize;
+            }
+        }
         self.current.query_caches(None);
         for slot in &mut self.slots {
             slot.reset();
@@ -1739,6 +1922,7 @@ impl Session {
         Ok(())
     }
     pub fn clear_generation(&mut self) {
+        self.speaker_layouts = 0;
         self.slots.clear();
         self.active.clear();
         self.order.clear();
@@ -1795,12 +1979,15 @@ impl Session {
             + BLOCK;
         self.incoming
             .as_ref()
-            .map_or(self.current.prepared.tail_frames(), |v| {
-                self.current
-                    .prepared
-                    .tail_frames()
-                    .max(v.prepared.tail_frames())
-            })
+            .map_or(
+                self.current.prepared.tail_for_layouts(self.speaker_layouts),
+                |v| {
+                    self.current
+                        .prepared
+                        .tail_for_layouts(self.speaker_layouts)
+                        .max(v.prepared.tail_for_layouts(self.speaker_layouts))
+                },
+            )
             .max(head)
     }
     fn pending_request(&self) -> u64 {
@@ -1877,12 +2064,20 @@ impl Session {
         } else {
             &room.prepared.room.profile
         };
-        let shape = Shape::from_state(
-            state,
-            slot.description.position,
-            slot.description.role,
-            self.spread,
-        );
+        let mut fallback = slot.description.position;
+        if self.metres == 0.
+            && state.head_locked == 0
+            && let Some(speaker) = slot.description.speaker
+            && profile
+                .calibration
+                .as_ref()
+                .and_then(|c| c.trim(speaker.feed))
+                .is_some()
+        {
+            state.position = speaker.position(state.position);
+            fallback = speaker.position(fallback);
+        }
+        let shape = Shape::from_state(state, fallback, slot.description.role, self.spread);
         let shape = if self.metres == 0. {
             shape.map_room(
                 profile,
@@ -2012,7 +2207,9 @@ impl Session {
         // The first reflection target may be initialized between grid points.
         // Extend the total warmup as well as the filter-preparation window so
         // even short rooms discard that target before the crossfade starts.
-        self.warm_remaining = (incoming.prepared.room.eq.taps + incoming.prepared.room.short_taps
+        self.warm_remaining = (incoming.prepared.electrical_tail(self.speaker_layouts)
+            + incoming.prepared.room.eq.taps
+            + incoming.prepared.room.short_taps
             - 2
             + incoming
                 .prepared
@@ -2310,6 +2507,7 @@ impl Session {
             let start = self.clock - BLOCK as u64;
             self.current.prepare_render(
                 &self.slots,
+                &self.order,
                 &self.marks,
                 &self.poses,
                 &[1.; BLOCK],
@@ -2380,6 +2578,7 @@ impl Session {
         }
         self.current.prepare_render(
             &self.slots,
+            &self.order,
             &self.marks,
             &self.poses,
             &old_gain,
@@ -2393,6 +2592,7 @@ impl Session {
         if let Some(incoming) = &mut self.incoming {
             incoming.prepare_render(
                 &self.slots,
+                &self.order,
                 &self.marks,
                 &self.poses,
                 &new_gain,
@@ -2508,7 +2708,8 @@ impl Session {
                 self.fade_done += BLOCK;
                 if self.fade_done >= super::room_fade(self.head_room.profile.sample_rate) {
                     self.phase = 3;
-                    self.drain_remaining = self.current.prepared.tail_frames() - BLOCK;
+                    self.drain_remaining =
+                        self.current.prepared.tail_for_layouts(self.speaker_layouts) - BLOCK;
                 }
             }
             3 => {

@@ -1,5 +1,6 @@
 //! Room-only numerical contract. Resource I/O belongs to the caller; preparation
 //! accepts authenticated bytes and processing owns all of its mutable history.
+pub mod calibration;
 pub mod collection;
 pub mod control;
 pub mod geometry;
@@ -18,6 +19,7 @@ pub mod signal;
 pub mod sofa;
 pub mod spatial;
 mod spectral;
+pub mod surfaces;
 mod workers;
 
 pub const SAMPLE_RATE: u32 = 48_000;

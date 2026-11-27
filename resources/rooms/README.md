@@ -61,3 +61,8 @@ build/release/mradm render -i input.wav -o output.wav --renderer room-binaural \
 根目录 `.gitattributes` 自动纳入 Git LFS；清单和 `SHA256SUMS` 固定 LF 换行，保持三平台哈希一致。
 提交前检查清单内的组件大小与 SHA-256、执行 `room-check --sofa`，并运行 `git lfs fsck`。
 正常 `git push` 的 LFS 钩子上传对应数值组件。声学报告和资源校验分别维护。
+
+
+## 分区参考听音室候选
+
+[48 kHz](candidates/treated-reference-v2-48000/room.json) 和 [96 kHz](candidates/treated-reference-v2-96000/room.json) 含 7.1.4、9.1.6、22.2 固定虚拟音箱的原生延时、电平和 LFE 校准。在支持房间清单版本 2 的构建中选择对应的 `room.json` 和个人 HRIR。使用自动坐标映射，`room-check` 的 `speaker_calibration` 列出可用布局；文件输入命中时渲染日志列出所用布局。[制作与验收](../../docs/architecture/ROOM_TREATED_REFERENCE.md)

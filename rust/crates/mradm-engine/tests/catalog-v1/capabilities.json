@@ -324,6 +324,18 @@
             96000
           ],
           "supports_realtime": true
+        },
+        {
+          "display_name": "Zoned hybrid room (CPU)",
+          "id": "hybrid-shoebox-v2",
+          "layouts": [
+            "binaural"
+          ],
+          "sample_rates": [
+            48000,
+            96000
+          ],
+          "supports_realtime": true
         }
       ],
       "qualities": [

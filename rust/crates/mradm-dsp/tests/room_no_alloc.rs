@@ -41,13 +41,14 @@ static ALLOCATOR: CheckedAllocator = CheckedAllocator;
 fn regular_room_dsp_does_not_allocate_on_any_worker() {
     for quality in [Quality::Realtime, Quality::Exact] {
         for automatic in [false, true] {
-            verify_quality(quality, false, 48000, automatic);
-            verify_quality(quality, true, 48000, automatic);
-            verify_quality(quality, true, 96000, automatic);
+            verify_quality(quality, false, 48000, automatic, false);
+            verify_quality(quality, true, 48000, automatic, false);
+            verify_quality(quality, true, 96000, automatic, false);
+            verify_quality(quality, true, 96000, automatic, true);
         }
     }
 }
-fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool) {
+fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool, zoned: bool) {
     ALLOCATIONS.store(0, Ordering::SeqCst);
     let base = if rate == 96000 {
         common::fixture_at_rate(quality, rate)
@@ -62,6 +63,29 @@ fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool
     if collection {
         profile.listener[0] = 0.4;
         profile.minimum_distance = 0.2;
+    }
+    if zoned {
+        let f: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/room/synthetic/zoned-room.json"
+        ))
+        .unwrap();
+        profile.surfaces = Some(
+            mradm_dsp::room::surfaces::SurfaceModel::parse(&f["surface_model"], profile.dimensions)
+                .unwrap(),
+        );
+    }
+    if zoned {
+        use mradm_dsp::room::calibration::Calibration;
+        let data: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/room/synthetic/speaker-room.json"
+        ))
+        .unwrap();
+        profile.calibration = Some(
+            Calibration::parse(&data["speaker_calibration"], rate, &mut |_, _| {
+                Ok(include_bytes!("../../../../tests/fixtures/room/synthetic/eq.f64").to_vec())
+            })
+            .unwrap(),
+        );
     }
     profile.late_directions = (0..32)
         .map(|i| base.room.profile.late_directions[i % 6])
@@ -81,6 +105,8 @@ fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool
         .unwrap(),
     );
     profile.identity.push_str("-changed");
+    profile.surfaces = None;
+    profile.calibration = None;
     profile.absorption = [[0.9; 8]; 6];
     let other = Arc::new(
         PreparedSet::new(Arc::new(
@@ -105,6 +131,23 @@ fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool
     let descriptions: Vec<_> = (0..8)
         .map(|id| RoomDescription {
             id,
+            role: if zoned && id == 3 {
+                2
+            } else if zoned && id == 1 {
+                1
+            } else {
+                0
+            },
+            speaker: (zoned && (id == 1 || id == 3)).then_some(
+                mradm_dsp::room::calibration::Speaker {
+                    feed: mradm_dsp::room::calibration::Feed {
+                        layout: mradm_dsp::room::calibration::SpeakerLayout::SevenOneFour,
+                        channel: id as u8,
+                    },
+                    nominal: [-0.5, 0.8, 0.2],
+                    source_nominal: None,
+                },
+            ),
             position: [0., 1., 0.],
             screens: RoomScreens {
                 enabled: 1,

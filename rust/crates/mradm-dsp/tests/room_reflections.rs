@@ -462,3 +462,76 @@ fn near_wall_motion_expansion_pose_switch_and_reset_are_packet_independent() {
         }
     }
 }
+
+#[test]
+fn moving_across_a_treatment_uses_the_local_specular_power() {
+    use mradm_dsp::room::{geometry::WeightedPosition, surfaces::SurfaceModel};
+    let material = |id: &str, a: f64, s: f64| serde_json::json!({"id":id,"absorption":vec![a;8],"scattering":vec![s;8]});
+    let mut faces = vec![serde_json::json!({"material":"dead"}); 6];
+    faces[0] = serde_json::json!({"material":"bare","regions":[{"material":"treated","polygon":[[0.4,0],[1,0],[1,1],[0.4,1]]}]});
+    let model = serde_json::json!({"materials":[material("dead",1.,0.),material("bare",0.36,0.25),material("treated",0.84,0.5)],"faces":faces});
+    for quality in [Quality::Exact, Quality::Realtime] {
+        let base = room(quality, true, 0.12, true);
+        let build = |effective: Option<f64>| {
+            let mut p = (*base.profile).clone();
+            if let Some(a) = effective {
+                p.absorption[0] = [a; 8];
+            } else {
+                p.surfaces = Some(SurfaceModel::parse(&model, p.dimensions).unwrap());
+            }
+            PreparedRoom::with_quality(Arc::new(p), base.hrir.clone(), quality).unwrap()
+        };
+        let zoned = build(None);
+        let refs = [build(Some(1. - 0.64 * 0.75)), build(Some(1. - 0.16 * 0.5))];
+        let mut work = ResponseWork::new(&zoned).unwrap();
+        let pose = Rotation::new([12., 4., 0.]).unwrap();
+        let positions = [0.30, 0.50].map(|y| {
+            let delta = [0.28, y - 0.4, 0.];
+            let distance = norm(delta);
+            Position {
+                point: [0.4, y, 0.5],
+                direction: scale(delta, 1. / distance),
+                distance,
+                constrained: false,
+            }
+        });
+        // At X=0 the first ray hits below U=0.4 and the second above it. All other walls absorb fully.
+        let mut expect = Vec::new();
+        for (i, &p) in positions.iter().enumerate() {
+            let mut reference = ResponseWork::new(&refs[i]).unwrap();
+            reference.build(&refs[i], p, &pose).unwrap();
+            expect.push(reference.impulse);
+        }
+        let close = |actual: &[f32], expected: &[f32]| {
+            let peak = expected.iter().copied().map(f32::abs).fold(0., f32::max);
+            assert!(
+                peak > 0.
+                    && actual
+                        .iter()
+                        .zip(expected)
+                        .all(|(a, b)| (*a - *b).abs() < peak * 2e-5)
+            );
+        };
+        for i in [0, 1, 0] {
+            work.build(&zoned, positions[i], &pose).unwrap();
+            close(
+                &work.impulse[zoned.short_taps * 2..],
+                &expect[i][zoned.short_taps * 2..],
+            );
+        }
+        let weighted = positions.map(|position| WeightedPosition {
+            position,
+            weight: 0.5,
+        });
+        work.build_many(&zoned, &weighted, &pose).unwrap();
+        let mix: Vec<_> = expect[0]
+            .iter()
+            .zip(&expect[1])
+            .map(|(a, b)| 0.5 * (a + b))
+            .collect();
+        close(
+            &work.impulse[zoned.short_taps * 2..],
+            &mix[zoned.short_taps * 2..],
+        );
+    }
+}

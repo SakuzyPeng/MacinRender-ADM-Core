@@ -21,6 +21,7 @@ pub mod output;
 pub mod postprocess;
 pub mod room;
 pub mod room_runtime;
+mod room_speakers;
 pub mod room_stream;
 pub mod routing;
 pub mod scene;

@@ -140,7 +140,13 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let package = package();
+        Self::with_package(package())
+    }
+    fn zoned() -> Self {
+        let path = manifest().replace("/room.json", "/zoned-room.json");
+        Self::with_package(Arc::new(loading::load_package(path.as_bytes()).unwrap()))
+    }
+    fn with_package(package: Arc<Package>) -> Self {
         Self {
             resources: resources(&package),
             package,
@@ -343,7 +349,11 @@ fn dropping_the_stream_joins_the_preparer_and_the_control_outlives_it() {
 
 #[test]
 fn an_abandoned_stepped_seek_leaves_the_next_seek_exact() {
-    let fixture = Fixture::new();
+    check_abandoned_seek(Fixture::new());
+    check_abandoned_seek(Fixture::zoned());
+}
+
+fn check_abandoned_seek(fixture: Fixture) {
     let mut reference = fixture.stream(open_gate().prepare());
     let expected = pull(&mut reference, FRAMES as usize);
     let mut stream = fixture.stream(open_gate().prepare());
@@ -447,7 +457,11 @@ fn render(
 
 #[test]
 fn scene_generations_check_their_sources_and_warn_as_cpp_did() {
-    let fixture = Fixture::new();
+    check_scene_generations(Fixture::new());
+    check_scene_generations(Fixture::zoned());
+}
+
+fn check_scene_generations(fixture: Fixture) {
     let mut r = live(&fixture, true);
     let elements = [
         element(1, Role::Object, ""),
@@ -857,4 +871,223 @@ fn a_reset_keeps_the_applied_room_and_clears_history() {
     }
     drop((r, fresh));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn speaker_package() -> Arc<Package> {
+    let path = manifest().replace("/room.json", "/speaker-room.json");
+    Arc::new(loading::load_package(path.as_bytes()).unwrap())
+}
+
+fn speaker_file(input: &common::Temp, package: &Arc<Package>, layout: &str) -> FileStream {
+    let scene = mradm_scene::import::import(
+        input.path().as_bytes(),
+        mradm_scene::import::ImportOptions {
+            input_layout: Some(layout),
+            input_channel_labels: &[],
+        },
+    )
+    .unwrap();
+    FileStream::open(
+        input.path(),
+        table(&scene),
+        resources(package),
+        Config {
+            metres: 0.,
+            ..config(package)
+        },
+        [0.; 3],
+        scope,
+        open_gate().prepare(),
+    )
+    .unwrap()
+}
+
+fn near(a: &[f32], b: &[f32]) {
+    assert_eq!(a.len(), b.len());
+    let peak = b.iter().copied().map(f32::abs).fold(0., f32::max);
+    let err = a
+        .iter()
+        .zip(b)
+        .map(|(x, y)| (x - y).abs())
+        .fold(0., f32::max);
+    assert!(
+        peak > 0. && err < peak * 1e-5,
+        "peak {peak}, difference {err}"
+    );
+}
+
+#[test]
+fn fixed_speaker_calibration_matches_electrical_feeds_in_file_and_scene_streams() {
+    const N: usize = 6103;
+    for layout in ["7.1.4", "9.1.6", "22.2"] {
+        let preset = mradm_scene::input::find_input_layout(layout).unwrap();
+        let apple =
+            mradm_scene::layouts::find(preset.internal_id, mradm_scene::layouts::Geometry::Apple)
+                .unwrap();
+        let ch = preset.channels.len();
+        let cal = speaker_package();
+        let mut x = vec![0.; N * ch];
+        let mut reference = vec![0.; (N + 512) * ch];
+        let mut extra = 0;
+        for (i, c) in preset.channels.iter().enumerate() {
+            let delay = (i * 37 + 5) % 480;
+            let gain = if i % 2 == 0 { 0.5 } else { 1. };
+            extra = extra.max(delay + if c.is_lfe { 3 } else { 0 });
+            for (at, sample) in [(0, 0.063), (256 - i, 0.31), (2680 + i, -0.2), (N - 1, 0.08)] {
+                let v = sample * (1. + i as f32 / 32.);
+                x[at * ch + i] = v;
+                reference[(at + delay) * ch + i] += v * gain;
+                if c.is_lfe {
+                    reference[(at + delay + 3) * ch + i] += v * gain * 0.05;
+                }
+            }
+        }
+        reference.truncate((N + extra) * ch);
+        let src = common::input_channels(&x, ch as u16);
+        let ref_src = common::input_channels(&reference, ch as u16);
+        let mut file = speaker_file(&src, &cal, layout);
+        let mut uncalibrated = speaker_file(&ref_src, &package(), layout);
+        let tail = file.tail_frames() as usize;
+        assert_eq!(tail, uncalibrated.tail_frames() as usize + extra);
+        let want = pull(&mut uncalibrated, N + tail);
+        let actual = pull(&mut file, N + tail);
+        near(&actual, &want);
+        for at in [79, N - 4, N + 31] {
+            seek(&mut file, at as u64);
+            assert_eq!(pull(&mut file, 113), actual[at * 2..(at + 113) * 2]);
+        }
+        // The Scene host can enumerate the bus in any order and use the Apple
+        // speaker geometry. A calibrated room maps those buses to its measured array.
+        let elements: Vec<_> = preset
+            .channels
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(i, c)| {
+                let a = apple
+                    .speakers
+                    .iter()
+                    .find(|a| a.label == c.speaker_label)
+                    .unwrap();
+                Element {
+                    has_position: true,
+                    position: loading::polar(a.azimuth, a.elevation, 1.).unwrap(),
+                    ..element(
+                        i as u64 + 1,
+                        if c.is_lfe {
+                            Role::Lfe
+                        } else {
+                            Role::DirectSpeaker
+                        },
+                        c.speaker_label,
+                    )
+                }
+            })
+            .collect();
+        let mut live = Live::new(
+            resources(&cal),
+            Config {
+                metres: 0.,
+                ..config(&cal)
+            },
+            false,
+            RoomScreens::default(),
+            true,
+            scope,
+            open_gate().prepare(),
+        )
+        .unwrap();
+        live.configure(17, &elements).unwrap();
+        let planar: Vec<Vec<f32>> = (0..ch)
+            .map(|i| x.iter().skip(i).step_by(ch).copied().collect())
+            .collect();
+        let mut stream = Vec::new();
+        let mut at = 0;
+        while at < N + tail {
+            if at == N {
+                assert_eq!(live.end_input().unwrap() as usize, tail);
+            }
+            let n = 181.min(if at < N { N - at } else { N + tail - at });
+            let planes: Vec<_> = if at < N {
+                (0..ch)
+                    .map(|i| Plane {
+                        element_id: i as u64 + 1,
+                        has_signal: true,
+                        samples: &planar[i][at..at + n],
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let mut out = vec![0.; 2 * n];
+            live.render(
+                &Frame {
+                    generation: 17,
+                    duration: n as u32,
+                    planes: &planes,
+                    initial: &[],
+                    updates: &[],
+                    trace: b"",
+                },
+                &mut out,
+            )
+            .unwrap();
+            stream.extend(out);
+            at += n;
+        }
+        near(&stream, &want);
+    }
+}
+
+#[test]
+fn fixed_speaker_calibration_bypasses_objects_and_explicit_distance_scale() {
+    let cal = speaker_package();
+    let uncal = package();
+    let fixture = common::input(&common::sine(3600, 0.25));
+    let scene = common::scene(
+        vec![ObjectSpec {
+            id: "AO_1001",
+            gain: 1.,
+            end: 3600,
+            tracks: vec![TrackSpec {
+                blocks: vec![object_block(0, 3600, 65.)],
+                direct: vec![],
+            }],
+        }],
+        3600,
+    );
+    let open = |pack: &Arc<Package>, input: &common::Temp, t: Arc<Prepared>, metres| {
+        FileStream::open(
+            input.path(),
+            t,
+            resources(pack),
+            Config {
+                metres,
+                ..config(pack)
+            },
+            [0.; 3],
+            scope,
+            open_gate().prepare(),
+        )
+        .unwrap()
+    };
+    let mut a = open(&cal, &fixture, table(&scene), 0.);
+    let mut b = open(&uncal, &fixture, table(&scene), 0.);
+    assert_eq!(a.tail_frames(), b.tail_frames());
+    let n = 3600 + a.tail_frames() as usize;
+    assert_eq!(pull(&mut a, n), pull(&mut b, n));
+    let x = common::input_channels(&common::sine(12 * 3200, 0.1), 12);
+    let scene = mradm_scene::import::import(
+        x.path().as_bytes(),
+        mradm_scene::import::ImportOptions {
+            input_layout: Some("7.1.4"),
+            input_channel_labels: &[],
+        },
+    )
+    .unwrap();
+    let mut a = open(&cal, &x, table(&scene), 1.5);
+    let mut b = open(&uncal, &x, table(&scene), 1.5);
+    assert_eq!(a.tail_frames(), b.tail_frames());
+    let n = 3200 + a.tail_frames() as usize;
+    assert_eq!(pull(&mut a, n), pull(&mut b, n));
 }

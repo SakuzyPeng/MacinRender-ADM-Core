@@ -180,6 +180,14 @@ pub(crate) fn description(
         "reflection_paths":room.images.len(),"hrir_bank_bytes":room.hrir.storage_bytes(),
         "windows_mmcss_workers":crate::room_environment::mmcss_workers(),
         "scope":"Validated resource integrity; acoustic and realtime acceptance are separate."});
+    if let Some(c) = &room.profile.calibration {
+        value["speaker_calibration"] = serde_json::json!({"version":1,
+            "layouts":c.layouts().map(|l|l.id()).collect::<Vec<_>>(),
+            "automatic_mapping":metres==0., "lfe_fir_taps":c.lfe.len()});
+    }
+    if room.profile.surfaces.is_some() {
+        value["kind"] = "hybrid-shoebox-v2".into();
+    }
     if let Some(collection) = &room.hrir.data.collection {
         value["hrtf_collection"] = collection.summary();
     }

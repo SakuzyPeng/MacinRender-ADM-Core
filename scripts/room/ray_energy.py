@@ -17,7 +17,7 @@ import math
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import fftconvolve
+from scipy.signal import fftconvolve, resample_poly
 
 BANDS = 8
 WALLS = 6
@@ -63,8 +63,10 @@ def validate(late, room):
     """Resolve defaults and check every field before any output exists."""
     if not isinstance(late, dict) or late.get("generator") != GENERATOR:
         raise RayEnergyError("late.generator must be ray-energy-v1")
-    unknown = set(late) - set(REQUIRED) - set(DEFAULTS)
-    missing = [key for key in REQUIRED if key not in late]
+    zoned = room.get("kind") == "hybrid-shoebox-v2"
+    required = [key for key in REQUIRED if not zoned or key != "materials"]
+    unknown = set(late) - set(required) - set(DEFAULTS)
+    missing = [key for key in required if key not in late]
     if unknown or missing:
         raise RayEnergyError(f"late fields: unknown {sorted(unknown)}, missing {missing}")
     config = {**DEFAULTS, **late}
@@ -74,11 +76,17 @@ def validate(late, room):
     config["histogram_seconds"] = _number(config["histogram_seconds"], "histogram_seconds", 0.0005, 0.01)
     config["min_hits_per_bin"] = _integer(config["min_hits_per_bin"], "min_hits_per_bin", 1, 1_000_000)
     config["direction_kappa"] = _number(config["direction_kappa"], "direction_kappa", 0.1, 1000.)
-    materials = late["materials"]
-    if not isinstance(materials, dict) or set(materials) != {"absorption", "scattering"}:
-        raise RayEnergyError("late.materials needs exactly absorption and scattering")
-    config["materials"] = {"absorption": _table(materials["absorption"], "materials.absorption", WALLS, BANDS),
-                           "scattering": _table(materials["scattering"], "materials.scattering", WALLS, BANDS)}
+    if zoned:
+        from room_surfaces import SurfaceMap
+        surface_map = SurfaceMap(room["surface_model"], room["dimensions"])
+        config["_surfaces"] = surface_map
+        config["materials"] = {"absorption": surface_map.absorption, "scattering": surface_map.scattering}
+    else:
+        materials = late["materials"]
+        if not isinstance(materials, dict) or set(materials) != {"absorption", "scattering"}:
+            raise RayEnergyError("late.materials needs exactly absorption and scattering")
+        config["materials"] = {"absorption": _table(materials["absorption"], "materials.absorption", WALLS, BANDS),
+                               "scattering": _table(materials["scattering"], "materials.scattering", WALLS, BANDS)}
     config["air_attenuation_db_per_m"] = _table(config["air_attenuation_db_per_m"], "air_attenuation_db_per_m",
                                                 0, BANDS, 0., 1.)
     dimensions = np.asarray(room["dimensions"], dtype=np.float64)
@@ -110,6 +118,8 @@ def resolved(config):
     """The configuration with defaults, as recorded in the manifest."""
     result = dict(config)
     result["materials"] = {k: v.tolist() for k, v in config["materials"].items()}
+    if result.pop("_surfaces", None) is not None:
+        del result["materials"]
     result["air_attenuation_db_per_m"] = config["air_attenuation_db_per_m"].tolist()
     return result
 
@@ -236,6 +246,7 @@ def trace_source(config, room, position, rng, bands=tuple(range(BANDS))):
     stalled = np.zeros(rays, dtype=np.int64)
     times, arrivals, energies = [], [], []
     rows = np.arange(rays)
+    surfaces = config.get("_surfaces")
     while len(rows):
         with np.errstate(divide="ignore", invalid="ignore"):
             span = np.where(direction > 0, (dimensions - origin) / direction,
@@ -275,8 +286,9 @@ def trace_source(config, room, position, rng, bands=tuple(range(BANDS))):
         origin = np.clip(origin, 0., dimensions)
         origin[index, axis] = np.where(upper, dimensions[axis], 0.)
         wall = axis * 2 + upper
-        energy = energy * reflection[wall]
-        diffuse = rng.random(len(rows)) < scattering[wall]
+        slot = surfaces.bindings(wall, origin) if surfaces is not None else wall
+        energy = energy * reflection[slot]
+        diffuse = rng.random(len(rows)) < scattering[slot]
         specular = ~diffuse
         direction[index[specular], axis[specular]] *= -1.
         if diffuse.any():
@@ -288,6 +300,10 @@ def trace_source(config, room, position, rng, bands=tuple(range(BANDS))):
             fresh[np.arange(len(chosen)), normal_axis] = np.where(upper[chosen], -1., 1.) * np.sqrt(1. - first)
             fresh[np.arange(len(chosen)), (normal_axis + 1) % 3] = radial * np.cos(azimuth)
             fresh[np.arange(len(chosen)), (normal_axis + 2) % 3] = radial * np.sin(azimuth)
+            if surfaces is not None:
+                fan = surfaces.fans[slot[chosen]]
+                fi = chosen[fan]
+                fresh[fan] = surfaces.scatter_fan(direction[fi], slot[fi], axis[fi], upper[fi], second[fan])
             direction[chosen] = fresh
         reflected[:] = True
         alive = (elapsed <= limit) & (energy.max(axis=1) >= TERMINATION * initial)
@@ -568,7 +584,7 @@ def distribute_directions(energy, squares, hits, shape, starts, minimum):
     return finished, seams, smoothed
 
 
-def synthesize(energy, bands, sample_rate, duration, width, rng):
+def synthesize(energy, bands, sample_rate, duration, width, rng, ultrasonic_rng=None):
     """Seeded band noise under each (direction, band) envelope; one common energy calibration.
 
     The template bands sum to a delta, so filtered unit noise keeps each band's share of a flat
@@ -582,7 +598,17 @@ def synthesize(energy, bands, sample_rate, duration, width, rng):
     field = np.zeros((directions, frames), dtype=np.float64)
     for channel in range(directions):
         for band in range(band_count):
-            noise = rng.standard_normal(frames + bands.shape[1] - 1)
+            length = frames + bands.shape[1] - 1
+            if ultrasonic_rng is None:
+                noise = rng.standard_normal(length)
+            else:
+                # Share the audible excitation with the 48 kHz pack. The independent
+                # upper octave is shifted to 24..48 kHz. Filter each at its native rate.
+                base_length = round(duration * 48000) + (bands.shape[1] + 1) // 2 - 1
+                low = resample_poly(rng.standard_normal(base_length), 2, 1, window=('kaiser', 8.6))
+                high = resample_poly(ultrasonic_rng.standard_normal(base_length), 2, 1, window=('kaiser', 8.6))
+                high[1::2] *= -1.
+                noise = np.pad((low + high) / np.sqrt(2.), (1, max(0, length - len(low) - 1)))[:length]
             filtered = fftconvolve(noise, bands[band], mode="valid")
             envelope = np.interp(samples, centres, np.sqrt(energy[channel, band] / width))
             field[channel] += filtered * envelope
@@ -664,7 +690,10 @@ def generate(late, room, bands, directions, tool_dir, jobs=1):
         for d in np.flatnonzero(seams < histogram.bins):
             continuation[d][b] = [float(seams[d] * histogram.width), int(smoothed[d])]
     noise = np.random.Generator(np.random.PCG64(np.random.SeedSequence(seed, spawn_key=(1,))))
-    field = synthesize(finished, bands, int(room["sample_rate"]), config["duration_seconds"], histogram.width, noise)
+    extra = {}
+    if "_surfaces" in config and room["sample_rate"] == 96000:
+        extra["ultrasonic_rng"] = np.random.Generator(np.random.PCG64(np.random.SeedSequence(seed, spawn_key=(2,))))
+    field = synthesize(finished, bands, int(room["sample_rate"]), config["duration_seconds"], histogram.width, noise, **extra)
     band_energy = finished.sum(axis=(0, 2))
     decays = [decay_times(finished[:, b].sum(axis=0), histogram.width) for b in range(BANDS)]
     summary = dict(
@@ -686,4 +715,17 @@ def generate(late, room, bands, directions, tool_dir, jobs=1):
                   hits_by_source_and_group=per_source, effective_hits=dict(
                       minimum=float(hits[histogram.energy > 0].min()) if (histogram.energy > 0).any() else 0.,
                       median=float(np.median(hits[histogram.energy > 0])) if (histogram.energy > 0).any() else 0.))
+    if "_surfaces" in config:
+        report["band_bin_seconds"] = histogram.width
+        report["band_envelopes"] = finished.sum(axis=0).tolist()
+        report["direction_moments"] = []
+        centres = (np.arange(histogram.bins) + .5) * histogram.width
+        for lo, hi in ((0., .05), (.05, .15), (.15, .35), (.35, config["duration_seconds"])):
+            hi = min(hi, config["duration_seconds"])
+            if hi <= lo:
+                break
+            weights = finished[:, :, (centres >= lo) & (centres < hi)].sum(axis=2)
+            weights = np.divide(weights, weights.sum(axis=0), out=np.zeros_like(weights), where=weights.sum(axis=0) > 0)
+            tensor = np.einsum("db,di,dj->bij", weights, directions, directions)
+            report["direction_moments"].append(dict(seconds=[lo, hi], tensor=tensor.tolist()))
     return field, summary, report

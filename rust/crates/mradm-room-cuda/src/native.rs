@@ -343,7 +343,8 @@ pub struct NativeFactory {
 }
 impl NativeFactory {
     pub fn new(room: Arc<PreparedRoom>, library: Option<&Path>) -> Result<Arc<Self>> {
-        if room.quality != Quality::Realtime
+        if room.profile.surfaces.is_some()
+            || room.quality != Quality::Realtime
             || room.profile.sample_rate != 96000
             || room.fft_length != 4096
             || room.early_channels() != 2
@@ -409,6 +410,11 @@ impl NativeFactory {
 
 impl Factory for NativeFactory {
     fn create(&self, room: Arc<PreparedRoom>) -> Result<Box<dyn Backend>> {
+        if room.profile.surfaces.is_some() {
+            return Err(Error::Unsupported(
+                "hybrid-shoebox-v2 needs CPU room rendering",
+            ));
+        }
         let bank = self.bank();
         if !Arc::ptr_eq(&room.hrir, &bank.cpu) || room.quality != Quality::Realtime {
             return Err(Error::InvalidArgument(

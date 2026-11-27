@@ -16,3 +16,5 @@ committed) called the C ABI of a Linux x64 config A Release build through ctypes
 
 The Apple, Windows and IAMF facts are island data; `tests/catalog.rs` covers how they reach the
 documents.
+
+The capabilities fixture includes the subsequently added CPU `hybrid-shoebox-v2` room mode.

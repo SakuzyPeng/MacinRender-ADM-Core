@@ -126,6 +126,8 @@ fn build_fixture(quality: Quality, collection: bool, rate: u32) -> Arc<PreparedS
         late[direction * 2301 + 2200 + direction * 9] = 0.01;
     }
     let profile = Arc::new(RoomProfile {
+        surfaces: None,
+        calibration: None,
         sample_rate: rate,
         identity: "synthetic-room".into(),
         id: "test".into(),

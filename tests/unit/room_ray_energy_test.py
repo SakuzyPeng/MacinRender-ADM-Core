@@ -5,6 +5,7 @@ Covers docs/architecture/ROOM_RAY_ENERGY_LATE_FIELD.md, "生成器自测": conse
 decay against Eyring, scattering groups, direction conventions, the onset energy account,
 determinism, the tail rules and the error paths. Needs numpy and scipy; no build, no LFS.
 """
+import hashlib
 import importlib.util
 import json
 import math
@@ -311,6 +312,59 @@ class Tail(unittest.TestCase):
                                       energy, np.arange(50), 32)
 
 
+
+class ZonedSurfaces(unittest.TestCase):
+    def setUp(self):
+        if str(TOOLS) not in sys.path:
+            sys.path.insert(0, str(TOOLS))
+        from room_surfaces import SurfaceMap
+        self.compile = SurfaceMap
+        self.base = json.loads((ROOT / "tests/fixtures/room/synthetic/zoned-room.json").read_text())
+        self.model = self.base["surface_model"]
+
+    def test_shared_concave_boundaries_and_rejection(self):
+        mapping = self.compile(self.model, self.base["dimensions"])
+        for wall, (u, v), name in self.base["cases"]:
+            points = np.zeros((1, 3))
+            points[0, [1, 2]] = [u, v]  # shared cases on X-normal walls
+            slot = mapping.bindings(np.array([wall]), points)[0]
+            material = next(m for m in self.model["materials"] if m["id"] == name)
+            np.testing.assert_array_equal(mapping.absorption[slot], material["absorption"])
+        self.model["faces"][0]["regions"][0]["polygon"] = [[0, 0], [3, 2], [0, 2], [2, 0]]
+        with self.assertRaises(ValueError):
+            self.compile(self.model, self.base["dimensions"])
+
+    def test_native_rate_pair_shares_the_audible_carrier(self):
+        from scipy.signal import resample_poly, butter, sosfilt
+        energy = np.ones((1, 1, 64))
+        low = np.zeros((1, 16))
+        high = np.zeros((1, 32))
+        low[0, 8], high[0, 16] = 1., 1.
+        def rng(seed):
+            return np.random.default_rng(seed)
+        a = ray.synthesize(energy, low, 48000, .256, .004, rng(4))[0]
+        b = ray.synthesize(energy, high, 96000, .256, .004, rng(4), rng(9))[0]
+        sos = butter(6, 12000, fs=48000, output='sos')
+        mid = slice(500, -500)
+        self.assertGreater(np.corrcoef(sosfilt(sos, a)[mid], sosfilt(sos, resample_poly(b, 1, 2))[mid])[0, 1], .999)
+
+    def test_fan_rotation_conserves_energy_and_rotates_dispersion(self):
+        material = self.model["faces"][0]["regions"][0]
+        u = np.linspace(0., 1., 1001)
+        for angle, spread, groove in [(0, 1, 2), (90, 2, 1)]:
+            material["angle_deg"] = angle
+            mapping = self.compile(self.model, self.base["dimensions"])
+            slot = mapping.bindings(np.array([0]), np.array([[0., 2.5, 0.2]]))[0]
+            incoming = np.zeros((len(u), 3))
+            incoming[:, 0], incoming[:, groove] = -0.8, 0.6
+            out = mapping.scatter_fan(incoming, np.full(len(u), slot), np.zeros(len(u), int),
+                                      np.zeros(len(u), bool), u)
+            np.testing.assert_allclose(np.linalg.norm(out, axis=1), 1., atol=1e-14)
+            np.testing.assert_allclose(out[:, groove], 0.6, atol=1e-14)
+            self.assertAlmostEqual(np.ptp(out[:, spread]), 1.6)
+            self.assertGreaterEqual(out[:, 0].min(), 0.)
+
+
 class Generator(unittest.TestCase):
     """End to end through generate-room.py on the synthetic room fixture."""
 
@@ -323,7 +377,7 @@ class Generator(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.root)
 
-    def run_generator(self, name, late, *extra, **room_changes):
+    def run_generator(self, name, late, *extra, surface_model=None, **room_changes):
         definition_file = self.root / f"{name}.json"
         room = {**self.template_room, **room_changes}
         content = dict(schema="mradm.room-definition", version=1, id="candidate", name="Candidate", late=late,
@@ -331,6 +385,9 @@ class Generator(unittest.TestCase):
                            "dimensions", "listener", "speed_of_sound", "reference_distance", "minimum_distance",
                            "boundary_clearance", "reflection_order", "absorption", "early_fade_seconds",
                            "late_predelay_seconds")})
+        if surface_model is not None:
+            del content["absorption"]
+            content.update(version=2, surface_model=surface_model, common_eq=[[0, 0], [100, -1], [1000, 0]])
         definition_file.write_text(json.dumps(content))
         output = self.root / name
         process = subprocess.run([sys.executable, "-B", str(TOOLS / "generate-room.py"), "--template-package",
@@ -371,6 +428,36 @@ class Generator(unittest.TestCase):
         for band in range(8):
             self.assertAlmostEqual(variant["late_t30_seconds"][band] / summary["late_t30_seconds"][band], 1.,
                                    delta=0.1)
+
+    def test_zoned_package_shares_the_table_and_is_reproducible_across_jobs(self):
+        model = json.loads((self.template / "zoned-room.json").read_text())["surface_model"]
+        late = self.small()
+        del late["materials"]
+        one, a = self.run_generator("one", late, surface_model=model)
+        two, b = self.run_generator("two", late, "--jobs", "2", surface_model=model)
+        for process in (one, two):
+            self.assertEqual(process.returncode, 0, process.stderr)
+        manifest = json.loads((a / "room.json").read_text())
+        self.assertEqual(manifest["kind"], "hybrid-shoebox-v2")
+        self.assertEqual(manifest["surface_model"], model)
+        self.assertNotIn("absorption", manifest)
+        self.assertGreater(manifest["assets"]["eq"]["shape"][0], 1)
+        self.assertEqual((a / "SHA256SUMS").read_bytes(), (b / "SHA256SUMS").read_bytes())
+        for row in (a / "SHA256SUMS").read_text().splitlines():
+            digest, name = row.split("  ")
+            self.assertEqual(digest, hashlib.sha256((a / name).read_bytes()).hexdigest())
+        duplicate, output = self.run_generator("duplicate", self.small(), surface_model=model)
+        self.assertNotEqual(duplicate.returncode, 0)
+        self.assertFalse(output.exists())
+
+    def test_missing_optional_hrir_leaves_the_destination_available_for_retry(self):
+        (self.template / self.template_room["default_hrir"]).unlink()
+        run, output = self.run_generator("retry", self.small(), "--include-hrir")
+        self.assertNotEqual(run.returncode, 0)
+        self.assertFalse(output.exists())
+        run, output = self.run_generator("retry", self.small())
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertTrue((output / "room.json").exists())
 
     def test_invalid_definitions_fail_before_any_output_exists(self):
         cases = dict(

@@ -265,13 +265,22 @@ pub fn room() -> Backend {
         supports_render_window: true,
         hrtf_sources: strings(&["user-sofa", "prepared-hrir", "hrtf-collection"]),
         layouts: vec![layout("binaural", "Room binaural", 2, true, 0, true, true)],
-        modes: vec![mode(
-            "hybrid-shoebox-v1",
-            "Finite hybrid room",
-            &["binaural"],
-            &rates,
-            true,
-        )],
+        modes: vec![
+            mode(
+                "hybrid-shoebox-v1",
+                "Finite hybrid room",
+                &["binaural"],
+                &rates,
+                true,
+            ),
+            mode(
+                "hybrid-shoebox-v2",
+                "Zoned hybrid room (CPU)",
+                &["binaural"],
+                &rates,
+                true,
+            ),
+        ],
         qualities: vec![
             mode("exact", "精确", &["binaural"], &rates, true),
             mode("realtime", "实时", &["binaural"], &rates, true),
