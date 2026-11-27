@@ -7,6 +7,7 @@ use mradm_dsp::room::{
     session::{Instance, PreparedSet, Session},
 };
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[path = "common/room_fixture.rs"]
@@ -15,11 +16,22 @@ mod common;
 struct CheckedAllocator;
 static CHECK: AtomicBool = AtomicBool::new(false);
 static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+// libtest reports long tests from its own coordinator while the DSP may be
+// measuring. Count the submitting thread and every dedicated ROOM worker,
+// including the mailbox driver, across the entire processing interval.
+thread_local! { static AUDIO_THREAD: Cell<bool> = const { Cell::new(false) }; }
+fn mark_audio_thread() {
+    AUDIO_THREAD.set(true);
+}
+fn record_allocation() {
+    if CHECK.load(Ordering::Relaxed) && AUDIO_THREAD.get() {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 unsafe impl GlobalAlloc for CheckedAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if CHECK.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        }
+        record_allocation();
         unsafe { System.alloc(layout) }
     }
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
@@ -28,9 +40,7 @@ unsafe impl GlobalAlloc for CheckedAllocator {
         }
     }
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
-        if CHECK.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        }
+        record_allocation();
         unsafe { System.realloc(pointer, layout, size) }
     }
 }
@@ -39,6 +49,14 @@ static ALLOCATOR: CheckedAllocator = CheckedAllocator;
 
 #[test]
 fn regular_room_dsp_does_not_allocate_on_any_worker() {
+    mark_audio_thread();
+    mradm_dsp::room::set_worker_start_hook(mark_audio_thread);
+    mradm_dsp::room::run_on_workers(|| {
+        rayon::broadcast(|_| assert!(AUDIO_THREAD.get(), "unobserved ROOM worker"));
+        Ok(())
+    })
+    .unwrap();
+
     for quality in [Quality::Realtime, Quality::Exact] {
         for automatic in [false, true] {
             verify_quality(quality, false, 48000, automatic, false);
