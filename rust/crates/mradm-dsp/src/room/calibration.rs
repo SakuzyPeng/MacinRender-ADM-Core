@@ -230,7 +230,7 @@ mod tests {
     #[test]
     fn rejects_bad_tables_and_firs_before_loading_audio() {
         let base: Value = serde_json::from_str(include_str!(
-            "../../../../../tests/fixtures/room/synthetic/speaker-room.json"
+            "../../../../../tests/fixtures/room/variant-manifests/speaker-room.json"
         ))
         .unwrap();
         for (key, value) in [

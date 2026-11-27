@@ -283,7 +283,7 @@ mod tests {
     use crate::room::geometry::images;
     fn fixture() -> Value {
         serde_json::from_str(include_str!(
-            "../../../../../tests/fixtures/room/synthetic/zoned-room.json"
+            "../../../../../tests/fixtures/room/variant-manifests/zoned-room.json"
         ))
         .unwrap()
     }

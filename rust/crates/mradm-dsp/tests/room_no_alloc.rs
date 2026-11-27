@@ -66,7 +66,7 @@ fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool
     }
     if zoned {
         let f: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/room/synthetic/zoned-room.json"
+            "../../../../tests/fixtures/room/variant-manifests/zoned-room.json"
         ))
         .unwrap();
         profile.surfaces = Some(
@@ -77,7 +77,7 @@ fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool
     if zoned {
         use mradm_dsp::room::calibration::Calibration;
         let data: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/room/synthetic/speaker-room.json"
+            "../../../../tests/fixtures/room/variant-manifests/speaker-room.json"
         ))
         .unwrap();
         profile.calibration = Some(

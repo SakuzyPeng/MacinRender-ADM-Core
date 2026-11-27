@@ -319,7 +319,7 @@ class ZonedSurfaces(unittest.TestCase):
             sys.path.insert(0, str(TOOLS))
         from room_surfaces import SurfaceMap
         self.compile = SurfaceMap
-        self.base = json.loads((ROOT / "tests/fixtures/room/synthetic/zoned-room.json").read_text())
+        self.base = json.loads((ROOT / "tests/fixtures/room/variant-manifests/zoned-room.json").read_text())
         self.model = self.base["surface_model"]
 
     def test_shared_concave_boundaries_and_rejection(self):
@@ -430,7 +430,7 @@ class Generator(unittest.TestCase):
                                    delta=0.1)
 
     def test_zoned_package_shares_the_table_and_is_reproducible_across_jobs(self):
-        model = json.loads((self.template / "zoned-room.json").read_text())["surface_model"]
+        model = json.loads((ROOT / "tests/fixtures/room/variant-manifests/zoned-room.json").read_text())["surface_model"]
         late = self.small()
         del late["materials"]
         one, a = self.run_generator("one", late, surface_model=model)

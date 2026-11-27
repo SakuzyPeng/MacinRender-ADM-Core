@@ -28,6 +28,24 @@ fn package() -> Arc<Package> {
     Arc::new(loading::load_package(manifest().as_bytes()).unwrap())
 }
 
+/// Alternate manifests reuse the frozen synthetic room's numeric files.
+fn variant_package(name: &str) -> Arc<Package> {
+    let root = std::path::PathBuf::from(manifest())
+        .parent()
+        .unwrap()
+        .to_owned();
+    let bytes = std::fs::read(root.parent().unwrap().join("variant-manifests").join(name)).unwrap();
+    let room = mradm_dsp::room::resources::RoomProfile::parse(&bytes, |n, len| {
+        loading::bounded_read(&root.join(n), Some(len), len)
+    })
+    .unwrap();
+    Arc::new(Package {
+        profile: Arc::new(room),
+        root,
+        manifest: bytes,
+    })
+}
+
 fn fault(e: mradm_dsp::Error) -> Fault {
     match e {
         mradm_dsp::Error::InvalidArgument(s) => (1, s),
@@ -143,8 +161,7 @@ impl Fixture {
         Self::with_package(package())
     }
     fn zoned() -> Self {
-        let path = manifest().replace("/room.json", "/zoned-room.json");
-        Self::with_package(Arc::new(loading::load_package(path.as_bytes()).unwrap()))
+        Self::with_package(variant_package("zoned-room.json"))
     }
     fn with_package(package: Arc<Package>) -> Self {
         Self {
@@ -874,8 +891,7 @@ fn a_reset_keeps_the_applied_room_and_clears_history() {
 }
 
 fn speaker_package() -> Arc<Package> {
-    let path = manifest().replace("/room.json", "/speaker-room.json");
-    Arc::new(loading::load_package(path.as_bytes()).unwrap())
+    variant_package("speaker-room.json")
 }
 
 fn speaker_file(input: &common::Temp, package: &Arc<Package>, layout: &str) -> FileStream {
