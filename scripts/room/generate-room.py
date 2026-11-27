@@ -2,8 +2,9 @@
 """Generate a finite hybrid-shoebox-v1 package from a room definition.
 
 The template package provides verified band synthesis, propagation kernels, EQ
-and world directions. The new seeded octave-decay late field is a new acoustic
-preset; it does not inherit the reference room's validation claims.
+and world directions. The new seeded octave-decay or ray-traced (ray-energy-v1,
+ray_energy.py) late field is a new acoustic preset; it does not inherit the
+reference room's validation claims.
 """
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
+import time
 
 import numpy as np
 import scipy
@@ -89,13 +92,28 @@ def noise_field(late, bands, directions, sample_rate=48000):
     return field
 
 
+def ray_energy_module():
+    # A plain import, so that --jobs workers (spawned on macOS) can resolve the pickled tasks.
+    directory = str(Path(__file__).resolve().parent)
+    if directory not in sys.path:
+        sys.path.insert(0, directory)
+    import ray_energy
+    return ray_energy, hashlib.sha256(Path(ray_energy.__file__).read_bytes()).hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--template-package", type=Path, required=True, help="existing room.json")
     parser.add_argument("--definition", type=Path, required=True, help="copy/edit room-template.json")
     parser.add_argument("--output", type=Path, required=True, help="new directory")
     parser.add_argument("--include-hrir", action="store_true", help="copy the default HRIR binding into the new package")
+    parser.add_argument("--jobs", type=int, default=1,
+                        help="ray-energy-v1 worker processes (1..256); the output does not depend on it")
     args = parser.parse_args()
+    if not 1 <= args.jobs <= 256:
+        raise ValueError("--jobs must be within 1..256")
+    if args.output.exists():
+        raise ValueError("output directory already exists")
     base = json.loads(args.template_package.read_text(encoding="utf-8"))
     definition_bytes = args.definition.read_bytes()
     definition = json.loads(definition_bytes)
@@ -125,6 +143,8 @@ def main():
     source = args.template_package.parent
     arrays = {name: read_asset(source, entry) for name, entry in base["assets"].items()}
     mix_error = None
+    ray_summary = ray_report = ray_tool = None
+    started = time.perf_counter()
     if late["generator"] == "octave-decay-noise-v1":
         field = noise_field(late, arrays["bands"], arrays["late_directions"], base["sample_rate"])
     elif late["generator"] == "template-orthogonal-mix-v1":
@@ -132,6 +152,10 @@ def main():
             raise ValueError("orthogonal mix requires the exact declared template late field")
         field, mix_error = orthogonal_mix(arrays["late"], late["mix_vector"],
                                          float(late.get("decay_rate_per_second", 0.)), base["sample_rate"])
+    elif late["generator"] == "ray-energy-v1":
+        ray, ray_tool = ray_energy_module()
+        field, ray_summary, ray_report = ray.generate(late, base, arrays["bands"], arrays["late_directions"],
+                                                      Path(__file__).parent, args.jobs)
     else:
         raise ValueError("unsupported offline late-field generator")
     encoded = np.asarray(field, dtype="<f4", order="C")
@@ -150,6 +174,9 @@ def main():
                                tool_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), definition_sha256=hashlib.sha256(definition_bytes).hexdigest(),
                                numpy=np.__version__, scipy=scipy.__version__, late=late,
                                orthogonal_energy_relative_error_before_tilt=mix_error)
+    if ray_summary is not None:
+        base["generation"]["ray_energy_tool_sha256"] = ray_tool
+        base["generation"]["ray_energy"] = ray_summary
     base["validation_scope"] = "New preset. Resource integrity only; requires independent acoustic validation."
     if args.include_hrir:
         hrir_name = base["default_hrir"]
@@ -162,6 +189,11 @@ def main():
         shutil.copyfile(source / hrir_name, args.output / hrir_name)
     (args.output / "room.json").write_text(json.dumps(base, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     (args.output / "definition.json").write_bytes(definition_bytes)
+    if ray_report is not None:
+        # Per-run facts stay out of room.json, whose bytes are the runtime room identity.
+        ray_report.update(seconds=time.perf_counter() - started, numpy=np.__version__, scipy=scipy.__version__)
+        (args.output / "generation-report.json").write_text(
+            json.dumps(ray_report, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(json.dumps(dict(room=str(args.output / "room.json"), hrir_included=args.include_hrir,
                          bytes=sum(p.stat().st_size for p in args.output.iterdir()))))
 
