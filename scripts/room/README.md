@@ -15,6 +15,8 @@
   （`late.materials` 的六面八带吸收与散射）做随机射线追踪后合成，形状与方向基不变；字段、
   算法与验收见[方案](../../docs/architecture/ROOM_RAY_ENERGY_LATE_FIELD.md)。射线追踪耗时为分钟级，
   `--jobs N` 用多个进程追踪，输出与 N 无关；包内另写不进入房间身份的 `generation-report.json`。
+  各方向在同一时间窗内共享频带能量。若整个尾段的有效命中数不足，且余量超过该频带总能量的
+  百万分之一，生成器会报告余量和有效命中数，可增加 `late.rays` 或加宽 `late.histogram_seconds`。
   自测为 `tests/unit/room_ray_energy_test.py`（ctest `mr_adm_room_ray_energy_tests`）。
 - `mradm room-check room.json --hrir /path/to/hrir.json` 检查版本、形状、有限值、哈希、滤波支持
   并准备 FFT，输出资源身份、尾长和缓冲延迟。缺省 `--hrir` 读取包内默认绑定。

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`ray-energy-v1`: a preparation-time stochastic ray-traced late field for generate-room.py.
 
-Traces energy-vector rays (eight bands share one geometric path) in the hybrid-shoebox room,
+Traces rays in the shoebox with a shared path for bands of equal scattering,
 receives them on a volume receiver at the listener, aligns every source to its direct arrival
 plus the late predelay, softly assigns arrivals to the template's world late directions and
 synthesises the same `[directions, taps]` late resource as the other generators. The runtime is
@@ -28,7 +28,8 @@ REQUIRED = ("generator", "seed", "duration_seconds", "rays", "receiver_radius", 
 RUN = 3  # consecutive bins that establish the field or start the sparse tail
 FIT_POINTS = 10
 TERMINATION = 1e-12  # -120 dB of a ray's initial energy in every band
-SEAM_BINS = 8
+NEGLIGIBLE_TAIL_FRACTION = 1e-6  # -60 dB of a band's integrated energy
+TAIL_FADE_SECONDS = 0.005
 
 
 class RayEnergyError(ValueError):
@@ -378,7 +379,7 @@ class Histogram:
         self.hits += part["hits"]
 
     def effective_hits(self):
-        return np.divide(self.energy ** 2, self.squares, out=np.zeros_like(self.energy), where=self.squares > 0)
+        return effective_hits(self.energy, self.squares)
 
     def account(self):
         histogram = self.energy.sum(axis=(0, 2))
@@ -417,8 +418,12 @@ def fit_decay(times, energy, low, high, compensation=0.):
     return dict(slope=float(slope), first=int(chosen[0]), last=int(chosen[-1]))
 
 
+def effective_hits(energy, squares):
+    return np.divide(energy ** 2, squares, out=np.zeros_like(energy), where=squares > 0)
+
+
 def _seam(energy, hits, minimum):
-    """(onset, seam) by the §7 rules; seam is None when the measured series stays reliable."""
+    """First sustained sparse run after the reliable peak, or None."""
     reliable = hits >= minimum
     established = _runs(reliable)
     if not established.any():
@@ -428,7 +433,7 @@ def _seam(energy, hits, minimum):
     peak = int(np.argmax(np.where(reliable & (np.arange(len(energy)) >= onset), energy, -np.inf)))
     sparse = _runs(~reliable)
     candidates = np.flatnonzero(sparse[peak + 1:]) + peak + 1 if len(sparse) > peak + 1 else np.zeros(0, int)
-    return reliable, onset, (int(candidates[0]) if len(candidates) else None)
+    return int(candidates[0]) if len(candidates) else None
 
 
 def _geometric_sum(rate, count):
@@ -445,7 +450,7 @@ def _pair_rate(first, second):
     """
     (a1, b1, e1), (a2, b2, e2) = first, second
     n1, n2 = b1 - a1, b2 - a2
-    target = math.log((e2 / n2) / (e1 / n1))
+    target = math.log(e2) - math.log(e1) + math.log(n1 / n2)
     if target >= 0:
         return 0.
 
@@ -461,70 +466,106 @@ def _pair_rate(first, second):
     return 0.5 * (low + high)
 
 
-def tail(energy, squares, width, minimum):
-    """A band's direction-pooled series: keep it, or merge its sparse tail into reliable windows.
+def _enough_hits(energy, square_sum, minimum):
+    return square_sum > 0. and energy * energy >= minimum * square_sum
 
-    From the seam on, each window grows bin by bin until its effective arrivals
-    (Σ energy)² / Σ energy² reach `minimum`; a short last window joins the one before it. Each
-    window keeps its energy, spread along an exponential whose rate is the mean of the rates that
-    reproduce its mean density together with each neighbour's (window means are reliable, a single
-    window's internal shape is not). The windows reach the end of the series, so nothing is
-    extrapolated, and the decay may change from window to window (late decays need not be one
-    exponential; a fitted extrapolation also carries the truncation bias of its integral).
-    """
+
+def windowed_tail(energy, squares, width, minimum):
+    """Return the pooled band envelope, its diagnostics and the start bin of each budget window."""
     count = len(energy)
-    if not energy.any():
-        return energy.copy(), dict(status="zero")
-    hits = np.divide(energy ** 2, squares, out=np.zeros_like(energy), where=squares > 0)
-    reliable, onset, seam = _seam(energy, hits, minimum)
-    if seam is None:
-        return energy.copy(), dict(status="measured")
+    occupied = np.flatnonzero(energy)
+    if occupied.size == 0:
+        return energy.copy(), dict(status="zero"), np.arange(count)
+    seam = _seam(energy, effective_hits(energy, squares), minimum)
+    end = int(occupied[-1]) + 1
+    if seam is None or seam >= end:
+        return energy.copy(), dict(status="measured"), np.arange(count)
     windows, start = [], seam
-    while start < count:
+    while start < end:
         stop, total, square = start, 0., 0.
-        while stop < count:
+        while stop < end:
             total, square, stop = total + energy[stop], square + squares[stop], stop + 1
-            if square > 0 and total * total >= minimum * square:
+            if _enough_hits(total, square, minimum):
                 break
         windows.append([start, stop, total, square])
         start = stop
-    if len(windows) > 1 and not (windows[-1][3] > 0 and windows[-1][2] ** 2 >= minimum * windows[-1][3]):
+    # A dominant ray in the remainder can lower the effective count even after a merge.
+    while len(windows) > 1 and not _enough_hits(windows[-1][2], windows[-1][3], minimum):
         last = windows.pop()
         windows[-1] = [windows[-1][0], last[1], windows[-1][2] + last[2], windows[-1][3] + last[3]]
     result = energy.copy()
+    total, square = windows[-1][2:]
+    if not _enough_hits(total, square, minimum):
+        fraction = float(total / energy.sum())
+        hits = float(total ** 2 / square) if square > 0. else 0.
+        if fraction > NEGLIGIBLE_TAIL_FRACTION:
+            raise RayEnergyError(f"晚场尾段采样不足：剩余频带能量占比 {fraction:.3g}，"
+                                 f"有效命中 {hits:.2f} < {minimum}，请提高 rays 或 histogram_seconds")
+        # Confine the unresolved energy to a short cosine amplitude fade at the seam.
+        length = min(count - seam, math.ceil(TAIL_FADE_SECONDS / width))
+        weights = np.cos((np.arange(length) + 0.5) * (np.pi / (2 * length))) ** 2
+        result[seam:] = 0.
+        result[seam:seam + length] = total * (weights / weights.sum())
+        info = dict(status="tapered", start_seconds=float(seam * width), fade_bins=length,
+                    residual_energy_fraction=fraction, effective_hits=hits)
+        return result, info, np.arange(seam + 1)
+
     spans = [(first, stop, total) for first, stop, total, _ in windows]
     for i, (first, stop, total) in enumerate(spans):
-        if not total > 0:
-            result[first:stop] = 0.
-            continue
-        rates = [_pair_rate(spans[j], spans[j + 1]) for j in (i - 1, i) if 0 <= j and j + 1 < len(spans)
-                 and spans[j][2] > 0 and spans[j + 1][2] > 0]
-        rate = float(np.mean(rates)) if rates else 0.
+        rates = [_pair_rate(spans[j], spans[j + 1]) for j in (i - 1, i) if 0 <= j < len(spans) - 1]
+        # A single supported window still has a measured neighbour just before the seam.
+        rate = float(np.mean(rates)) if rates else _pair_rate((seam - 1, seam, energy[seam - 1]), spans[i])
         weights = np.exp(-rate * np.arange(stop - first, dtype=np.float64))
-        result[first:stop] = total * weights / weights.sum()
-    return result, dict(status="merged", start_seconds=float(seam * width), windows=len(windows),
-                        last_window_seconds=float((windows[-1][1] - windows[-1][0]) * width))
+        result[first:stop] = total * (weights / weights.sum())
+    starts = [*range(seam), *(first for first, _, _ in spans)]
+    if end < count:
+        starts.append(end)  # keep the observed trailing silence
+    info = dict(status="merged", start_seconds=float(seam * width), windows=len(windows),
+                last_window_seconds=float((end - spans[-1][0]) * width))
+    return result, info, np.asarray(starts)
 
 
-def continue_direction(energy, hits, shape, width, minimum):
-    """One (direction, band) series: after its own seam it follows the band's finished pooled shape.
+def tail(energy, squares, width, minimum):
+    """A single band's envelope and diagnostics, also used independently of FIR synthesis."""
+    shape, info, _ = windowed_tail(energy, squares, width, minimum)
+    return shape, info
 
-    Per-direction fits on sparse data scatter widely and see only the early part of a decay that
-    need not be one exponential; the pooled band series is about one direction count more
-    reliable. The level at the seam comes from the direction's own last reliable bins.
-    """
-    if not energy.any():
-        return energy.copy(), dict(status="zero")
-    reliable, onset, seam = _seam(energy, hits, minimum)
-    if seam is None:
-        return energy.copy(), dict(status="measured")
-    before = np.flatnonzero(reliable[onset:seam])[-SEAM_BINS:] + onset
-    if not np.all(shape[before] > 0) or not shape[seam] > 0:
-        raise RayEnergyError("晚场的频带合并形状在方向尾段起点为零")
-    level = float(np.mean(energy[before] / shape[before]))
-    result = energy.copy()
-    result[seam:] = level * shape[seam:]
-    return result, dict(status="continued", start_seconds=float(seam * width), level_to_pooled=level)
+
+def distribute_directions(energy, squares, hits, shape, starts, minimum):
+    """Allocate each pooled window's energy across directions, keeping reliable observations."""
+    directions, bins = energy.shape
+    seams = np.full(directions, bins)
+    for d in range(directions):
+        if energy[d].any():
+            seam = _seam(energy[d], hits[d], minimum)
+            if seam is not None:
+                seams[d] = seam
+
+    observed = np.add.reduceat(energy, starts, axis=1)
+    support = effective_hits(observed, np.add.reduceat(squares, starts, axis=1))
+    previous = np.zeros(directions)
+    smoothed = np.zeros(directions, dtype=int)
+    finished = np.zeros_like(energy)
+    for i, (first, stop) in enumerate(zip(starts, np.append(starts[1:], bins))):
+        amount = observed[:, i].copy()
+        total = amount.sum()
+        if total == 0.:
+            continue
+        sparse = (seams <= first) & (support[:, i] < minimum)
+        if sparse.any():
+            confidence = support[sparse, i] / minimum
+            shares = confidence * (amount[sparse] / total) + (1. - confidence) * previous[sparse]
+            # Only redistribute the energy left by the reliable directions.
+            share_sum = shares.sum()
+            if share_sum > 0.:
+                amount[sparse] = amount[sparse].sum() * (shares / share_sum)
+            smoothed[sparse] += 1
+        previous = amount / total
+        if stop == first + 1:
+            finished[:, first] = amount
+        else:
+            finished[:, first:stop] = previous[:, None] * shape[first:stop]
+    return finished, seams, smoothed
 
 
 def synthesize(energy, bands, sample_rate, duration, width, rng):
@@ -604,21 +645,24 @@ def generate(late, room, bands, directions, tool_dir, jobs=1):
         raise RayEnergyError("no reflected energy reached the late-field histogram")
     hits = histogram.effective_hits()
     minimum = config["min_hits_per_bin"]
-    shapes, pooled_tails = np.zeros((BANDS, histogram.bins)), []
-    for b in range(BANDS):
-        shapes[b], info = tail(histogram.energy[:, b].sum(axis=0), histogram.pooled_squares[b], histogram.width,
-                               minimum)
-        pooled_tails.append(info)
+    pooled_tails = []
     finished = np.zeros_like(histogram.energy)
     continuation = [[None] * BANDS for _ in range(len(directions))]
-    zero = 0
-    for d in range(len(directions)):
-        for b in range(BANDS):
-            finished[d, b], info = continue_direction(histogram.energy[d, b], hits[d, b], shapes[b],
-                                                      histogram.width, minimum)
-            zero += info["status"] == "zero"
-            continuation[d][b] = None if info["status"] != "continued" else \
-                [info["start_seconds"], info["level_to_pooled"]]
+    for b in range(BANDS):
+        observed = histogram.energy[:, b]
+        shape, info, starts = windowed_tail(observed.sum(axis=0), histogram.pooled_squares[b],
+                                            histogram.width, minimum)
+        finished[:, b], seams, smoothed = distribute_directions(observed, histogram.squares[:, b], hits[:, b],
+                                                               shape, starts, minimum)
+        difference = np.abs(finished[:, b].sum(axis=0) - shape)
+        # Subnormal energies have an absolute rounding floor. Check exact silence separately.
+        relative = difference / np.maximum(shape, np.finfo(shape.dtype).tiny)
+        info["max_bin_energy_relative_error"] = float(relative.max())
+        if info["max_bin_energy_relative_error"] > 1e-12 or np.any(difference[shape == 0.]):
+            raise RayEnergyError("晚场合成方向的分箱能量与频带能量不符")
+        pooled_tails.append(info)
+        for d in np.flatnonzero(seams < histogram.bins):
+            continuation[d][b] = [float(seams[d] * histogram.width), int(smoothed[d])]
     noise = np.random.Generator(np.random.PCG64(np.random.SeedSequence(seed, spawn_key=(1,))))
     field = synthesize(finished, bands, int(room["sample_rate"]), config["duration_seconds"], histogram.width, noise)
     band_energy = finished.sum(axis=(0, 2))
@@ -633,8 +677,8 @@ def generate(late, room, bands, directions, tool_dir, jobs=1):
         direction_energy_fraction=[(finished[:, b].sum(axis=1) / band_energy[b]).tolist()
                                    if band_energy[b] > 0 else None for b in range(BANDS)],
         pooled_tail=pooled_tails,
-        continuation=dict(columns=["start_seconds", "level_to_pooled"], by_direction_band=continuation),
-        zero_series=zero, energy=account,
+        continuation=dict(columns=["start_seconds", "smoothed_windows"], by_direction_band=continuation),
+        zero_series=int(np.count_nonzero(~histogram.energy.any(axis=2))), energy=account,
         decay_scope="Late-field component only: arrivals after the direct sound plus the predelay, "
                     "weighted by 1 - fade(u)^2; not a complete room RT.")
     report = dict(positions=[{k: p[k] for k in ("label", "azimuth", "elevation", "requested_distance", "distance",

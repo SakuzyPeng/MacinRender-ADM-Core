@@ -224,20 +224,79 @@ class Tail(unittest.TestCase):
         self.assertAlmostEqual(info["last_window_seconds"], 0.012)
         self.assertAlmostEqual(result[20:].sum() / energy[20:].sum(), 1., delta=1e-12)
 
-    def test_a_sparse_direction_continues_along_the_pooled_band_shape(self):
-        # A decay that is not one exponential: the pooled shape carries the slower late part.
-        times = (np.arange(600) + 0.5) * self.WIDTH
-        shape = 10 ** (-150 * times / 10) + 1e-3 * 10 ** (-60 * times / 10)
-        energy, hits = 0.25 * shape, np.full(600, 100.)
-        hits[120:] = 4
-        energy[120:] *= np.random.Generator(np.random.PCG64(7)).uniform(0, 2, 480)
-        result, info = ray.continue_direction(energy, hits, shape, self.WIDTH, 32)
-        self.assertEqual(info["status"], "continued")
-        self.assertAlmostEqual(info["start_seconds"], 0.12)
-        np.testing.assert_array_equal(result[:120], energy[:120])
-        np.testing.assert_allclose(result[120:], 0.25 * shape[120:], rtol=1e-12)
-        self.assertEqual(ray.continue_direction(np.zeros(9), np.zeros(9), shape[:9], self.WIDTH, 32)[1]["status"],
-                         "zero")
+    def test_directions_with_different_seams_share_one_budget_and_follow_later_arrivals(self):
+        i = np.arange(80)
+        band = np.exp(-0.045 * i)
+        share = np.interp(i, [20, 36], [0.6, 0.2])
+        share[52:] = 0.5
+        share[61] = 0.15
+        energy = np.stack([share * band, (1 - share) * band])
+        hits = np.stack([np.where(i < 20, 64., 24.), np.where(i < 44, 96., 24.)])
+        hits[0, 61] = 64.
+        squares = self.squares(energy, hits)
+        # Disjoint directional arrivals. The pooled band is well sampled throughout;
+        # freezing each share at its seam would spend 60% + 80% of the band.
+        shape, info, starts = ray.windowed_tail(energy.sum(axis=0), squares.sum(axis=0), 0.002, 32)
+        self.assertEqual(info["status"], "measured")
+        result, seams, _ = ray.distribute_directions(energy, squares, hits, shape, starts, 32)
+        np.testing.assert_array_equal(seams, [20, 44])
+        np.testing.assert_allclose(result.sum(axis=0), band, rtol=1e-12, atol=0)
+        np.testing.assert_array_equal(result[1, :44], energy[1, :44])
+        # Both directions have 24/32 effective hits. Update from 20% toward the new 50%.
+        self.assertAlmostEqual(result[0, 52] / band[52], 0.425)
+        self.assertEqual(result[0, 61], energy[0, 61])  # a later well-supported observation
+        self.assertAlmostEqual(result[0, -1] / band[-1], 0.5)
+
+    def test_merged_windows_keep_reliable_direction_totals_and_silence(self):
+        i = np.arange(150)
+        band = self.decay(len(i))
+        band[50:] *= np.resize([1.2, 0.8], 100)
+        share = np.interp(i, [50, 100], [0.2, 0.35])
+        remainder = (1 - share) * band
+        split = np.interp(i, [60, 100], [0.25, 0.75])
+        energy = np.stack([share * band, split * remainder, (1 - split) * remainder, np.zeros_like(band)])
+        energy[:, -8:] = 0.
+        counts = np.stack([np.full(len(i), 64.), np.where(i < 50, 64., 2.),
+                           np.where(i < 50, 64., 1.), np.zeros(len(i))])
+        squares = self.squares(energy, counts)
+        shape, info, starts = ray.windowed_tail(energy.sum(axis=0), squares.sum(axis=0), self.WIDTH, 32)
+        self.assertEqual(info["status"], "merged")
+        result, _, _ = ray.distribute_directions(energy, squares, ray.effective_hits(energy, squares),
+                                                shape, starts, 32)
+        np.testing.assert_array_equal(result[:, :50], energy[:, :50])
+        np.testing.assert_array_equal(result[3], 0.)
+        np.testing.assert_array_equal(result[:, -8:], 0.)
+        np.testing.assert_allclose(result.sum(axis=0), shape, rtol=1e-12, atol=0)
+        np.testing.assert_allclose(np.add.reduceat(result[0], starts), np.add.reduceat(energy[0], starts),
+                                   rtol=1e-12, atol=0)
+
+    def test_single_supported_window_uses_the_measured_decline(self):
+        energy = self.decay(90)
+        hits = np.r_[np.full(70, 64.), np.full(20, 2.)]
+        result, info = ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)
+        self.assertEqual(info["windows"], 1)
+        np.testing.assert_allclose(result, energy, rtol=1e-10, atol=0)
+
+    def test_unresolved_residue_fades_only_when_its_energy_is_negligible(self):
+        head = self.decay(64)
+        hits = np.r_[np.full(64, 64.), 1., np.zeros(199)]
+        energy = np.r_[head, head.sum() * 1e-8, np.zeros(199)]
+        result, info = ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)
+        self.assertEqual(info["status"], "tapered")
+        self.assertEqual(info["effective_hits"], 1.)
+        np.testing.assert_array_equal(result[:64], head)
+        self.assertTrue(np.all(np.diff(result[64:70]) < 0))
+        np.testing.assert_array_equal(result[69:], 0.)
+        np.testing.assert_allclose(result[64:].sum(), energy[64], rtol=1e-12, atol=0)
+        energy[64] = head.sum() * 1e-3
+        with self.assertRaisesRegex(ray.RayEnergyError, "尾段采样不足.*rays"):
+            ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)
+
+    def test_a_dominant_last_arrival_invalidates_the_merged_window(self):
+        energy = np.r_[np.ones(16), np.full(12, 0.01), 0.8]
+        hits = np.r_[np.full(16, 64.), np.full(12, 8.), 1.]
+        with self.assertRaisesRegex(ray.RayEnergyError, "尾段采样不足"):
+            ray.tail(energy, self.squares(energy, hits), self.WIDTH, 32)
 
     def test_zero_and_unestablished_series(self):
         result, info = ray.tail(np.zeros(50), np.zeros(50), self.WIDTH, 32)
@@ -246,8 +305,10 @@ class Tail(unittest.TestCase):
         energy = self.decay(50)
         with self.assertRaisesRegex(ray.RayEnergyError, "没有连续"):
             ray.tail(energy, self.squares(energy, np.full(50, 10.)), self.WIDTH, 32)
+        hits = np.full((1, 50), 10.)
         with self.assertRaisesRegex(ray.RayEnergyError, "没有连续"):
-            ray.continue_direction(energy, np.full(50, 10.), energy, self.WIDTH, 32)
+            ray.distribute_directions(energy[None, :], self.squares(energy[None, :], hits), hits,
+                                      energy, np.arange(50), 32)
 
 
 class Generator(unittest.TestCase):
@@ -303,6 +364,8 @@ class Generator(unittest.TestCase):
         self.assertAlmostEqual(float(np.mean(np.sum(field.astype(np.float64) ** 2, axis=1))), 1., delta=1e-5)
         summary = manifest["generation"]["ray_energy"]
         self.assertEqual(summary["resolved"]["rays"], 20000)
+        for tail in summary["pooled_tail"]:
+            self.assertLessEqual(tail["max_bin_energy_relative_error"], 1e-12)
         self.assertIn("seconds", json.loads((a / "generation-report.json").read_text()))
         variant = json.loads((c / "room.json").read_text())["generation"]["ray_energy"]
         for band in range(8):
