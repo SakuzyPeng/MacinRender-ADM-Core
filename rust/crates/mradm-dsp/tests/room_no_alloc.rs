@@ -51,11 +51,6 @@ static ALLOCATOR: CheckedAllocator = CheckedAllocator;
 fn regular_room_dsp_does_not_allocate_on_any_worker() {
     mark_audio_thread();
     mradm_dsp::room::set_worker_start_hook(mark_audio_thread);
-    mradm_dsp::room::run_on_workers(|| {
-        rayon::broadcast(|_| assert!(AUDIO_THREAD.get(), "unobserved ROOM worker"));
-        Ok(())
-    })
-    .unwrap();
 
     for quality in [Quality::Realtime, Quality::Exact] {
         for automatic in [false, true] {
@@ -65,6 +60,14 @@ fn regular_room_dsp_does_not_allocate_on_any_worker() {
             verify_quality(quality, true, 96000, automatic, true);
         }
     }
+
+    // This check submits a mailbox job. Run it last so the first DSP block
+    // exposes any allocation on the first non-noop dispatch.
+    mradm_dsp::room::run_on_workers(|| {
+        rayon::broadcast(|_| assert!(AUDIO_THREAD.get(), "unobserved ROOM worker"));
+        Ok(())
+    })
+    .unwrap();
 }
 fn verify_quality(quality: Quality, collection: bool, rate: u32, automatic: bool, zoned: bool) {
     ALLOCATIONS.store(0, Ordering::SeqCst);
